@@ -1,0 +1,32 @@
+# ============================================================
+# pyproject.toml
+# ============================================================
+
+pyproject = """
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssis-migration-agent"
+version = "0.1.0"
+description = "Reusable AI-driven SSIS migration analysis and code generation platform"
+requires-python = ">=3.10"
+
+dependencies = [
+    "lxml>=5.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+"""
+
+
+path = REPO_ROOT / "pyproject.toml"
+
+path.write_text(
+    pyproject.strip() + "\n",
+    encoding="utf-8"
+)
+
+print(f"✓ Created {path}")
