@@ -1,0 +1,16 @@
+{
+  "mappings": [
+    {
+      "connection_reference": "Project.ConnectionManagers[WWI_Source_DB]",
+      "metadata_file": "examples/wwi/database_metadata_wwi.json",
+      "database_name": "WideWorldImporters",
+      "role": "source"
+    },
+    {
+      "connection_reference": "Project.ConnectionManagers[WWI_DW_Destination_DB]",
+      "metadata_file": "examples/wwi/database_metadata_wwi_dw.json",
+      "database_name": "WideWorldImportersDW",
+      "role": "destination"
+    }
+  ]
+}
