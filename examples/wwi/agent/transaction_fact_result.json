@@ -1,0 +1,15 @@
+{
+  "status": "MOCK_RESPONSE",
+  "language": "PySpark",
+  "code": "# MOCK AI RESPONSE\n# No real LLM has been called.\n",
+  "assumptions": [],
+  "unresolved_items": [
+    "Mock provider does not generate migration code."
+  ],
+  "validation_requirements": [],
+  "metadata": {
+    "provider": "mock",
+    "step_id": "load_transaction_fact",
+    "prompt_length": 33209
+  }
+}

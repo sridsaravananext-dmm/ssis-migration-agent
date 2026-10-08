@@ -4,6 +4,10 @@ from typing import Any
 
 from ssis_migration.analyzer.sql_semantic import analyze_sql
 
+from ssis_migration.planner.migration_strategy import (
+    determine_migration_strategy,
+)
+
 from ssis_migration.context.migration_context import (
     MigrationContext,
 )
@@ -407,7 +411,7 @@ class MigrationPlanner:
                         procedure_analysis
                     )
 
-                        # -------------------------------------------------
+            # -------------------------------------------------
             # Analyze destination procedures
             # -------------------------------------------------
 
@@ -624,6 +628,23 @@ class MigrationPlanner:
             # Build migration step
             # -------------------------------------------------
 
+            migration_intent = self._build_migration_intent(
+                load_name=load_name,
+                load_type=load_type,
+                source_objects=source_objects,
+                target_objects=target_objects,
+                operations=operations,
+                procedure_semantics=procedure_semantics,
+                destination_procedure_semantics=(
+                    destination_procedure_semantics
+                ),
+                flow_semantics=flow_semantics,
+            )
+
+            migration_strategy = determine_migration_strategy(
+                migration_intent
+            )    
+
             step = MigrationStep(
                 step_id=self._make_step_id(
                     load_name
@@ -661,18 +682,8 @@ class MigrationPlanner:
                     "destination_procedure_semantics": (
                         destination_procedure_semantics
                     ),
-                    "migration_intent": self._build_migration_intent(
-                        load_name=load_name,
-                        load_type=load_type,
-                        source_objects=source_objects,
-                        target_objects=target_objects,
-                        operations=operations,
-                        procedure_semantics=procedure_semantics,
-                        destination_procedure_semantics=(
-                            destination_procedure_semantics
-                        ),
-                        flow_semantics=flow_semantics,
-                    ),
+                    "migration_intent": migration_intent,
+                    "migration_strategy": migration_strategy,
                 },
             )
 
@@ -709,6 +720,7 @@ class MigrationPlanner:
                         if procedure.get("schema")
                         else procedure.get("name")
                     ),
+                    "definition": procedure.get("definition"),
                     "pattern": semantics.get("pattern"),
                     "extraction_pattern": semantics.get(
                         "extraction_pattern"

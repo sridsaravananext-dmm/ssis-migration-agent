@@ -1,0 +1,474 @@
+{
+  "step_id": "load_transaction_fact",
+  "name": "Load Transaction Fact",
+  "source_platform": "SSIS",
+  "target_platform": "Databricks",
+  "target_language": "PySpark",
+  "step_type": "FACT_LOAD",
+  "source_components": [
+    "Integration_GetTransactionUpdates"
+  ],
+  "source_objects": [
+    "Integration.GetTransactionUpdates"
+  ],
+  "target_components": [
+    "Integration_Transaction_Staging"
+  ],
+  "target_objects": [
+    "Integration.Transaction_Staging"
+  ],
+  "transformations": [],
+  "dependencies": [],
+  "metadata": {
+    "operations": [
+      "EXTRACT_TO_STAGING",
+      "GET_LAST_CUTOFF",
+      "GET_LINEAGE_KEY",
+      "MIGRATE_STAGED_DATA",
+      "SET_TABLE_NAME",
+      "CLEAR_STAGING"
+    ],
+    "ref_id": "Package\\Load Transaction Fact",
+    "data_flows": [
+      {
+        "name": "Extract Updated Transaction Data to Staging",
+        "source": [
+          {
+            "name": "Integration_GetTransactionUpdates",
+            "component_type": "OLE_DB_SOURCE",
+            "properties": {
+              "CommandTimeout": "0",
+              "OpenRowset": "",
+              "OpenRowsetVariable": "",
+              "SqlCommand": "EXEC Integration.GetTransactionUpdates ?, ?\nWITH RESULT SETS\n(\n    (\n        [Date Key] date,\n        [WWI Customer Transaction ID] int,\n        [WWI Supplier Transaction ID] int,\n        [WWI Invoice ID] int,\n        [WWI Purchase Order ID] int,\n        [Supplier Invoice Number] nvarchar(20),\n        [Total Excluding Tax] decimal(18,2),\n        [Tax Amount] decimal(18,2),\n        [Total Including Tax] decimal(18,2),\n        [Outstanding Balance] decimal(18,2),\n        [Is Finalized] bit,\n        [WWI Customer ID] int,\n        [WWI Bill To Customer ID] int,\n        [WWI Supplier ID] int,\n        [WWI Transaction Type ID] int,\n        [WWI Payment Method ID] int,\n        [Last Modified When] datetime2(7)\n    )\n);",
+              "SqlCommandVariable": "",
+              "DefaultCodePage": "1252",
+              "AlwaysUseDefaultCodePage": "false",
+              "AccessMode": "2",
+              "ParameterMapping": "\"@LastCutoff:Input\",{60BD9010-4784-49A6-8FF2-340D7AB3B70D};\"@NewCutoff:Input\",{B96D08A3-EC4E-45C1-8E78-526920753C6B};"
+            },
+            "connections": [
+              {
+                "ref_id": null,
+                "connection_manager_id": null,
+                "connection_manager_ref_id": "Project.ConnectionManagers[WWI_Source_DB]",
+                "name": null
+              }
+            ],
+            "outputs": []
+          }
+        ],
+        "destination": [
+          {
+            "name": "Integration_Transaction_Staging",
+            "component_type": "OLE_DB_DESTINATION",
+            "properties": {
+              "CommandTimeout": "0",
+              "OpenRowset": "[Integration].[Transaction_Staging]",
+              "OpenRowsetVariable": "",
+              "SqlCommand": "",
+              "DefaultCodePage": "1252",
+              "AlwaysUseDefaultCodePage": "false",
+              "AccessMode": "3",
+              "FastLoadKeepIdentity": "false",
+              "FastLoadKeepNulls": "false",
+              "FastLoadOptions": "CHECK_CONSTRAINTS",
+              "FastLoadMaxInsertCommitSize": "2147483647"
+            },
+            "connections": [
+              {
+                "ref_id": null,
+                "connection_manager_id": null,
+                "connection_manager_ref_id": "Project.ConnectionManagers[WWI_DW_Destination_DB]",
+                "name": null
+              }
+            ],
+            "inputs": []
+          }
+        ],
+        "mappings": [
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "Last Modified When",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[Last Modified When]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[Last Modified When]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[Last Modified When]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "WWI Invoice ID",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[WWI Invoice ID]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[WWI Invoice ID]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[WWI Invoice ID]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "Total Excluding Tax",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[Total Excluding Tax]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[Total Excluding Tax]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[Total Excluding Tax]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "Tax Amount",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[Tax Amount]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[Tax Amount]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[Tax Amount]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "Total Including Tax",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[Total Including Tax]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[Total Including Tax]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[Total Including Tax]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "WWI Customer ID",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[WWI Customer ID]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[WWI Customer ID]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[WWI Customer ID]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "WWI Bill To Customer ID",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[WWI Bill To Customer ID]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[WWI Bill To Customer ID]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[WWI Bill To Customer ID]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "Date Key",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[Date Key]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[Date Key]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[Date Key]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "WWI Customer Transaction ID",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[WWI Customer Transaction ID]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[WWI Customer Transaction ID]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[WWI Customer Transaction ID]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "WWI Supplier Transaction ID",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[WWI Supplier Transaction ID]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[WWI Supplier Transaction ID]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[WWI Supplier Transaction ID]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "WWI Purchase Order ID",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[WWI Purchase Order ID]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[WWI Purchase Order ID]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[WWI Purchase Order ID]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "Supplier Invoice Number",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[Supplier Invoice Number]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[Supplier Invoice Number]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[Supplier Invoice Number]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "Outstanding Balance",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[Outstanding Balance]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[Outstanding Balance]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[Outstanding Balance]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "Is Finalized",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[Is Finalized]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[Is Finalized]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[Is Finalized]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "WWI Supplier ID",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[WWI Supplier ID]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[WWI Supplier ID]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[WWI Supplier ID]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "WWI Transaction Type ID",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[WWI Transaction Type ID]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[WWI Transaction Type ID]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[WWI Transaction Type ID]"
+          },
+          {
+            "destination_component": "Integration_Transaction_Staging",
+            "destination_input": "OLE DB Destination Input",
+            "destination_column": "WWI Payment Method ID",
+            "destination_column_ref": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].Columns[WWI Payment Method ID]",
+            "source_lineage_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_GetTransactionUpdates.Outputs[OLE DB Source Output].Columns[WWI Payment Method ID]",
+            "external_metadata_column_id": "Package\\Load Transaction Fact\\Extract Updated Transaction Data to Staging\\Integration_Transaction_Staging.Inputs[OLE DB Destination Input].ExternalColumns[WWI Payment Method ID]"
+          }
+        ],
+        "mapping_count": 17
+      }
+    ],
+    "procedure_semantics": [
+      {
+        "schema": "Integration",
+        "name": "GetTransactionUpdates",
+        "object_type": "PROCEDURE",
+        "classification": "PROCEDURAL",
+        "features": [
+          "SELECT",
+          "EXEC",
+          "JOIN"
+        ],
+        "procedural_features": [
+          "EXEC"
+        ],
+        "relational_features": [
+          "SELECT",
+          "JOIN"
+        ],
+        "referenced_objects": [
+          "Purchasing.SupplierTransactions",
+          "Sales.CustomerTransactions",
+          "Sales.Invoices"
+        ],
+        "stored_procedures": [],
+        "parameters": [
+          {
+            "parameter_id": 1,
+            "name": "@LastCutoff",
+            "data_type": "datetime2",
+            "max_length": 8,
+            "precision": 27,
+            "scale": 7,
+            "is_output": false
+          },
+          {
+            "parameter_id": 2,
+            "name": "@NewCutoff",
+            "data_type": "datetime2",
+            "max_length": 8,
+            "precision": 27,
+            "scale": 7,
+            "is_output": false
+          }
+        ],
+        "definition": "\r\nCREATE PROCEDURE Integration.GetTransactionUpdates\r\n@LastCutoff datetime2(7),\r\n@NewCutoff datetime2(7)\r\nWITH EXECUTE AS OWNER\r\nAS\r\nBEGIN\r\n    SET NOCOUNT ON;\r\n    SET XACT_ABORT ON;\r\n\r\n    SELECT CAST(ct.TransactionDate AS date) AS [Date Key],\r\n           ct.CustomerTransactionID AS [WWI Customer Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Supplier Transaction ID],\r\n           ct.InvoiceID AS [WWI Invoice ID],\r\n           CAST(NULL AS int) AS [WWI Purchase Order ID],\r\n           CAST(NULL AS nvarchar(20)) AS [Supplier Invoice Number],\r\n           ct.AmountExcludingTax AS [Total Excluding Tax],\r\n           ct.TaxAmount AS [Tax Amount],\r\n           ct.TransactionAmount AS [Total Including Tax],\r\n           ct.OutstandingBalance AS [Outstanding Balance],\r\n           ct.IsFinalized AS [Is Finalized],\r\n           COALESCE(i.CustomerID, ct.CustomerID) AS [WWI Customer ID],\r\n           ct.CustomerID AS [WWI Bill To Customer ID],\r\n           CAST(NULL AS int) AS [WWI Supplier ID],\r\n           ct.TransactionTypeID AS [WWI Transaction Type ID],\r\n           ct.PaymentMethodID AS [WWI Payment Method ID],\r\n           ct.LastEditedWhen AS [Last Modified When]\r\n    FROM Sales.CustomerTransactions AS ct\r\n    LEFT OUTER JOIN Sales.Invoices AS i\r\n    ON ct.InvoiceID = i.InvoiceID\r\n    WHERE ct.LastEditedWhen > @LastCutoff\r\n    AND ct.LastEditedWhen <= @NewCutoff\r\n\r\n    UNION ALL\r\n\r\n    SELECT CAST(st.TransactionDate AS date) AS [Date Key],\r\n           CAST(NULL AS int) AS [WWI Customer Transaction ID],\r\n           st.SupplierTransactionID AS [WWI Supplier Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Invoice ID],\r\n           st.PurchaseOrderID AS [WWI Purchase Order ID],\r\n           st.SupplierInvoiceNumber AS [Supplier Invoice Number],\r\n           st.AmountExcludingTax AS [Total Excluding Tax],\r\n           st.TaxAmount AS [Tax Amount],\r\n           st.TransactionAmount AS [Total Including Tax],\r\n           st.OutstandingBalance AS [Outstanding Balance],\r\n           st.IsFinalized AS [Is Finalized],\r\n           CAST(NULL AS int) AS [WWI Customer ID],\r\n           CAST(NULL AS int) AS [WWI Bill To Customer ID],\r\n           st.SupplierID AS [WWI Supplier ID],\r\n           st.TransactionTypeID AS [WWI Transaction Type ID],\r\n           st.PaymentMethodID AS [WWI Payment Method ID],\r\n           st.LastEditedWhen AS [Last Modified When]\r\n    FROM Purchasing.SupplierTransactions AS st\r\n    WHERE st.LastEditedWhen > @LastCutoff\r\n    AND st.LastEditedWhen <= @NewCutoff;\r\n\r\n    RETURN 0;\r\nEND;\r\n",
+        "migration_semantics": {
+          "operations": [
+            "SELECT"
+          ],
+          "pattern": "INCREMENTAL_COMPOSITE",
+          "extraction_pattern": "INCREMENTAL_QUERY",
+          "execution_style": "RELATIONAL",
+          "temporary_tables": [],
+          "has_cursor": false,
+          "has_loop": false,
+          "has_cutoff_parameters": true,
+          "has_cutoff_filter": true,
+          "has_temporal_logic": false,
+          "has_point_in_time_lookup": false,
+          "relational_features": [
+            "JOIN",
+            "UNION"
+          ]
+        }
+      }
+    ],
+    "destination_procedure_semantics": [
+      {
+        "schema": "Integration",
+        "name": "MigrateStagedTransactionData",
+        "object_type": "PROCEDURE",
+        "classification": "PROCEDURAL",
+        "features": [
+          "SELECT",
+          "INSERT",
+          "UPDATE",
+          "EXEC",
+          "ORDER_BY"
+        ],
+        "referenced_objects": [
+          "Dimension.Customer",
+          "Dimension.Payment Method",
+          "Dimension.Supplier",
+          "Dimension.Transaction Type",
+          "Integration.ETL Cutoff",
+          "Integration.Lineage",
+          "Integration.Transaction_Staging"
+        ],
+        "stored_procedures": [],
+        "target_objects": [
+          "Dimension.Customer",
+          "Dimension.Payment Method",
+          "Dimension.Supplier",
+          "Dimension.Transaction Type",
+          "Integration.ETL Cutoff",
+          "Integration.Lineage",
+          "Integration.Transaction_Staging"
+        ],
+        "procedure_role": "DATA_MIGRATION",
+        "migration_operations": [
+          {
+            "operation": "RESOLVE_DIMENSION_KEYS",
+            "type": "LOOKUP_UPDATE",
+            "description": "Resolve surrogate dimension keys from staging records using validity ranges.",
+            "targets": [
+              "Dimension.Customer",
+              "Dimension.Supplier",
+              "Dimension.Transaction Type",
+              "Dimension.Payment Method"
+            ],
+            "features": [
+              "VALID_FROM",
+              "VALID_TO",
+              "TOP_1",
+              "COALESCE"
+            ]
+          },
+          {
+            "operation": "INSERT_TARGET",
+            "type": "INSERT",
+            "description": "Insert staged records into the target table.",
+            "target": "Fact.Transaction",
+            "features": [
+              "INSERT",
+              "SELECT_FROM_STAGING"
+            ]
+          },
+          {
+            "operation": "COMPLETE_LINEAGE",
+            "type": "UPDATE",
+            "description": "Mark the current lineage record as successfully completed.",
+            "target": "Integration.Lineage",
+            "features": [
+              "DATA_LOAD_COMPLETED",
+              "WAS_SUCCESSFUL",
+              "LINEAGE_KEY"
+            ]
+          },
+          {
+            "operation": "UPDATE_ETL_CUTOFF",
+            "type": "UPDATE",
+            "description": "Advance the ETL cutoff using the source-system cutoff associated with the lineage key.",
+            "target": "Integration.ETL Cutoff",
+            "features": [
+              "SOURCE_SYSTEM_CUTOFF_TIME",
+              "LINEAGE_KEY"
+            ]
+          }
+        ],
+        "definition": "\r\nCREATE PROCEDURE Integration.MigrateStagedTransactionData\r\nWITH EXECUTE AS OWNER\r\nAS\r\nBEGIN\r\n    SET NOCOUNT ON;\r\n    SET XACT_ABORT ON;\r\n\r\n    BEGIN TRAN;\r\n\r\n    DECLARE @LineageKey int = (SELECT TOP(1) [Lineage Key]\r\n                               FROM Integration.Lineage\r\n                               WHERE [Table Name] = N'Transaction'\r\n                               AND [Data Load Completed] IS NULL\r\n                               ORDER BY [Lineage Key] DESC);\r\n\r\n    -- Find the dimension keys required\r\n\r\n    UPDATE t\r\n        SET t.[Customer Key] = COALESCE((SELECT TOP(1) c.[Customer Key]\r\n                                         FROM Dimension.Customer AS c\r\n                                         WHERE c.[WWI Customer ID] = t.[WWI Customer ID]\r\n                                         AND t.[Last Modified When] > c.[Valid From]\r\n                                         AND t.[Last Modified When] <= c.[Valid To]\r\n\t\t\t\t\t\t\t\t\t     ORDER BY c.[Valid From]), 0),\r\n            t.[Bill To Customer Key] = COALESCE((SELECT TOP(1) c.[Customer Key]\r\n                                                 FROM Dimension.Customer AS c\r\n                                                 WHERE c.[WWI Customer ID] = t.[WWI Bill To Customer ID]\r\n                                                 AND t.[Last Modified When] > c.[Valid From]\r\n                                                 AND t.[Last Modified When] <= c.[Valid To]\r\n\t\t\t\t\t\t\t\t\t             ORDER BY c.[Valid From]), 0),\r\n            t.[Supplier Key] = COALESCE((SELECT TOP(1) s.[Supplier Key]\r\n                                         FROM Dimension.Supplier AS s\r\n                                         WHERE s.[WWI Supplier ID] = t.[WWI Supplier ID]\r\n                                         AND t.[Last Modified When] > s.[Valid From]\r\n                                         AND t.[Last Modified When] <= s.[Valid To]\r\n\t\t\t\t\t\t\t\t\t     ORDER BY s.[Valid From]), 0),\r\n            t.[Transaction Type Key] = COALESCE((SELECT TOP(1) tt.[Transaction Type Key]\r\n                                                 FROM Dimension.[Transaction Type] AS tt\r\n                                                 WHERE tt.[WWI Transaction Type ID] = t.[WWI Transaction Type ID]\r\n                                                 AND t.[Last Modified When] > tt.[Valid From]\r\n                                                 AND t.[Last Modified When] <= tt.[Valid To]\r\n\t\t\t\t\t\t\t\t\t             ORDER BY tt.[Valid From]), 0),\r\n            t.[Payment Method Key] = COALESCE((SELECT TOP(1) pm.[Payment Method Key]\r\n                                                 FROM Dimension.[Payment Method] AS pm\r\n                                                 WHERE pm.[WWI Payment Method ID] = t.[WWI Payment Method ID]\r\n                                                 AND t.[Last Modified When] > pm.[Valid From]\r\n                                                 AND t.[Last Modified When] <= pm.[Valid To]\r\n\t\t\t\t\t\t\t\t\t             ORDER BY pm.[Valid From]), 0)\r\n    FROM Integration.Transaction_Staging AS t;\r\n\r\n    -- Insert all the transactions\r\n\r\n    INSERT Fact.[Transaction]\r\n        ([Date Key], [Customer Key], [Bill To Customer Key], [Supplier Key], [Transaction Type Key],\r\n         [Payment Method Key], [WWI Customer Transaction ID], [WWI Supplier Transaction ID],\r\n         [WWI Invoice ID], [WWI Purchase Order ID], [Supplier Invoice Number], [Total Excluding Tax],\r\n         [Tax Amount], [Total Including Tax], [Outstanding Balance], [Is Finalized], [Lineage Key])\r\n    SELECT [Date Key], [Customer Key], [Bill To Customer Key], [Supplier Key], [Transaction Type Key],\r\n         [Payment Method Key], [WWI Customer Transaction ID], [WWI Supplier Transaction ID],\r\n         [WWI Invoice ID], [WWI Purchase Order ID], [Supplier Invoice Number], [Total Excluding Tax],\r\n         [Tax Amount], [Total Including Tax], [Outstanding Balance], [Is Finalized], @LineageKey\r\n    FROM Integration.Transaction_Staging;\r\n\r\n    UPDATE Integration.Lineage\r\n        SET [Data Load Completed] = SYSDATETIME(),\r\n            [Was Successful] = 1\r\n    WHERE [Lineage Key] = @LineageKey;\r\n\r\n    UPDATE Integration.[ETL Cutoff]\r\n        SET [Cutoff Time] = (SELECT [Source System Cutoff Time]\r\n                             FROM Integration.Lineage\r\n                             WHERE [Lineage Key] = @LineageKey)\r\n    FROM Integration.[ETL Cutoff]\r\n    WHERE [Table Name] = N'Transaction';\r\n\r\n    COMMIT;\r\n\r\n    RETURN 0;\r\nEND;\r\n",
+        "execution": {
+          "task_name": "Migrate Staged Transaction Data",
+          "task_ref_id": "Package\\Load Transaction Fact\\Migrate Staged Transaction Data",
+          "sql_statement": "EXEC Integration.MigrateStagedTransactionData;",
+          "procedure": "Integration.MigrateStagedTransactionData"
+        }
+      }
+    ],
+    "migration_intent": {
+      "load_name": "Load Transaction Fact",
+      "load_type": "FACT_LOAD",
+      "source_objects": [
+        "Integration.GetTransactionUpdates"
+      ],
+      "target_objects": [
+        "Integration.Transaction_Staging"
+      ],
+      "control_flow_operations": [
+        "EXTRACT_TO_STAGING",
+        "GET_LAST_CUTOFF",
+        "GET_LINEAGE_KEY",
+        "MIGRATE_STAGED_DATA",
+        "SET_TABLE_NAME",
+        "CLEAR_STAGING"
+      ],
+      "source_procedures": [
+        {
+          "procedure": "Integration.GetTransactionUpdates",
+          "definition": "\r\nCREATE PROCEDURE Integration.GetTransactionUpdates\r\n@LastCutoff datetime2(7),\r\n@NewCutoff datetime2(7)\r\nWITH EXECUTE AS OWNER\r\nAS\r\nBEGIN\r\n    SET NOCOUNT ON;\r\n    SET XACT_ABORT ON;\r\n\r\n    SELECT CAST(ct.TransactionDate AS date) AS [Date Key],\r\n           ct.CustomerTransactionID AS [WWI Customer Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Supplier Transaction ID],\r\n           ct.InvoiceID AS [WWI Invoice ID],\r\n           CAST(NULL AS int) AS [WWI Purchase Order ID],\r\n           CAST(NULL AS nvarchar(20)) AS [Supplier Invoice Number],\r\n           ct.AmountExcludingTax AS [Total Excluding Tax],\r\n           ct.TaxAmount AS [Tax Amount],\r\n           ct.TransactionAmount AS [Total Including Tax],\r\n           ct.OutstandingBalance AS [Outstanding Balance],\r\n           ct.IsFinalized AS [Is Finalized],\r\n           COALESCE(i.CustomerID, ct.CustomerID) AS [WWI Customer ID],\r\n           ct.CustomerID AS [WWI Bill To Customer ID],\r\n           CAST(NULL AS int) AS [WWI Supplier ID],\r\n           ct.TransactionTypeID AS [WWI Transaction Type ID],\r\n           ct.PaymentMethodID AS [WWI Payment Method ID],\r\n           ct.LastEditedWhen AS [Last Modified When]\r\n    FROM Sales.CustomerTransactions AS ct\r\n    LEFT OUTER JOIN Sales.Invoices AS i\r\n    ON ct.InvoiceID = i.InvoiceID\r\n    WHERE ct.LastEditedWhen > @LastCutoff\r\n    AND ct.LastEditedWhen <= @NewCutoff\r\n\r\n    UNION ALL\r\n\r\n    SELECT CAST(st.TransactionDate AS date) AS [Date Key],\r\n           CAST(NULL AS int) AS [WWI Customer Transaction ID],\r\n           st.SupplierTransactionID AS [WWI Supplier Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Invoice ID],\r\n           st.PurchaseOrderID AS [WWI Purchase Order ID],\r\n           st.SupplierInvoiceNumber AS [Supplier Invoice Number],\r\n           st.AmountExcludingTax AS [Total Excluding Tax],\r\n           st.TaxAmount AS [Tax Amount],\r\n           st.TransactionAmount AS [Total Including Tax],\r\n           st.OutstandingBalance AS [Outstanding Balance],\r\n           st.IsFinalized AS [Is Finalized],\r\n           CAST(NULL AS int) AS [WWI Customer ID],\r\n           CAST(NULL AS int) AS [WWI Bill To Customer ID],\r\n           st.SupplierID AS [WWI Supplier ID],\r\n           st.TransactionTypeID AS [WWI Transaction Type ID],\r\n           st.PaymentMethodID AS [WWI Payment Method ID],\r\n           st.LastEditedWhen AS [Last Modified When]\r\n    FROM Purchasing.SupplierTransactions AS st\r\n    WHERE st.LastEditedWhen > @LastCutoff\r\n    AND st.LastEditedWhen <= @NewCutoff;\r\n\r\n    RETURN 0;\r\nEND;\r\n",
+          "pattern": "INCREMENTAL_COMPOSITE",
+          "extraction_pattern": "INCREMENTAL_QUERY",
+          "execution_style": "RELATIONAL",
+          "operations": [
+            "SELECT"
+          ],
+          "relational_features": [
+            "JOIN",
+            "UNION"
+          ],
+          "temporary_tables": [],
+          "has_cursor": false,
+          "has_loop": false,
+          "has_cutoff_parameters": true,
+          "has_cutoff_filter": true,
+          "has_temporal_logic": false,
+          "has_point_in_time_lookup": false
+        }
+      ],
+      "destination_procedures": [
+        {
+          "procedure": "Integration.MigrateStagedTransactionData",
+          "role": "DATA_MIGRATION",
+          "operations": [
+            "SELECT",
+            "INSERT",
+            "UPDATE",
+            "EXEC",
+            "ORDER_BY"
+          ],
+          "target_objects": [
+            "Dimension.Customer",
+            "Dimension.Payment Method",
+            "Dimension.Supplier",
+            "Dimension.Transaction Type",
+            "Integration.ETL Cutoff",
+            "Integration.Lineage",
+            "Integration.Transaction_Staging"
+          ]
+        }
+      ],
+      "data_flows": [
+        {
+          "name": "Extract Updated Transaction Data to Staging",
+          "source_components": [
+            "Integration_GetTransactionUpdates"
+          ],
+          "destination_components": [
+            "Integration_Transaction_Staging"
+          ],
+          "mapping_count": 17
+        }
+      ]
+    },
+    "migration_strategy": {
+      "strategy": "AI_ASSISTED",
+      "requires_ai": true,
+      "complexity_signals": [
+        "UNION"
+      ],
+      "patterns": [
+        "INCREMENTAL_COMPOSITE"
+      ]
+    }
+  }
+}
