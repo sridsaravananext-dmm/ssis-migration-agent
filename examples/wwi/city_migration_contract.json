@@ -1,0 +1,77 @@
+{
+  "contract_id": "wwi.city",
+  "source_procedure": "Integration.GetCityUpdates",
+  "target_procedure": "Integration.MigrateStagedCityData",
+  "verification_status": "REVIEW_REQUIRED",
+  "source_behavior": {
+    "cutoff_parameters": [
+      "@LastCutoff",
+      "@NewCutoff"
+    ],
+    "change_groups": [
+      "Country",
+      "StateProvince",
+      "City"
+    ],
+    "change_window": {
+      "lower_bound": "ValidFrom > @LastCutoff",
+      "upper_bound": "ValidFrom <= @NewCutoff",
+      "initial_load_exclusion": "Country and StateProvince queries exclude @InitialLoadDate; City query does not."
+    },
+    "temporal_reconstruction": "FOR SYSTEM_TIME AS OF @ValidFrom on Cities, StateProvinces, and Countries",
+    "duplicate_change_handling": "UNION ALL is used for current/archive change queries; duplicate elimination is not explicit.",
+    "output": [
+      "WWI City ID",
+      "City",
+      "State Province",
+      "Country",
+      "Continent",
+      "Sales Territory",
+      "Region",
+      "Subregion",
+      "Location",
+      "Latest Recorded Population",
+      "Valid From",
+      "Valid To"
+    ],
+    "valid_to_rule": "For each city version, use the next later Valid From for that city, or the end-of-time sentinel."
+  },
+  "target_behavior": {
+    "staging_table": "Integration.City_Staging",
+    "dimension_table": "Dimension.City",
+    "lineage_table": "Integration.Lineage",
+    "cutoff_table": "Integration.ETL Cutoff",
+    "transaction": {
+      "begins_before_dimension_changes": true,
+      "commit_present": true,
+      "xact_abort_on": true
+    },
+    "scd_type_2": {
+      "close_current_version": true,
+      "close_at": "MIN(staged Valid From) grouped by WWI City ID",
+      "insert_staged_versions": true
+    },
+    "lineage": {
+      "selects_latest_incomplete_city_record": true,
+      "marks_completed": true,
+      "marks_successful": true
+    },
+    "cutoff": {
+      "updated_from": "Integration.Lineage.Source System Cutoff Time",
+      "updated_after_dimension_and_lineage_changes": true
+    }
+  },
+  "orchestration": {
+    "staging_truncate_before_extraction": true,
+    "lineage_key_created_before_staging_truncate": true,
+    "extraction_before_migration": true,
+    "all_observed_precedence_constraints_require_success": true
+  },
+  "unverified": [
+    "Behavior when a source entity is deleted.",
+    "Behavior when multiple changes for one city share Valid From.",
+    "Whether retries can select a stale incomplete lineage record.",
+    "Effective SSIS runtime error-handling property values.",
+    "End-to-end equivalence of the source and target procedures."
+  ]
+}

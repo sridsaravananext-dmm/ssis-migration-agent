@@ -118,3 +118,19 @@ if __name__ == "__main__":
         print(f"PASS: {test.__name__}")
 
     print(f"\n{len(tests)} tests passed.")
+
+    
+def test_empty_source_procedures_requires_review():
+    result = determine_migration_strategy({
+        "source_procedures": [],
+    })
+
+    assert result["strategy"] == "REVIEW_REQUIRED"
+    assert result["requires_ai"] is False
+
+
+def test_missing_source_procedures_requires_review():
+    result = determine_migration_strategy({})
+
+    assert result["strategy"] == "REVIEW_REQUIRED"
+    assert result["requires_ai"] is False

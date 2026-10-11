@@ -63,13 +63,15 @@ def determine_migration_strategy(
 
     if patterns & complex_patterns:
         requires_ai = True
-
     # ---------------------------------------------------------
     # Strategy
     # ---------------------------------------------------------
 
-    if requires_ai:
-        strategy = "AI_ASSISTED"
+    if not source_procedures or not patterns:
+        strategy = "REVIEW_REQUIRED"
+
+    elif requires_ai:
+        strategy = "AI_ASSISTED"    
 
     elif patterns <= deterministic_patterns:
         strategy = "DETERMINISTIC"

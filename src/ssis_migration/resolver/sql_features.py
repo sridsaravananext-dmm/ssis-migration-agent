@@ -36,6 +36,15 @@ def detect_required_features(
     ):
         features.add("LEFT_JOIN")
 
+    # Detect SQL Server temporal-table queries such as:
+    # FROM dbo.Cities FOR SYSTEM_TIME AS OF @ValidFrom
+    if any(
+        isinstance(table.args.get("version"), exp.Version)
+        and table.args["version"].args.get("kind") == "AS OF"
+        for table in expression.find_all(exp.Table)
+    ):
+        features.add("TEMPORAL_TABLE_AS_OF")
+
     if any(expression.find_all(exp.Coalesce)):
         features.add("COALESCE")
 

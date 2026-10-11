@@ -58,3 +58,17 @@ def test_union_without_all_does_not_require_union_all():
     )
 
     assert "UNION_ALL" not in features
+
+def test_detects_temporal_table_as_of():
+    sql = """
+        SELECT c.CityID
+        FROM [Application].Cities
+             FOR SYSTEM_TIME AS OF @ValidFrom AS c
+    """
+
+    features = detect_required_features(
+        sql,
+        source_dialect="tsql",
+    )
+
+    assert "TEMPORAL_TABLE_AS_OF" in features
