@@ -34,6 +34,10 @@ class SSISPipelineParser:
                 executable,
                 "ObjectName",
             ),
+            "ref_id": self._get_attribute(
+                executable,
+                "refId",
+            ),
             "creation_name": self._get_attribute(
                 executable,
                 "CreationName",

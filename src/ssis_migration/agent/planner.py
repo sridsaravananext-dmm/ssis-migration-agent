@@ -46,6 +46,11 @@ class AIMigrationPlanner:
             {},
         )
 
+        temporal_context = context.get(
+            "temporal_context",
+            {},
+        )
+
         strategy = migration.get(
             "strategy",
             {},
@@ -89,6 +94,8 @@ class AIMigrationPlanner:
 
             "evidence": evidence,
 
+            "temporal_context": temporal_context,
+
             "instructions": [
                 "Analyze the supplied migration context.",
                 "Preserve the behavior represented by the source semantics.",
@@ -99,6 +106,7 @@ class AIMigrationPlanner:
                 "Preserve lineage behavior where represented in the supplied context.",
                 "Preserve cutoff or watermark behavior where represented in the supplied context.",
                 "Do not invent unsupported business logic.",
+                "If temporal_context indicates temporal queries are present, use the provided ValidFrom/ValidTo columns and archive table pattern to translate FOR SYSTEM_TIME AS OF into equivalent Databricks SQL with row-level validity window filtering.",
                 "Explicitly report assumptions.",
                 "Explicitly report unresolved items.",
                 "Return structured migration output.",

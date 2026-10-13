@@ -218,6 +218,11 @@ class SSISPackageParser:
                             element,
                             "EvalOp",
                         ),
+                    "value":
+                        self._get_attribute(
+                            element,
+                            "Value",
+                        ),
                     "expression":
                         self._get_attribute(
                             element,
@@ -236,6 +241,29 @@ class SSISPackageParser:
         results = []
 
         for element in self.xml.find_all("Variable"):
+
+            # SSIS stores the data type and value on a
+            # <VariableValue> child element, not on the
+            # <Variable> element itself.
+            data_type = None
+            value = None
+
+            for child in element:
+                if (
+                    local_name(child.tag)
+                    == "VariableValue"
+                ):
+                    data_type = (
+                        self._get_attribute(
+                            child,
+                            "DataType",
+                        )
+                    )
+                    text = child.text
+                    if text and text.strip():
+                        value = text.strip()
+                    break
+
             results.append(
                 {
                     "tag": local_name(element.tag),
@@ -248,11 +276,16 @@ class SSISPackageParser:
                         element,
                         "Namespace",
                     ),
-                    "data_type": self._get_attribute(
+                    "data_type": data_type,
+                    "value": value,
+                    "expression": self._get_attribute(
                         element,
-                        "DataType",
+                        "Expression",
                     ),
-                    "value": self._element_value(element),
+                    "ref_id": self._get_attribute(
+                        element,
+                        "DTSID",
+                    ),
                 }
             )
 

@@ -1,0 +1,21 @@
+{
+  "status": "REVIEW_REQUIRED",
+  "table_count": 29,
+  "generated_table_count": 29,
+  "review_items": [
+    {
+      "object": "Dimension.City",
+      "column": "Location",
+      "source_type": "geography",
+      "target_type": "GEOGRAPHY(4326)",
+      "issue": "Target supports SRID 4326; verify source SRID and spatial conversion in the migration execution path."
+    },
+    {
+      "object": "Integration.City_Staging",
+      "column": "Location",
+      "source_type": "geography",
+      "target_type": "GEOGRAPHY(4326)",
+      "issue": "Target supports SRID 4326; verify source SRID and spatial conversion in the migration execution path."
+    }
+  ]
+}

@@ -1,0 +1,251 @@
+[
+  {
+    "step_id": "load_city_dimension",
+    "step_name": "Load City Dimension",
+    "validator": "code_validator",
+    "status": "REVIEW_REQUIRED",
+    "issues": [
+      {
+        "code": "TEMPORAL_HISTORY_NOT_EVIDENT",
+        "severity": "WARNING",
+        "message": "No recognizable ValidFrom/ValidTo history fields were found. Confirm that the required source history is available before claiming temporal equivalence.",
+        "line": null
+      }
+    ]
+  },
+  {
+    "step_id": "load_customer_dimension",
+    "step_name": "Load Customer Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_employee_dimension",
+    "step_name": "Load Employee Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_movement_fact",
+    "step_name": "Load Movement Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_order_fact",
+    "step_name": "Load Order Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_payment_method_dimension",
+    "step_name": "Load Payment Method Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_purchase_fact",
+    "step_name": "Load Purchase Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_sale_fact",
+    "step_name": "Load Sale Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_stock_holding_fact",
+    "step_name": "Load Stock Holding Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_stock_item_dimension",
+    "step_name": "Load Stock Item Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_supplier_dimension",
+    "step_name": "Load Supplier Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_transaction_fact",
+    "step_name": "Load Transaction Fact",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_transaction_type_dimension",
+    "step_name": "Load Transaction Type Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_city_dimension",
+    "step_name": "Load City Dimension",
+    "validator": "ai_orchestrator",
+    "status": "UNRESOLVED",
+    "unresolved_items": [
+      "Static code validation rejected the generated code.",
+      "PLACEHOLDER_TEXT: Generated code references placeholder logic. (line 77)",
+      "PLACEHOLDER_TEXT: Generated code references placeholder logic. (line 80)"
+    ]
+  },
+  {
+    "step_id": "load_customer_dimension",
+    "step_name": "Load Customer Dimension",
+    "validator": "ai_orchestrator",
+    "status": "ERROR",
+    "error": "Timed out after 0:05:00"
+  },
+  {
+    "step_id": "load_employee_dimension",
+    "step_name": "Load Employee Dimension",
+    "validator": "ai_orchestrator",
+    "status": "GENERATED",
+    "code_validation": {
+      "status": "PASS",
+      "issues": []
+    },
+    "assumptions": [
+      "Source tables `Application.People` and `Application.People_Archive` are Delta tables accessible via Spark SQL and contain the columns PersonID, FullName, PreferredName, IsSalesperson, Photo, ValidFrom, ValidTo, and IsEmployee.",
+      "`Integration.Employee_Staging` exists with a schema matching the columns produced by this transformation.",
+      "The cut‑off parameters are supplied as strings that Spark can cast to timestamps.",
+      "No additional business rules (e.g., filtering on other columns) are required beyond those expressed in the source procedure."
+    ],
+    "unresolved_items": []
+  },
+  {
+    "step_id": "load_payment_method_dimension",
+    "step_name": "Load Payment Method Dimension",
+    "validator": "ai_orchestrator",
+    "status": "GENERATED",
+    "code_validation": {
+      "status": "PASS",
+      "issues": []
+    },
+    "assumptions": [
+      "Source tables Application.PaymentMethods and Application.PaymentMethods_Archive are Delta tables that contain the columns PaymentMethodID, PaymentMethodName, ValidFrom, ValidTo.",
+      "The EndOfTime constant '9999-12-31 23:59:59.9999999' is compatible with the target schema.",
+      "Integration.PaymentMethod_Staging, Dimension.Payment Method, Integration.Lineage, and Integration.ETL Cutoff already exist as Delta tables with the columns referenced in the original SQL procedures.",
+      "Databricks runtime supports Spark SQL UPDATE statements on Delta tables (i.e., Delta Lake version >= 0.8).",
+      "The workflow that calls this function will handle clearing the staging table after a successful run if required."
+    ],
+    "unresolved_items": []
+  },
+  {
+    "step_id": "load_stock_item_dimension",
+    "step_name": "Load Stock Item Dimension",
+    "validator": "ai_orchestrator",
+    "status": "GENERATED",
+    "code_validation": {
+      "status": "PASS",
+      "issues": []
+    },
+    "assumptions": [
+      "Archive tables for PackageTypes and Colors exist with the naming pattern `<schema>.<table>_Archive` and contain the same schema (including ValidFrom/ValidTo) as the current tables.",
+      "Integration.StockItem_Staging is a pre‑created Delta table with a schema matching the columns produced by the source procedure.",
+      "The column `Tax Rate` in the original procedure is populated from `LeadTimeDays` – this appears to be a copy‑paste error in the source; the migration preserves the exact behaviour.",
+      "The driver memory can hold the list of change points; the number of distinct StockItem change timestamps is expected to be modest enough for a Python‑side loop."
+    ],
+    "unresolved_items": []
+  },
+  {
+    "step_id": "load_supplier_dimension",
+    "step_name": "Load Supplier Dimension",
+    "validator": "ai_orchestrator",
+    "status": "GENERATED",
+    "code_validation": {
+      "status": "PASS",
+      "issues": []
+    },
+    "assumptions": [
+      "Source tables Purchasing.Suppliers, Purchasing.Suppliers_Archive, Purchasing.SupplierCategories, Purchasing.SupplierCategories_Archive, and Application.People exist as Delta tables in Databricks.",
+      "All temporal tables contain ValidFrom and ValidTo columns that define the validity window for each row.",
+      "Application.People is not versioned; the current version is sufficient for the join.",
+      "Integration.ETL_Cutoff table contains a row with Table Name = 'Supplier' and a Cutoff Time column representing the last successful load.",
+      "The staging table Integration.Supplier_Staging already exists with a schema matching the SELECT list of the source procedure.",
+      "The orchestration layer will invoke the subsequent destination procedure Integration.MigrateStagedSupplierData after this step."
+    ],
+    "unresolved_items": []
+  },
+  {
+    "step_id": "load_transaction_fact",
+    "step_name": "Load Transaction Fact",
+    "validator": "ai_orchestrator",
+    "status": "REVIEW_REQUIRED",
+    "unresolved_items": [
+      "Exact data types and nullability of columns in Integration.Lineage and Integration.ETL Cutoff are not provided; the code assumes compatible types.",
+      "Whether Integration.Lineage already contains a row for the current load (instead of inserting a new one) is unclear; the implementation inserts a new row and then selects the most recent incomplete one.",
+      "If the staging table is partitioned or has additional constraints (e.g., primary keys), those details are missing.",
+      "Potential need for handling duplicate rows across successive incremental loads (e.g., idempotency) is not addressed in the source procedure and thus not implemented."
+    ]
+  },
+  {
+    "step_id": "load_transaction_type_dimension",
+    "step_name": "Load Transaction Type Dimension",
+    "validator": "ai_orchestrator",
+    "status": "GENERATED",
+    "code_validation": {
+      "status": "PASS",
+      "issues": []
+    },
+    "assumptions": [
+      "Source tables Application.TransactionTypes and Application.TransactionTypes_Archive are Delta tables with columns TransactionTypeID, TransactionTypeName, ValidFrom, ValidTo.",
+      "Both source tables contain row‑level validity columns (ValidFrom, ValidTo) as described in temporal_context.",
+      "The staging table Integration.TransactionType_Staging exists and is a Delta table compatible with the column names produced by the extraction step.",
+      "Dimension table Dimension.`Transaction Type` has the columns WWI Transaction Type ID, Transaction Type, Valid From, Valid To, Lineage Key and is a Delta table.",
+      "Integration.Lineage and Integration.`ETL Cutoff` tables contain the columns referenced in the destination procedure (Lineage Key, Table Name, Data Load Completed, Was Successful, Source System Cutoff Time, Cutoff Time).",
+      "The constant END_OF_TIME ('9999-12-31 23:59:59.9999999') fits the timestamp type of the target columns.",
+      "No concurrent processes are modifying the same dimension or staging tables during execution."
+    ],
+    "unresolved_items": []
+  }
+]

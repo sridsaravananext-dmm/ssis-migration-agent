@@ -1,0 +1,62 @@
+[
+  {
+    "operation_id": "set_table_name",
+    "operation_type": "CONTROL",
+    "order": 1,
+    "code": "table_name = \"Integration.Purchase_Staging\""
+  },
+  {
+    "operation_id": "get_last_cutoff",
+    "operation_type": "CONTROL",
+    "order": 2,
+    "code": "last_cutoff = get_last_etl_cutoff(\n    table_name=table_name\n)"
+  },
+  {
+    "operation_id": "get_lineage_key",
+    "operation_type": "CONTROL",
+    "order": 3,
+    "code": "lineage_key = get_lineage_key(\n    table_name=table_name,\n    cutoff_time=new_cutoff\n)"
+  },
+  {
+    "operation_id": "clear_staging",
+    "operation_type": "STAGING",
+    "order": 4,
+    "code": "spark.sql(\"\"\"\nDELETE FROM Integration.Purchase_Staging\n\"\"\")"
+  },
+  {
+    "operation_id": "extract_to_staging",
+    "operation_type": "EXTRACT",
+    "order": 5,
+    "code": "source_df = spark.sql(\"\"\"\nSELECT CAST(po.OrderDate AS date) AS `Date Key`,\r\n           po.PurchaseOrderID AS `WWI Purchase Order ID`,\r\n           pol.OrderedOuters AS `Ordered Outers`,\r\n           pol.OrderedOuters * si.QuantityPerOuter AS `Ordered Quantity`,\r\n           pol.ReceivedOuters AS `Received Outers`,\r\n           pt.PackageTypeName AS Package,\r\n           pol.IsOrderLineFinalized AS `Is Order Finalized`,\r\n           po.SupplierID AS `WWI Supplier ID`,\r\n           pol.StockItemID AS `WWI Stock Item ID`,\r\n           CASE WHEN pol.LastEditedWhen > po.LastEditedWhen THEN pol.LastEditedWhen ELSE po.LastEditedWhen END AS `Last Modified When`\r\n    FROM Purchasing.PurchaseOrders AS po\r\n    INNER JOIN Purchasing.PurchaseOrderLines AS pol\r\n    ON po.PurchaseOrderID = pol.PurchaseOrderID\r\n    INNER JOIN Warehouse.StockItems AS si\r\n    ON pol.StockItemID = si.StockItemID\r\n    INNER JOIN Warehouse.PackageTypes AS pt\r\n    ON pol.PackageTypeID = pt.PackageTypeID\r\n    WHERE CASE WHEN pol.LastEditedWhen > po.LastEditedWhen THEN pol.LastEditedWhen ELSE po.LastEditedWhen END > :LastCutoff\r\n    AND CASE WHEN pol.LastEditedWhen > po.LastEditedWhen THEN pol.LastEditedWhen ELSE po.LastEditedWhen END <= :NewCutoff\r\n    ORDER BY po.PurchaseOrderID\n\"\"\")"
+  },
+  {
+    "operation_id": "resolve_dimension_keys",
+    "operation_type": "LOOKUP_UPDATE",
+    "order": 6,
+    "code": "dimension_targets = [\n    \"Dimension.Supplier\", \"Dimension.Stock Item\"\n]\n\n# Resolve dimension/surrogate keys according to\n# the semantic analysis of the source procedure.\n\n# Semantic operation:\n# RESOLVE_DIMENSION_KEYS\n\n# Required target dimensions:\n# \"Dimension.Supplier\", \"Dimension.Stock Item\""
+  },
+  {
+    "operation_id": "delete_existing_target",
+    "operation_type": "DELETE",
+    "order": 7,
+    "code": "# TODO: generate executable DELETE.\n#\n# Target:\n# Fact.Purchase\n#\n# Semantic analysis:\n# {'operation': 'DELETE_EXISTING_TARGET', 'type': 'DELETE', 'description': 'Remove existing target records affected by the incoming staging records.', 'target': 'Fact.Purchase', 'features': ['DELETE', 'STAGING_KEY_FILTER']}"
+  },
+  {
+    "operation_id": "insert_target",
+    "operation_type": "INSERT",
+    "order": 8,
+    "code": "# TODO: generate executable INSERT.\n#\n# Target:\n# Fact.Purchase\n#\n# Semantic analysis:\n# {'operation': 'INSERT_TARGET', 'type': 'INSERT', 'description': 'Insert staged records into the target table.', 'target': 'Fact.Purchase', 'features': ['INSERT', 'SELECT_FROM_STAGING']}"
+  },
+  {
+    "operation_id": "complete_lineage",
+    "operation_type": "UPDATE",
+    "order": 9,
+    "code": "# Mark lineage record as successfully completed.\ncomplete_lineage(lineage_key)"
+  },
+  {
+    "operation_id": "update_etl_cutoff",
+    "operation_type": "UPDATE",
+    "order": 10,
+    "code": "# Advance ETL cutoff after successful load.\nupdate_etl_cutoff(\n    table_name=table_name,\n    cutoff_time=new_cutoff\n)"
+  }
+]

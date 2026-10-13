@@ -90,7 +90,7 @@ def analyze_package(
 
         "control_flow": analyze_control_flow(package),
 
-        "dependencies": analyze_dependencies(package),
+        "dependencies": dependency_analysis,
 
         "data_flows": analyzed_flows,
     }

@@ -1,0 +1,184 @@
+{
+  "artifact_id": "load_transaction_fact_pyspark",
+  "name": "Load Transaction Fact_pyspark",
+  "artifact_type": "AI_MIGRATION_ARTIFACT",
+  "target_platform": "databricks",
+  "language": "pyspark",
+  "source_step_id": "load_transaction_fact",
+  "metadata": {
+    "status": "AI_REQUIRED",
+    "migration_strategy": {
+      "strategy": "AI_ASSISTED",
+      "requires_ai": true,
+      "complexity_signals": [
+        "UNION"
+      ],
+      "patterns": [
+        "INCREMENTAL_COMPOSITE"
+      ]
+    },
+    "migration_intent": {
+      "load_name": "Load Transaction Fact",
+      "load_type": "FACT_LOAD",
+      "source_objects": [
+        "Integration.GetTransactionUpdates"
+      ],
+      "target_objects": [
+        "Integration.Transaction_Staging"
+      ],
+      "control_flow_operations": [
+        "EXTRACT_TO_STAGING",
+        "GET_LAST_CUTOFF",
+        "GET_LINEAGE_KEY",
+        "MIGRATE_STAGED_DATA",
+        "SET_TABLE_NAME",
+        "CLEAR_STAGING"
+      ],
+      "source_procedures": [
+        {
+          "procedure": "Integration.GetTransactionUpdates",
+          "definition": "\r\nCREATE PROCEDURE Integration.GetTransactionUpdates\r\n@LastCutoff datetime2(7),\r\n@NewCutoff datetime2(7)\r\nWITH EXECUTE AS OWNER\r\nAS\r\nBEGIN\r\n    SET NOCOUNT ON;\r\n    SET XACT_ABORT ON;\r\n\r\n    SELECT CAST(ct.TransactionDate AS date) AS [Date Key],\r\n           ct.CustomerTransactionID AS [WWI Customer Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Supplier Transaction ID],\r\n           ct.InvoiceID AS [WWI Invoice ID],\r\n           CAST(NULL AS int) AS [WWI Purchase Order ID],\r\n           CAST(NULL AS nvarchar(20)) AS [Supplier Invoice Number],\r\n           ct.AmountExcludingTax AS [Total Excluding Tax],\r\n           ct.TaxAmount AS [Tax Amount],\r\n           ct.TransactionAmount AS [Total Including Tax],\r\n           ct.OutstandingBalance AS [Outstanding Balance],\r\n           ct.IsFinalized AS [Is Finalized],\r\n           COALESCE(i.CustomerID, ct.CustomerID) AS [WWI Customer ID],\r\n           ct.CustomerID AS [WWI Bill To Customer ID],\r\n           CAST(NULL AS int) AS [WWI Supplier ID],\r\n           ct.TransactionTypeID AS [WWI Transaction Type ID],\r\n           ct.PaymentMethodID AS [WWI Payment Method ID],\r\n           ct.LastEditedWhen AS [Last Modified When]\r\n    FROM Sales.CustomerTransactions AS ct\r\n    LEFT OUTER JOIN Sales.Invoices AS i\r\n    ON ct.InvoiceID = i.InvoiceID\r\n    WHERE ct.LastEditedWhen > @LastCutoff\r\n    AND ct.LastEditedWhen <= @NewCutoff\r\n\r\n    UNION ALL\r\n\r\n    SELECT CAST(st.TransactionDate AS date) AS [Date Key],\r\n           CAST(NULL AS int) AS [WWI Customer Transaction ID],\r\n           st.SupplierTransactionID AS [WWI Supplier Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Invoice ID],\r\n           st.PurchaseOrderID AS [WWI Purchase Order ID],\r\n           st.SupplierInvoiceNumber AS [Supplier Invoice Number],\r\n           st.AmountExcludingTax AS [Total Excluding Tax],\r\n           st.TaxAmount AS [Tax Amount],\r\n           st.TransactionAmount AS [Total Including Tax],\r\n           st.OutstandingBalance AS [Outstanding Balance],\r\n           st.IsFinalized AS [Is Finalized],\r\n           CAST(NULL AS int) AS [WWI Customer ID],\r\n           CAST(NULL AS int) AS [WWI Bill To Customer ID],\r\n           st.SupplierID AS [WWI Supplier ID],\r\n           st.TransactionTypeID AS [WWI Transaction Type ID],\r\n           st.PaymentMethodID AS [WWI Payment Method ID],\r\n           st.LastEditedWhen AS [Last Modified When]\r\n    FROM Purchasing.SupplierTransactions AS st\r\n    WHERE st.LastEditedWhen > @LastCutoff\r\n    AND st.LastEditedWhen <= @NewCutoff;\r\n\r\n    RETURN 0;\r\nEND;\r\n",
+          "pattern": "INCREMENTAL_COMPOSITE",
+          "extraction_pattern": "INCREMENTAL_QUERY",
+          "execution_style": "RELATIONAL",
+          "operations": [
+            "SELECT"
+          ],
+          "relational_features": [
+            "JOIN",
+            "UNION"
+          ],
+          "temporary_tables": [],
+          "has_cursor": false,
+          "has_loop": false,
+          "has_cutoff_parameters": true,
+          "has_cutoff_filter": true,
+          "has_temporal_logic": false,
+          "has_point_in_time_lookup": false
+        }
+      ],
+      "destination_procedures": [
+        {
+          "procedure": "Integration.MigrateStagedTransactionData",
+          "role": "DATA_MIGRATION",
+          "operations": [
+            "SELECT",
+            "INSERT",
+            "UPDATE",
+            "EXEC",
+            "ORDER_BY"
+          ],
+          "target_objects": [
+            "Dimension.Customer",
+            "Dimension.Payment Method",
+            "Dimension.Supplier",
+            "Dimension.Transaction Type",
+            "Integration.ETL Cutoff",
+            "Integration.Lineage",
+            "Integration.Transaction_Staging"
+          ]
+        }
+      ],
+      "data_flows": [
+        {
+          "name": "Extract Updated Transaction Data to Staging",
+          "source_components": [
+            "Integration_GetTransactionUpdates"
+          ],
+          "destination_components": [
+            "Integration_Transaction_Staging"
+          ],
+          "mapping_count": 17
+        }
+      ]
+    },
+    "source_procedure": {
+      "procedure": "Integration.GetTransactionUpdates",
+      "definition": "\r\nCREATE PROCEDURE Integration.GetTransactionUpdates\r\n@LastCutoff datetime2(7),\r\n@NewCutoff datetime2(7)\r\nWITH EXECUTE AS OWNER\r\nAS\r\nBEGIN\r\n    SET NOCOUNT ON;\r\n    SET XACT_ABORT ON;\r\n\r\n    SELECT CAST(ct.TransactionDate AS date) AS [Date Key],\r\n           ct.CustomerTransactionID AS [WWI Customer Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Supplier Transaction ID],\r\n           ct.InvoiceID AS [WWI Invoice ID],\r\n           CAST(NULL AS int) AS [WWI Purchase Order ID],\r\n           CAST(NULL AS nvarchar(20)) AS [Supplier Invoice Number],\r\n           ct.AmountExcludingTax AS [Total Excluding Tax],\r\n           ct.TaxAmount AS [Tax Amount],\r\n           ct.TransactionAmount AS [Total Including Tax],\r\n           ct.OutstandingBalance AS [Outstanding Balance],\r\n           ct.IsFinalized AS [Is Finalized],\r\n           COALESCE(i.CustomerID, ct.CustomerID) AS [WWI Customer ID],\r\n           ct.CustomerID AS [WWI Bill To Customer ID],\r\n           CAST(NULL AS int) AS [WWI Supplier ID],\r\n           ct.TransactionTypeID AS [WWI Transaction Type ID],\r\n           ct.PaymentMethodID AS [WWI Payment Method ID],\r\n           ct.LastEditedWhen AS [Last Modified When]\r\n    FROM Sales.CustomerTransactions AS ct\r\n    LEFT OUTER JOIN Sales.Invoices AS i\r\n    ON ct.InvoiceID = i.InvoiceID\r\n    WHERE ct.LastEditedWhen > @LastCutoff\r\n    AND ct.LastEditedWhen <= @NewCutoff\r\n\r\n    UNION ALL\r\n\r\n    SELECT CAST(st.TransactionDate AS date) AS [Date Key],\r\n           CAST(NULL AS int) AS [WWI Customer Transaction ID],\r\n           st.SupplierTransactionID AS [WWI Supplier Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Invoice ID],\r\n           st.PurchaseOrderID AS [WWI Purchase Order ID],\r\n           st.SupplierInvoiceNumber AS [Supplier Invoice Number],\r\n           st.AmountExcludingTax AS [Total Excluding Tax],\r\n           st.TaxAmount AS [Tax Amount],\r\n           st.TransactionAmount AS [Total Including Tax],\r\n           st.OutstandingBalance AS [Outstanding Balance],\r\n           st.IsFinalized AS [Is Finalized],\r\n           CAST(NULL AS int) AS [WWI Customer ID],\r\n           CAST(NULL AS int) AS [WWI Bill To Customer ID],\r\n           st.SupplierID AS [WWI Supplier ID],\r\n           st.TransactionTypeID AS [WWI Transaction Type ID],\r\n           st.PaymentMethodID AS [WWI Payment Method ID],\r\n           st.LastEditedWhen AS [Last Modified When]\r\n    FROM Purchasing.SupplierTransactions AS st\r\n    WHERE st.LastEditedWhen > @LastCutoff\r\n    AND st.LastEditedWhen <= @NewCutoff;\r\n\r\n    RETURN 0;\r\nEND;\r\n",
+      "pattern": "INCREMENTAL_COMPOSITE",
+      "extraction_pattern": "INCREMENTAL_QUERY",
+      "execution_style": "RELATIONAL",
+      "operations": [
+        "SELECT"
+      ],
+      "relational_features": [
+        "JOIN",
+        "UNION"
+      ],
+      "temporary_tables": [],
+      "has_cursor": false,
+      "has_loop": false,
+      "has_cutoff_parameters": true,
+      "has_cutoff_filter": true,
+      "has_temporal_logic": false,
+      "has_point_in_time_lookup": false
+    },
+    "source_procedure_definition": "\r\nCREATE PROCEDURE Integration.GetTransactionUpdates\r\n@LastCutoff datetime2(7),\r\n@NewCutoff datetime2(7)\r\nWITH EXECUTE AS OWNER\r\nAS\r\nBEGIN\r\n    SET NOCOUNT ON;\r\n    SET XACT_ABORT ON;\r\n\r\n    SELECT CAST(ct.TransactionDate AS date) AS [Date Key],\r\n           ct.CustomerTransactionID AS [WWI Customer Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Supplier Transaction ID],\r\n           ct.InvoiceID AS [WWI Invoice ID],\r\n           CAST(NULL AS int) AS [WWI Purchase Order ID],\r\n           CAST(NULL AS nvarchar(20)) AS [Supplier Invoice Number],\r\n           ct.AmountExcludingTax AS [Total Excluding Tax],\r\n           ct.TaxAmount AS [Tax Amount],\r\n           ct.TransactionAmount AS [Total Including Tax],\r\n           ct.OutstandingBalance AS [Outstanding Balance],\r\n           ct.IsFinalized AS [Is Finalized],\r\n           COALESCE(i.CustomerID, ct.CustomerID) AS [WWI Customer ID],\r\n           ct.CustomerID AS [WWI Bill To Customer ID],\r\n           CAST(NULL AS int) AS [WWI Supplier ID],\r\n           ct.TransactionTypeID AS [WWI Transaction Type ID],\r\n           ct.PaymentMethodID AS [WWI Payment Method ID],\r\n           ct.LastEditedWhen AS [Last Modified When]\r\n    FROM Sales.CustomerTransactions AS ct\r\n    LEFT OUTER JOIN Sales.Invoices AS i\r\n    ON ct.InvoiceID = i.InvoiceID\r\n    WHERE ct.LastEditedWhen > @LastCutoff\r\n    AND ct.LastEditedWhen <= @NewCutoff\r\n\r\n    UNION ALL\r\n\r\n    SELECT CAST(st.TransactionDate AS date) AS [Date Key],\r\n           CAST(NULL AS int) AS [WWI Customer Transaction ID],\r\n           st.SupplierTransactionID AS [WWI Supplier Transaction ID],\r\n           CAST(NULL AS int) AS [WWI Invoice ID],\r\n           st.PurchaseOrderID AS [WWI Purchase Order ID],\r\n           st.SupplierInvoiceNumber AS [Supplier Invoice Number],\r\n           st.AmountExcludingTax AS [Total Excluding Tax],\r\n           st.TaxAmount AS [Tax Amount],\r\n           st.TransactionAmount AS [Total Including Tax],\r\n           st.OutstandingBalance AS [Outstanding Balance],\r\n           st.IsFinalized AS [Is Finalized],\r\n           CAST(NULL AS int) AS [WWI Customer ID],\r\n           CAST(NULL AS int) AS [WWI Bill To Customer ID],\r\n           st.SupplierID AS [WWI Supplier ID],\r\n           st.TransactionTypeID AS [WWI Transaction Type ID],\r\n           st.PaymentMethodID AS [WWI Payment Method ID],\r\n           st.LastEditedWhen AS [Last Modified When]\r\n    FROM Purchasing.SupplierTransactions AS st\r\n    WHERE st.LastEditedWhen > @LastCutoff\r\n    AND st.LastEditedWhen <= @NewCutoff;\r\n\r\n    RETURN 0;\r\nEND;\r\n",
+    "destination_procedure": {
+      "procedure": "Integration.MigrateStagedTransactionData",
+      "role": "DATA_MIGRATION",
+      "operations": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "EXEC",
+        "ORDER_BY"
+      ],
+      "target_objects": [
+        "Dimension.Customer",
+        "Dimension.Payment Method",
+        "Dimension.Supplier",
+        "Dimension.Transaction Type",
+        "Integration.ETL Cutoff",
+        "Integration.Lineage",
+        "Integration.Transaction_Staging"
+      ]
+    },
+    "destination_procedure_definition": "\r\nCREATE PROCEDURE Integration.MigrateStagedTransactionData\r\nWITH EXECUTE AS OWNER\r\nAS\r\nBEGIN\r\n    SET NOCOUNT ON;\r\n    SET XACT_ABORT ON;\r\n\r\n    BEGIN TRAN;\r\n\r\n    DECLARE @LineageKey int = (SELECT TOP(1) [Lineage Key]\r\n                               FROM Integration.Lineage\r\n                               WHERE [Table Name] = N'Transaction'\r\n                               AND [Data Load Completed] IS NULL\r\n                               ORDER BY [Lineage Key] DESC);\r\n\r\n    -- Find the dimension keys required\r\n\r\n    UPDATE t\r\n        SET t.[Customer Key] = COALESCE((SELECT TOP(1) c.[Customer Key]\r\n                                         FROM Dimension.Customer AS c\r\n                                         WHERE c.[WWI Customer ID] = t.[WWI Customer ID]\r\n                                         AND t.[Last Modified When] > c.[Valid From]\r\n                                         AND t.[Last Modified When] <= c.[Valid To]\r\n\t\t\t\t\t\t\t\t\t     ORDER BY c.[Valid From]), 0),\r\n            t.[Bill To Customer Key] = COALESCE((SELECT TOP(1) c.[Customer Key]\r\n                                                 FROM Dimension.Customer AS c\r\n                                                 WHERE c.[WWI Customer ID] = t.[WWI Bill To Customer ID]\r\n                                                 AND t.[Last Modified When] > c.[Valid From]\r\n                                                 AND t.[Last Modified When] <= c.[Valid To]\r\n\t\t\t\t\t\t\t\t\t             ORDER BY c.[Valid From]), 0),\r\n            t.[Supplier Key] = COALESCE((SELECT TOP(1) s.[Supplier Key]\r\n                                         FROM Dimension.Supplier AS s\r\n                                         WHERE s.[WWI Supplier ID] = t.[WWI Supplier ID]\r\n                                         AND t.[Last Modified When] > s.[Valid From]\r\n                                         AND t.[Last Modified When] <= s.[Valid To]\r\n\t\t\t\t\t\t\t\t\t     ORDER BY s.[Valid From]), 0),\r\n            t.[Transaction Type Key] = COALESCE((SELECT TOP(1) tt.[Transaction Type Key]\r\n                                                 FROM Dimension.[Transaction Type] AS tt\r\n                                                 WHERE tt.[WWI Transaction Type ID] = t.[WWI Transaction Type ID]\r\n                                                 AND t.[Last Modified When] > tt.[Valid From]\r\n                                                 AND t.[Last Modified When] <= tt.[Valid To]\r\n\t\t\t\t\t\t\t\t\t             ORDER BY tt.[Valid From]), 0),\r\n            t.[Payment Method Key] = COALESCE((SELECT TOP(1) pm.[Payment Method Key]\r\n                                                 FROM Dimension.[Payment Method] AS pm\r\n                                                 WHERE pm.[WWI Payment Method ID] = t.[WWI Payment Method ID]\r\n                                                 AND t.[Last Modified When] > pm.[Valid From]\r\n                                                 AND t.[Last Modified When] <= pm.[Valid To]\r\n\t\t\t\t\t\t\t\t\t             ORDER BY pm.[Valid From]), 0)\r\n    FROM Integration.Transaction_Staging AS t;\r\n\r\n    -- Insert all the transactions\r\n\r\n    INSERT Fact.[Transaction]\r\n        ([Date Key], [Customer Key], [Bill To Customer Key], [Supplier Key], [Transaction Type Key],\r\n         [Payment Method Key], [WWI Customer Transaction ID], [WWI Supplier Transaction ID],\r\n         [WWI Invoice ID], [WWI Purchase Order ID], [Supplier Invoice Number], [Total Excluding Tax],\r\n         [Tax Amount], [Total Including Tax], [Outstanding Balance], [Is Finalized], [Lineage Key])\r\n    SELECT [Date Key], [Customer Key], [Bill To Customer Key], [Supplier Key], [Transaction Type Key],\r\n         [Payment Method Key], [WWI Customer Transaction ID], [WWI Supplier Transaction ID],\r\n         [WWI Invoice ID], [WWI Purchase Order ID], [Supplier Invoice Number], [Total Excluding Tax],\r\n         [Tax Amount], [Total Including Tax], [Outstanding Balance], [Is Finalized], @LineageKey\r\n    FROM Integration.Transaction_Staging;\r\n\r\n    UPDATE Integration.Lineage\r\n        SET [Data Load Completed] = SYSDATETIME(),\r\n            [Was Successful] = 1\r\n    WHERE [Lineage Key] = @LineageKey;\r\n\r\n    UPDATE Integration.[ETL Cutoff]\r\n        SET [Cutoff Time] = (SELECT [Source System Cutoff Time]\r\n                             FROM Integration.Lineage\r\n                             WHERE [Lineage Key] = @LineageKey)\r\n    FROM Integration.[ETL Cutoff]\r\n    WHERE [Table Name] = N'Transaction';\r\n\r\n    COMMIT;\r\n\r\n    RETURN 0;\r\nEND;\r\n",
+    "control_flow_operations": [
+      "EXTRACT_TO_STAGING",
+      "GET_LAST_CUTOFF",
+      "GET_LINEAGE_KEY",
+      "MIGRATE_STAGED_DATA",
+      "SET_TABLE_NAME",
+      "CLEAR_STAGING"
+    ],
+    "data_flows": [
+      {
+        "name": "Extract Updated Transaction Data to Staging",
+        "source_components": [
+          "Integration_GetTransactionUpdates"
+        ],
+        "destination_components": [
+          "Integration_Transaction_Staging"
+        ],
+        "mapping_count": 17
+      }
+    ],
+    "source_objects": [
+      "Integration.GetTransactionUpdates"
+    ],
+    "target_objects": [
+      "Integration.Transaction_Staging"
+    ],
+    "transformations": [],
+    "language_decision": {
+      "target_platform": "databricks",
+      "language": "spark_sql",
+      "ai_required": false,
+      "confidence": "high",
+      "reasons": [
+        "Relational SQL constructs detected",
+        "No procedural constructs detected"
+      ],
+      "unsupported_features": [],
+      "evidence": {
+        "procedural_features": [],
+        "relational_features": [
+          "SELECT",
+          "JOIN"
+        ]
+      }
+    }
+  }
+}

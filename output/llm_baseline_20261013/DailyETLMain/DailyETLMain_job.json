@@ -1,0 +1,352 @@
+{
+  "name": "DailyETLMain Migration",
+  "tasks": [
+    {
+      "task_key": "load_city_dimension",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_city_dimension",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load City Dimension (DIMENSION_LOAD)"
+    },
+    {
+      "task_key": "load_customer_dimension",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_customer_dimension",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Customer Dimension (DIMENSION_LOAD)"
+    },
+    {
+      "task_key": "load_employee_dimension",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_employee_dimension",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Employee Dimension (DIMENSION_LOAD)"
+    },
+    {
+      "task_key": "load_payment_method_dimension",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_payment_method_dimension",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Payment Method Dimension (DIMENSION_LOAD)"
+    },
+    {
+      "task_key": "load_stock_item_dimension",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_stock_item_dimension",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Stock Item Dimension (DIMENSION_LOAD)"
+    },
+    {
+      "task_key": "load_supplier_dimension",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_supplier_dimension",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Supplier Dimension (DIMENSION_LOAD)"
+    },
+    {
+      "task_key": "load_transaction_type_dimension",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_transaction_type_dimension",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Transaction Type Dimension (DIMENSION_LOAD)"
+    },
+    {
+      "task_key": "load_movement_fact",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_movement_fact",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Movement Fact (FACT_LOAD)",
+      "depends_on": [
+        {
+          "task_key": "load_city_dimension"
+        },
+        {
+          "task_key": "load_customer_dimension"
+        },
+        {
+          "task_key": "load_employee_dimension"
+        },
+        {
+          "task_key": "load_payment_method_dimension"
+        },
+        {
+          "task_key": "load_stock_item_dimension"
+        },
+        {
+          "task_key": "load_supplier_dimension"
+        },
+        {
+          "task_key": "load_transaction_type_dimension"
+        }
+      ]
+    },
+    {
+      "task_key": "load_order_fact",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_order_fact",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Order Fact (FACT_LOAD)",
+      "depends_on": [
+        {
+          "task_key": "load_city_dimension"
+        },
+        {
+          "task_key": "load_customer_dimension"
+        },
+        {
+          "task_key": "load_employee_dimension"
+        },
+        {
+          "task_key": "load_payment_method_dimension"
+        },
+        {
+          "task_key": "load_stock_item_dimension"
+        },
+        {
+          "task_key": "load_supplier_dimension"
+        },
+        {
+          "task_key": "load_transaction_type_dimension"
+        }
+      ]
+    },
+    {
+      "task_key": "load_purchase_fact",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_purchase_fact",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Purchase Fact (FACT_LOAD)",
+      "depends_on": [
+        {
+          "task_key": "load_city_dimension"
+        },
+        {
+          "task_key": "load_customer_dimension"
+        },
+        {
+          "task_key": "load_employee_dimension"
+        },
+        {
+          "task_key": "load_payment_method_dimension"
+        },
+        {
+          "task_key": "load_stock_item_dimension"
+        },
+        {
+          "task_key": "load_supplier_dimension"
+        },
+        {
+          "task_key": "load_transaction_type_dimension"
+        }
+      ]
+    },
+    {
+      "task_key": "load_sale_fact",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_sale_fact",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Sale Fact (FACT_LOAD)",
+      "depends_on": [
+        {
+          "task_key": "load_city_dimension"
+        },
+        {
+          "task_key": "load_customer_dimension"
+        },
+        {
+          "task_key": "load_employee_dimension"
+        },
+        {
+          "task_key": "load_payment_method_dimension"
+        },
+        {
+          "task_key": "load_stock_item_dimension"
+        },
+        {
+          "task_key": "load_supplier_dimension"
+        },
+        {
+          "task_key": "load_transaction_type_dimension"
+        }
+      ]
+    },
+    {
+      "task_key": "load_stock_holding_fact",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_stock_holding_fact",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Stock Holding Fact (FACT_LOAD)",
+      "depends_on": [
+        {
+          "task_key": "load_city_dimension"
+        },
+        {
+          "task_key": "load_customer_dimension"
+        },
+        {
+          "task_key": "load_employee_dimension"
+        },
+        {
+          "task_key": "load_payment_method_dimension"
+        },
+        {
+          "task_key": "load_stock_item_dimension"
+        },
+        {
+          "task_key": "load_supplier_dimension"
+        },
+        {
+          "task_key": "load_transaction_type_dimension"
+        }
+      ]
+    },
+    {
+      "task_key": "load_transaction_fact",
+      "job_cluster_key": "migration_cluster",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/output/llm_baseline_20261013/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "base_parameters": {
+          "step_id": "load_transaction_fact",
+          "catalog": "main",
+          "schema": "default"
+        },
+        "source": "WORKSPACE"
+      },
+      "description": "Load Transaction Fact (FACT_LOAD)",
+      "depends_on": [
+        {
+          "task_key": "load_city_dimension"
+        },
+        {
+          "task_key": "load_customer_dimension"
+        },
+        {
+          "task_key": "load_employee_dimension"
+        },
+        {
+          "task_key": "load_payment_method_dimension"
+        },
+        {
+          "task_key": "load_stock_item_dimension"
+        },
+        {
+          "task_key": "load_supplier_dimension"
+        },
+        {
+          "task_key": "load_transaction_type_dimension"
+        }
+      ]
+    }
+  ],
+  "tags": {
+    "source": "ssis_migration",
+    "package": "DailyETLMain"
+  },
+  "job_clusters": [
+    {
+      "job_cluster_key": "migration_cluster",
+      "new_cluster": {
+        "spark_version": "15.4.x-scala2.12",
+        "node_type_id": "i3.xlarge",
+        "num_workers": 1,
+        "spark_conf": {
+          "spark.sql.catalog.unity": "com.databricks.sql.catalog.UnityCatalog"
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "catalog",
+      "default": "main"
+    },
+    {
+      "name": "schema",
+      "default": "default"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+from .databricks_provider import DatabricksProvider
 from .mock_provider import MockAIProvider
 from .openai_provider import OpenAIProvider
 from .puter_provider import PuterAIProvider
@@ -7,6 +8,9 @@ from .provider import AIProvider
 def create_provider(name: str) -> AIProvider:
     normalized = name.strip().lower()
 
+    if normalized == "databricks":
+        return DatabricksProvider()
+    
     if normalized == "mock":
         return MockAIProvider()
 
@@ -18,5 +22,5 @@ def create_provider(name: str) -> AIProvider:
 
     raise ValueError(
         f"Unsupported AI provider: {name!r}. "
-        "Supported providers: mock, openai, puter."
+        "Supported providers: mock, openai, puter, databricks."
     )

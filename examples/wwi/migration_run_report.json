@@ -1,0 +1,159 @@
+{
+  "mode": "DRY_RUN",
+  "catalog": "dev_catalog",
+  "status": "REVIEW_REQUIRED",
+  "schema_provisioning": {
+    "status": "DRY_RUN",
+    "missing_schemas": [],
+    "executed": false,
+    "results": []
+  },
+  "table_creation": {
+    "status": "DRY_RUN",
+    "executed": false,
+    "results": [
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`dimension`.`city` (\n  `City Key` INT NOT NULL,\n  `WWI City ID` INT NOT NULL,\n  `City` STRING NOT NULL,\n  `State Province` STRING NOT NULL,\n  `Country` STRING NOT NULL,\n  `Continent` STRING NOT NULL,\n  `Sales Territory` STRING NOT NULL,\n  `Region` STRING NOT NULL,\n  `Subregion` STRING NOT NULL,\n  `Location` GEOGRAPHY(4326),\n  `Latest Recorded Population` BIGINT NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`dimension`.`customer` (\n  `Customer Key` INT NOT NULL,\n  `WWI Customer ID` INT NOT NULL,\n  `Customer` STRING NOT NULL,\n  `Bill To Customer` STRING NOT NULL,\n  `Category` STRING NOT NULL,\n  `Buying Group` STRING NOT NULL,\n  `Primary Contact` STRING NOT NULL,\n  `Postal Code` STRING NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`dimension`.`date` (\n  `Date` DATE NOT NULL,\n  `Day Number` INT NOT NULL,\n  `Day` STRING NOT NULL,\n  `Month` STRING NOT NULL,\n  `Short Month` STRING NOT NULL,\n  `Calendar Month Number` INT NOT NULL,\n  `Calendar Month Label` STRING NOT NULL,\n  `Calendar Year` INT NOT NULL,\n  `Calendar Year Label` STRING NOT NULL,\n  `Fiscal Month Number` INT NOT NULL,\n  `Fiscal Month Label` STRING NOT NULL,\n  `Fiscal Year` INT NOT NULL,\n  `Fiscal Year Label` STRING NOT NULL,\n  `ISO Week Number` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`dimension`.`employee` (\n  `Employee Key` INT NOT NULL,\n  `WWI Employee ID` INT NOT NULL,\n  `Employee` STRING NOT NULL,\n  `Preferred Name` STRING NOT NULL,\n  `Is Salesperson` BOOLEAN NOT NULL,\n  `Photo` BINARY,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`dimension`.`payment method` (\n  `Payment Method Key` INT NOT NULL,\n  `WWI Payment Method ID` INT NOT NULL,\n  `Payment Method` STRING NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`dimension`.`stock item` (\n  `Stock Item Key` INT NOT NULL,\n  `WWI Stock Item ID` INT NOT NULL,\n  `Stock Item` STRING NOT NULL,\n  `Color` STRING NOT NULL,\n  `Selling Package` STRING NOT NULL,\n  `Buying Package` STRING NOT NULL,\n  `Brand` STRING NOT NULL,\n  `Size` STRING NOT NULL,\n  `Lead Time Days` INT NOT NULL,\n  `Quantity Per Outer` INT NOT NULL,\n  `Is Chiller Stock` BOOLEAN NOT NULL,\n  `Barcode` STRING,\n  `Tax Rate` DECIMAL(18,3) NOT NULL,\n  `Unit Price` DECIMAL(18,2) NOT NULL,\n  `Recommended Retail Price` DECIMAL(18,2),\n  `Typical Weight Per Unit` DECIMAL(18,3) NOT NULL,\n  `Photo` BINARY,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`dimension`.`supplier` (\n  `Supplier Key` INT NOT NULL,\n  `WWI Supplier ID` INT NOT NULL,\n  `Supplier` STRING NOT NULL,\n  `Category` STRING NOT NULL,\n  `Primary Contact` STRING NOT NULL,\n  `Supplier Reference` STRING,\n  `Payment Days` INT NOT NULL,\n  `Postal Code` STRING NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`dimension`.`transaction type` (\n  `Transaction Type Key` INT NOT NULL,\n  `WWI Transaction Type ID` INT NOT NULL,\n  `Transaction Type` STRING NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`fact`.`movement` (\n  `Movement Key` BIGINT NOT NULL,\n  `Date Key` DATE NOT NULL,\n  `Stock Item Key` INT NOT NULL,\n  `Customer Key` INT,\n  `Supplier Key` INT,\n  `Transaction Type Key` INT NOT NULL,\n  `WWI Stock Item Transaction ID` INT NOT NULL,\n  `WWI Invoice ID` INT,\n  `WWI Purchase Order ID` INT,\n  `Quantity` INT NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`fact`.`order` (\n  `Order Key` BIGINT NOT NULL,\n  `City Key` INT NOT NULL,\n  `Customer Key` INT NOT NULL,\n  `Stock Item Key` INT NOT NULL,\n  `Order Date Key` DATE NOT NULL,\n  `Picked Date Key` DATE,\n  `Salesperson Key` INT NOT NULL,\n  `Picker Key` INT,\n  `WWI Order ID` INT NOT NULL,\n  `WWI Backorder ID` INT,\n  `Description` STRING NOT NULL,\n  `Package` STRING NOT NULL,\n  `Quantity` INT NOT NULL,\n  `Unit Price` DECIMAL(18,2) NOT NULL,\n  `Tax Rate` DECIMAL(18,3) NOT NULL,\n  `Total Excluding Tax` DECIMAL(18,2) NOT NULL,\n  `Tax Amount` DECIMAL(18,2) NOT NULL,\n  `Total Including Tax` DECIMAL(18,2) NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`fact`.`purchase` (\n  `Purchase Key` BIGINT NOT NULL,\n  `Date Key` DATE NOT NULL,\n  `Supplier Key` INT NOT NULL,\n  `Stock Item Key` INT NOT NULL,\n  `WWI Purchase Order ID` INT,\n  `Ordered Outers` INT NOT NULL,\n  `Ordered Quantity` INT NOT NULL,\n  `Received Outers` INT NOT NULL,\n  `Package` STRING NOT NULL,\n  `Is Order Finalized` BOOLEAN NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`fact`.`sale` (\n  `Sale Key` BIGINT NOT NULL,\n  `City Key` INT NOT NULL,\n  `Customer Key` INT NOT NULL,\n  `Bill To Customer Key` INT NOT NULL,\n  `Stock Item Key` INT NOT NULL,\n  `Invoice Date Key` DATE NOT NULL,\n  `Delivery Date Key` DATE,\n  `Salesperson Key` INT NOT NULL,\n  `WWI Invoice ID` INT NOT NULL,\n  `Description` STRING NOT NULL,\n  `Package` STRING NOT NULL,\n  `Quantity` INT NOT NULL,\n  `Unit Price` DECIMAL(18,2) NOT NULL,\n  `Tax Rate` DECIMAL(18,3) NOT NULL,\n  `Total Excluding Tax` DECIMAL(18,2) NOT NULL,\n  `Tax Amount` DECIMAL(18,2) NOT NULL,\n  `Profit` DECIMAL(18,2) NOT NULL,\n  `Total Including Tax` DECIMAL(18,2) NOT NULL,\n  `Total Dry Items` INT NOT NULL,\n  `Total Chiller Items` INT NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`fact`.`stock holding` (\n  `Stock Holding Key` BIGINT NOT NULL,\n  `Stock Item Key` INT NOT NULL,\n  `Quantity On Hand` INT NOT NULL,\n  `Bin Location` STRING NOT NULL,\n  `Last Stocktake Quantity` INT NOT NULL,\n  `Last Cost Price` DECIMAL(18,2) NOT NULL,\n  `Reorder Level` INT NOT NULL,\n  `Target Stock Level` INT NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`fact`.`transaction` (\n  `Transaction Key` BIGINT NOT NULL,\n  `Date Key` DATE NOT NULL,\n  `Customer Key` INT,\n  `Bill To Customer Key` INT,\n  `Supplier Key` INT,\n  `Transaction Type Key` INT NOT NULL,\n  `Payment Method Key` INT,\n  `WWI Customer Transaction ID` INT,\n  `WWI Supplier Transaction ID` INT,\n  `WWI Invoice ID` INT,\n  `WWI Purchase Order ID` INT,\n  `Supplier Invoice Number` STRING,\n  `Total Excluding Tax` DECIMAL(18,2) NOT NULL,\n  `Tax Amount` DECIMAL(18,2) NOT NULL,\n  `Total Including Tax` DECIMAL(18,2) NOT NULL,\n  `Outstanding Balance` DECIMAL(18,2) NOT NULL,\n  `Is Finalized` BOOLEAN NOT NULL,\n  `Lineage Key` INT NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`city_staging` (\n  `City Staging Key` INT NOT NULL,\n  `WWI City ID` INT NOT NULL,\n  `City` STRING NOT NULL,\n  `State Province` STRING NOT NULL,\n  `Country` STRING NOT NULL,\n  `Continent` STRING NOT NULL,\n  `Sales Territory` STRING NOT NULL,\n  `Region` STRING NOT NULL,\n  `Subregion` STRING NOT NULL,\n  `Location` GEOGRAPHY(4326),\n  `Latest Recorded Population` BIGINT NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`customer_staging` (\n  `Customer Staging Key` INT NOT NULL,\n  `WWI Customer ID` INT NOT NULL,\n  `Customer` STRING NOT NULL,\n  `Bill To Customer` STRING NOT NULL,\n  `Category` STRING NOT NULL,\n  `Buying Group` STRING NOT NULL,\n  `Primary Contact` STRING NOT NULL,\n  `Postal Code` STRING NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`employee_staging` (\n  `Employee Staging Key` INT NOT NULL,\n  `WWI Employee ID` INT NOT NULL,\n  `Employee` STRING NOT NULL,\n  `Preferred Name` STRING NOT NULL,\n  `Is Salesperson` BOOLEAN NOT NULL,\n  `Photo` BINARY,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`etl cutoff` (\n  `Table Name` STRING NOT NULL,\n  `Cutoff Time` TIMESTAMP NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`lineage` (\n  `Lineage Key` INT NOT NULL,\n  `Data Load Started` TIMESTAMP NOT NULL,\n  `Table Name` STRING NOT NULL,\n  `Data Load Completed` TIMESTAMP,\n  `Was Successful` BOOLEAN NOT NULL,\n  `Source System Cutoff Time` TIMESTAMP NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`movement_staging` (\n  `Movement Staging Key` BIGINT NOT NULL,\n  `Date Key` DATE,\n  `Stock Item Key` INT,\n  `Customer Key` INT,\n  `Supplier Key` INT,\n  `Transaction Type Key` INT,\n  `WWI Stock Item Transaction ID` INT,\n  `WWI Invoice ID` INT,\n  `WWI Purchase Order ID` INT,\n  `Quantity` INT,\n  `WWI Stock Item ID` INT,\n  `WWI Customer ID` INT,\n  `WWI Supplier ID` INT,\n  `WWI Transaction Type ID` INT,\n  `Last Modifed When` TIMESTAMP\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`order_staging` (\n  `Order Staging Key` BIGINT NOT NULL,\n  `City Key` INT,\n  `Customer Key` INT,\n  `Stock Item Key` INT,\n  `Order Date Key` DATE,\n  `Picked Date Key` DATE,\n  `Salesperson Key` INT,\n  `Picker Key` INT,\n  `WWI Order ID` INT,\n  `WWI Backorder ID` INT,\n  `Description` STRING,\n  `Package` STRING,\n  `Quantity` INT,\n  `Unit Price` DECIMAL(18,2),\n  `Tax Rate` DECIMAL(18,3),\n  `Total Excluding Tax` DECIMAL(18,2),\n  `Tax Amount` DECIMAL(18,2),\n  `Total Including Tax` DECIMAL(18,2),\n  `Lineage Key` INT,\n  `WWI City ID` INT,\n  `WWI Customer ID` INT,\n  `WWI Stock Item ID` INT,\n  `WWI Salesperson ID` INT,\n  `WWI Picker ID` INT,\n  `Last Modified When` TIMESTAMP\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`paymentmethod_staging` (\n  `Payment Method Staging Key` INT NOT NULL,\n  `WWI Payment Method ID` INT NOT NULL,\n  `Payment Method` STRING NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`purchase_staging` (\n  `Purchase Staging Key` BIGINT NOT NULL,\n  `Date Key` DATE,\n  `Supplier Key` INT,\n  `Stock Item Key` INT,\n  `WWI Purchase Order ID` INT,\n  `Ordered Outers` INT,\n  `Ordered Quantity` INT,\n  `Received Outers` INT,\n  `Package` STRING,\n  `Is Order Finalized` BOOLEAN,\n  `WWI Supplier ID` INT,\n  `WWI Stock Item ID` INT,\n  `Last Modified When` TIMESTAMP\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`sale_staging` (\n  `Sale Staging Key` BIGINT NOT NULL,\n  `City Key` INT,\n  `Customer Key` INT,\n  `Bill To Customer Key` INT,\n  `Stock Item Key` INT,\n  `Invoice Date Key` DATE,\n  `Delivery Date Key` DATE,\n  `Salesperson Key` INT,\n  `WWI Invoice ID` INT,\n  `Description` STRING,\n  `Package` STRING,\n  `Quantity` INT,\n  `Unit Price` DECIMAL(18,2),\n  `Tax Rate` DECIMAL(18,3),\n  `Total Excluding Tax` DECIMAL(18,2),\n  `Tax Amount` DECIMAL(18,2),\n  `Profit` DECIMAL(18,2),\n  `Total Including Tax` DECIMAL(18,2),\n  `Total Dry Items` INT,\n  `Total Chiller Items` INT,\n  `WWI City ID` INT,\n  `WWI Customer ID` INT,\n  `WWI Bill To Customer ID` INT,\n  `WWI Stock Item ID` INT,\n  `WWI Salesperson ID` INT,\n  `Last Modified When` TIMESTAMP\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`stockholding_staging` (\n  `Stock Holding Staging Key` BIGINT NOT NULL,\n  `Stock Item Key` INT,\n  `Quantity On Hand` INT,\n  `Bin Location` STRING,\n  `Last Stocktake Quantity` INT,\n  `Last Cost Price` DECIMAL(18,2),\n  `Reorder Level` INT,\n  `Target Stock Level` INT,\n  `WWI Stock Item ID` INT\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`stockitem_staging` (\n  `Stock Item Staging Key` INT NOT NULL,\n  `WWI Stock Item ID` INT NOT NULL,\n  `Stock Item` STRING NOT NULL,\n  `Color` STRING NOT NULL,\n  `Selling Package` STRING NOT NULL,\n  `Buying Package` STRING NOT NULL,\n  `Brand` STRING NOT NULL,\n  `Size` STRING NOT NULL,\n  `Lead Time Days` INT NOT NULL,\n  `Quantity Per Outer` INT NOT NULL,\n  `Is Chiller Stock` BOOLEAN NOT NULL,\n  `Barcode` STRING,\n  `Tax Rate` DECIMAL(18,3) NOT NULL,\n  `Unit Price` DECIMAL(18,2) NOT NULL,\n  `Recommended Retail Price` DECIMAL(18,2),\n  `Typical Weight Per Unit` DECIMAL(18,3) NOT NULL,\n  `Photo` BINARY,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`supplier_staging` (\n  `Supplier Staging Key` INT NOT NULL,\n  `WWI Supplier ID` INT NOT NULL,\n  `Supplier` STRING NOT NULL,\n  `Category` STRING NOT NULL,\n  `Primary Contact` STRING NOT NULL,\n  `Supplier Reference` STRING,\n  `Payment Days` INT NOT NULL,\n  `Postal Code` STRING NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`transaction_staging` (\n  `Transaction Staging Key` BIGINT NOT NULL,\n  `Date Key` DATE,\n  `Customer Key` INT,\n  `Bill To Customer Key` INT,\n  `Supplier Key` INT,\n  `Transaction Type Key` INT,\n  `Payment Method Key` INT,\n  `WWI Customer Transaction ID` INT,\n  `WWI Supplier Transaction ID` INT,\n  `WWI Invoice ID` INT,\n  `WWI Purchase Order ID` INT,\n  `Supplier Invoice Number` STRING,\n  `Total Excluding Tax` DECIMAL(18,2),\n  `Tax Amount` DECIMAL(18,2),\n  `Total Including Tax` DECIMAL(18,2),\n  `Outstanding Balance` DECIMAL(18,2),\n  `Is Finalized` BOOLEAN,\n  `WWI Customer ID` INT,\n  `WWI Bill To Customer ID` INT,\n  `WWI Supplier ID` INT,\n  `WWI Transaction Type ID` INT,\n  `WWI Payment Method ID` INT,\n  `Last Modified When` TIMESTAMP\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      },
+      {
+        "sql": "CREATE TABLE IF NOT EXISTS `dev_catalog`.`integration`.`transactiontype_staging` (\n  `Transaction Type Staging Key` INT NOT NULL,\n  `WWI Transaction Type ID` INT NOT NULL,\n  `Transaction Type` STRING NOT NULL,\n  `Valid From` TIMESTAMP NOT NULL,\n  `Valid To` TIMESTAMP NOT NULL\n)\nUSING DELTA\nTBLPROPERTIES ('delta.columnMapping.mode' = 'name');",
+        "status": "PLANNED"
+      }
+    ],
+    "planned_statement_count": 29,
+    "generated_table_count": 29,
+    "review_findings": [
+      {
+        "object": "Dimension.City",
+        "column": "Location",
+        "source_type": "geography",
+        "target_type": "GEOGRAPHY(4326)",
+        "issue": "Target supports SRID 4326; verify source SRID and spatial conversion in the migration execution path."
+      },
+      {
+        "object": "Integration.City_Staging",
+        "column": "Location",
+        "source_type": "geography",
+        "target_type": "GEOGRAPHY(4326)",
+        "issue": "Target supports SRID 4326; verify source SRID and spatial conversion in the migration execution path."
+      }
+    ],
+    "column_mapping": true
+  },
+  "data_migration": {
+    "status": "NOT_IMPLEMENTED",
+    "loaded_tables": 0
+  },
+  "transformation_generation": {
+    "status": "NOT_RUN"
+  }
+}

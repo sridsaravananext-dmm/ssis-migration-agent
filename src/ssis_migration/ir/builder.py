@@ -322,12 +322,16 @@ class IRBuilder:
 
         if isinstance(connection, str):
             reference_id = connection
+            connection_manager_id = None
 
         else:
             reference_id = (
                 connection.get("reference_id")
                 or connection.get("connection_manager_ref_id")
                 or connection.get("ref_id")
+            )
+            connection_manager_id = (
+                connection.get("connection_manager_id")
             )
 
         name = None
@@ -341,7 +345,7 @@ class IRBuilder:
 
         return ConnectionReferenceIR(
             ref_id=reference_id,
-            connection_manager_id=None,
+            connection_manager_id=connection_manager_id,
             connection_manager_ref_id=reference_id,
             name=name,
         )
@@ -351,24 +355,94 @@ class IRBuilder:
     # =========================================================
 
     def _build_constraint(
-        self,
-        constraint: dict[str, Any],
+    self,
+    constraint: dict[str, Any],
     ) -> PrecedenceConstraintIR:
 
+        attributes = constraint.get("attributes", {})
+
+        logical_and = constraint.get("logical_and")
+        if logical_and is None:
+            logical_and = attributes.get("LogicalAnd")
+
+        if isinstance(logical_and, str):
+            logical_and = logical_and.strip().lower() == "true"
+
+        if logical_and is None:
+            logical_and = True
+
+        # -------------------------------------------------
+        # Evaluation operation (EvalOp)
+        # SSIS XML values: 0=Constraint, 1=Expression,
+        #   2=ExpressionAndConstraint,
+        #   3=ExpressionOrConstraint.
+        # Default when absent: Constraint.
+        # -------------------------------------------------
+        _EVAL_OP_MAP = {
+            "0": "Constraint",
+            "1": "Expression",
+            "2": "ExpressionAndConstraint",
+            "3": "ExpressionOrConstraint",
+        }
+
+        eval_op = (
+            constraint.get("evaluation_operation")
+            or attributes.get("EvalOp")
+        )
+        if eval_op is None:
+            eval_op = "Constraint"
+        elif isinstance(eval_op, str) and eval_op in _EVAL_OP_MAP:
+            eval_op = _EVAL_OP_MAP[eval_op]
+
+        # -------------------------------------------------
+        # Constraint value (Value)
+        # SSIS XML values: 0=Success, 1=Failure,
+        #   2=Completion.
+        # Default when absent: Success.
+        # -------------------------------------------------
+        _VALUE_MAP = {
+            "0": "Success",
+            "1": "Failure",
+            "2": "Completion",
+        }
+
+        value = (
+            constraint.get("value")
+            or attributes.get("Value")
+        )
+        if value is None:
+            value = "Success"
+        elif isinstance(value, str) and value in _VALUE_MAP:
+            value = _VALUE_MAP[value]
+
+        # -------------------------------------------------
+        # Expression (absent = no expression)
+        # -------------------------------------------------
+        expression = (
+            constraint.get("expression")
+            or attributes.get("Expression")
+        )
+
         return PrecedenceConstraintIR(
-            ref_id=constraint.get(
-                "ref_id"
+            ref_id=(
+                constraint.get("ref_id")
+                or attributes.get("refId")
             ),
-            from_executable=constraint.get(
-                "from_executable"
+            from_executable=(
+                constraint.get("from_executable")
+                or constraint.get("from")
+                or attributes.get("From")
             ),
-            to_executable=constraint.get(
-                "to_executable"
+            to_executable=(
+                constraint.get("to_executable")
+                or constraint.get("to")
+                or attributes.get("To")
             ),
-            attributes=constraint.get(
-                "attributes",
-                {}
-            ),
+            logical_and=logical_and,
+            evaluation_operation=eval_op,
+            value=value,
+            expression=expression,
+            attributes=attributes,
         )
 
     # =========================================================

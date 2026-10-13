@@ -1,0 +1,128 @@
+{
+  "artifact_id": "load_movement_fact_spark_sql",
+  "name": "Load Movement Fact_spark_sql",
+  "artifact_type": "NOTEBOOK_CELL",
+  "target_platform": "databricks",
+  "language": "spark_sql",
+  "source_step_id": "load_movement_fact",
+  "metadata": {
+    "generator": "SparkSQLGenerator",
+    "status": "GENERATED",
+    "procedure": "Integration.GetMovementUpdates",
+    "translation": {
+      "status": "TRANSLATED",
+      "sql": "SELECT CAST(sit.TransactionOccurredWhen AS date) AS `Date Key`,\r\n           sit.StockItemTransactionID AS `WWI Stock Item Transaction ID`,\r\n           sit.InvoiceID AS `WWI Invoice ID`,\r\n           sit.PurchaseOrderID AS `WWI Purchase Order ID`,\r\n           CAST(sit.Quantity AS int) AS Quantity,\r\n           sit.StockItemID AS `WWI Stock Item ID`,\r\n           sit.CustomerID AS `WWI Customer ID`,\r\n           sit.SupplierID AS `WWI Supplier ID`,\r\n           sit.TransactionTypeID AS `WWI Transaction Type ID`,\r\n           sit.TransactionOccurredWhen AS `Transaction Occurred When`\r\n    FROM Warehouse.StockItemTransactions AS sit\r\n    WHERE sit.LastEditedWhen > :LastCutoff\r\n    AND sit.LastEditedWhen <= :NewCutoff\r\n    ORDER BY sit.StockItemTransactionID",
+      "parameters": [
+        "LastCutoff",
+        "NewCutoff"
+      ],
+      "source_objects": [
+        "Warehouse.StockItemTransactions"
+      ],
+      "evidence": {
+        "source_sql_length": 971,
+        "translated_sql_length": 757
+      }
+    },
+    "migration_strategy": {
+      "strategy": "DETERMINISTIC",
+      "requires_ai": false,
+      "complexity_signals": [],
+      "patterns": [
+        "INCREMENTAL_RELATIONAL"
+      ]
+    },
+    "migration_intent": {
+      "load_name": "Load Movement Fact",
+      "load_type": "FACT_LOAD",
+      "source_objects": [
+        "Integration.GetMovementUpdates"
+      ],
+      "target_objects": [
+        "Integration.Movement_Staging"
+      ],
+      "control_flow_operations": [
+        "EXTRACT_TO_STAGING",
+        "GET_LAST_CUTOFF",
+        "GET_LINEAGE_KEY",
+        "MIGRATE_STAGED_DATA",
+        "SET_TABLE_NAME",
+        "CLEAR_STAGING"
+      ],
+      "source_procedures": [
+        {
+          "procedure": "Integration.GetMovementUpdates",
+          "definition": "\r\nCREATE PROCEDURE Integration.GetMovementUpdates\r\n@LastCutoff datetime2(7),\r\n@NewCutoff datetime2(7)\r\nWITH EXECUTE AS OWNER\r\nAS\r\nBEGIN\r\n    SET NOCOUNT ON;\r\n    SET XACT_ABORT ON;\r\n\r\n    SELECT CAST(sit.TransactionOccurredWhen AS date) AS [Date Key],\r\n           sit.StockItemTransactionID AS [WWI Stock Item Transaction ID],\r\n           sit.InvoiceID AS [WWI Invoice ID],\r\n           sit.PurchaseOrderID AS [WWI Purchase Order ID],\r\n           CAST(sit.Quantity AS int) AS Quantity,\r\n           sit.StockItemID AS [WWI Stock Item ID],\r\n           sit.CustomerID AS [WWI Customer ID],\r\n           sit.SupplierID AS [WWI Supplier ID],\r\n           sit.TransactionTypeID AS [WWI Transaction Type ID],\r\n           sit.TransactionOccurredWhen AS [Transaction Occurred When]\r\n    FROM Warehouse.StockItemTransactions AS sit\r\n    WHERE sit.LastEditedWhen > @LastCutoff\r\n    AND sit.LastEditedWhen <= @NewCutoff\r\n    ORDER BY sit.StockItemTransactionID;\r\n\r\n    RETURN 0;\r\nEND;\r\n",
+          "pattern": "INCREMENTAL_RELATIONAL",
+          "extraction_pattern": "INCREMENTAL_QUERY",
+          "execution_style": "RELATIONAL",
+          "operations": [
+            "SELECT"
+          ],
+          "relational_features": [
+            "ORDER_BY"
+          ],
+          "temporary_tables": [],
+          "has_cursor": false,
+          "has_loop": false,
+          "has_cutoff_parameters": true,
+          "has_cutoff_filter": true,
+          "has_temporal_logic": false,
+          "has_point_in_time_lookup": false
+        }
+      ],
+      "destination_procedures": [
+        {
+          "procedure": "Integration.MigrateStagedMovementData",
+          "role": "DATA_MIGRATION",
+          "operations": [
+            "SELECT",
+            "INSERT",
+            "UPDATE",
+            "MERGE",
+            "EXEC",
+            "ORDER_BY"
+          ],
+          "target_objects": [
+            "Dimension.Customer",
+            "Dimension.Stock Item",
+            "Dimension.Supplier",
+            "Dimension.Transaction Type",
+            "Integration.ETL Cutoff",
+            "Integration.Lineage",
+            "Integration.Movement_Staging"
+          ]
+        }
+      ],
+      "data_flows": [
+        {
+          "name": "Extract Updated Movement Data to Staging",
+          "source_components": [
+            "Integration_GetMovementUpdates"
+          ],
+          "destination_components": [
+            "Integration_Movement_Staging"
+          ],
+          "mapping_count": 10
+        }
+      ]
+    },
+    "language_decision": {
+      "target_platform": "databricks",
+      "language": "spark_sql",
+      "ai_required": false,
+      "confidence": "high",
+      "reasons": [
+        "Relational SQL constructs detected",
+        "No procedural constructs detected"
+      ],
+      "unsupported_features": [],
+      "evidence": {
+        "procedural_features": [],
+        "relational_features": [
+          "SELECT"
+        ]
+      }
+    }
+  }
+}

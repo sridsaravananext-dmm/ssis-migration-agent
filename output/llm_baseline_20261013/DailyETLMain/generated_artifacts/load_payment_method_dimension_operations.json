@@ -1,0 +1,56 @@
+[
+  {
+    "operation_id": "set_table_name",
+    "operation_type": "CONTROL",
+    "order": 1,
+    "code": "table_name = \"Integration.PaymentMethod_Staging\""
+  },
+  {
+    "operation_id": "get_last_cutoff",
+    "operation_type": "CONTROL",
+    "order": 2,
+    "code": "last_cutoff = get_last_etl_cutoff(\n    table_name=table_name\n)"
+  },
+  {
+    "operation_id": "get_lineage_key",
+    "operation_type": "CONTROL",
+    "order": 3,
+    "code": "lineage_key = get_lineage_key(\n    table_name=table_name,\n    cutoff_time=new_cutoff\n)"
+  },
+  {
+    "operation_id": "clear_staging",
+    "operation_type": "STAGING",
+    "order": 4,
+    "code": "spark.sql(\"\"\"\nDELETE FROM Integration.PaymentMethod_Staging\n\"\"\")"
+  },
+  {
+    "operation_id": "extract_to_staging",
+    "operation_type": "EXTRACT",
+    "order": 5,
+    "code": "# AI_REQUIRED\n#\n# Source procedure cannot be deterministically translated.\n#\n# Translation status:\n# UNSUPPORTED_PROCEDURAL_SQL\n#\n# Unsupported/complex features:\n# CURSOR, WHILE, TEMP_TABLE\n#\n# The original procedure is preserved in operation metadata.\n#\n# The migration agent must convert this procedure\n# into executable Databricks logic."
+  },
+  {
+    "operation_id": "resolve_dimension_keys",
+    "operation_type": "LOOKUP_UPDATE",
+    "order": 6,
+    "code": "dimension_targets = [\n    \"Dimension.Payment Method\"\n]\n\n# Resolve dimension/surrogate keys according to\n# the semantic analysis of the source procedure.\n\n# Semantic operation:\n# RESOLVE_DIMENSION_KEYS\n\n# Required target dimensions:\n# \"Dimension.Payment Method\""
+  },
+  {
+    "operation_id": "insert_target",
+    "operation_type": "INSERT",
+    "order": 7,
+    "code": "# TODO: generate executable INSERT.\n#\n# Target:\n# Dimension.Payment Method\n#\n# Semantic analysis:\n# {'operation': 'INSERT_TARGET', 'type': 'INSERT', 'description': 'Insert staged records into the target table.', 'target': 'Dimension.Payment Method', 'features': ['INSERT', 'SELECT_FROM_STAGING']}"
+  },
+  {
+    "operation_id": "complete_lineage",
+    "operation_type": "UPDATE",
+    "order": 8,
+    "code": "# Mark lineage record as successfully completed.\ncomplete_lineage(lineage_key)"
+  },
+  {
+    "operation_id": "update_etl_cutoff",
+    "operation_type": "UPDATE",
+    "order": 9,
+    "code": "# Advance ETL cutoff after successful load.\nupdate_etl_cutoff(\n    table_name=table_name,\n    cutoff_time=new_cutoff\n)"
+  }
+]

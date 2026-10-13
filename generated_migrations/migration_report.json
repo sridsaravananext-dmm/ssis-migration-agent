@@ -1,0 +1,55 @@
+{
+  "tool": "ssis-migration-agent",
+  "created_at_utc": "2026-10-12T16:50:06.330144+00:00",
+  "mode": "ANALYZE_ONLY",
+  "target": {
+    "platform": "databricks",
+    "catalog": "main"
+  },
+  "source": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/examples/wwi/DailyETLMain.dtsx",
+  "output": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations",
+  "package_count": 1,
+  "packages": [
+    {
+      "package": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/examples/wwi/DailyETLMain.dtsx",
+      "name": "DailyETLMain",
+      "status": "MIGRATED",
+      "artifacts": {
+        "ir": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/package_ir.json",
+        "analysis": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/analysis.json",
+        "manifest": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/migration_manifest.json",
+        "plan": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/migration_plan.json",
+        "validation": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/validation_results.json",
+        "notebook": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "job": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/DailyETLMain_job.json",
+        "dabs": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/databricks.yml",
+        "data_validation": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/DailyETLMain_data_validation.sql",
+        "data_validation_notebook": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/DailyETLMain_Data_Validation.ipynb",
+        "data_validation_report": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/data_validation_report.json",
+        "generated_dir": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/generated_migrations/DailyETLMain/generated_artifacts",
+        "artifact_count": 13,
+        "validation_count": 13
+      },
+      "stages": {
+        "package_discovery": "SUCCEEDED",
+        "parsing": "SUCCEEDED",
+        "ir_build": "SUCCEEDED",
+        "analysis": "SUCCEEDED",
+        "target_metadata_discovery": "SUCCEEDED",
+        "transformation_generation": "SUCCEEDED",
+        "data_validation": "SUCCEEDED",
+        "job_pipeline_generation": "SUCCEEDED",
+        "deployment": "NOT_IMPLEMENTED",
+        "data_migration": "NOT_IMPLEMENTED"
+      }
+    }
+  ],
+  "deployment": {
+    "status": "NOT_IMPLEMENTED",
+    "message": "No target artifacts have been deployed. Connect validated DDL, transformation generation, and resource deployment adapters before enabling execution."
+  },
+  "analyzed_package_count": 1,
+  "migrated_package_count": 1,
+  "failed_package_count": 0,
+  "status": "MIGRATION_COMPLETE_DEPLOYMENT_PENDING"
+}

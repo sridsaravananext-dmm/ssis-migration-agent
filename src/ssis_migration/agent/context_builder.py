@@ -19,8 +19,8 @@ class AIMigrationContextBuilder:
         migration_step: dict[str, Any],
         package_ir: Any | None = None,
         databases: list[Any] | None = None,
+        procedure_definitions: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-
         metadata = migration_step.get(
             "metadata",
             {},
@@ -111,6 +111,19 @@ class AIMigrationContextBuilder:
                 destination_procedures,
             ),
         }
+        # Explicit SQL definitions override incomplete metadata definitions.
+        # Pass ALL procedure definitions through — the caller
+        # already filtered to only the procedures relevant to
+        # this migration step.
+        procedure_definitions = procedure_definitions or {}
+
+        source_context["procedure_definitions"] = dict(
+            procedure_definitions
+        )
+
+        destination_context["procedure_definitions"] = dict(
+            procedure_definitions
+        )
 
         return {
             "migration": {
@@ -124,11 +137,13 @@ class AIMigrationContextBuilder:
                     migration_step,
                     source_context,
                 ),
-                "target_platform": migration_step.get(
-                    "target_platform"
+                "target_platform": (
+                    migration_step.get("target_platform")
+                    or "Databricks"
                 ),
-                "target_language": migration_step.get(
-                    "target_language"
+                "target_language": (
+                    migration_step.get("target_language")
+                    or "python"
                 ),
                 "strategy": migration_strategy,
             },
@@ -163,6 +178,10 @@ class AIMigrationContextBuilder:
                     "target_objects",
                     [],
                 ),
+            ),
+
+            "temporal_context": self._build_temporal_context(
+                procedure_definitions,
             ),
         }
 
@@ -294,6 +313,94 @@ class AIMigrationContextBuilder:
                 )
 
         return result
+
+    # ============================================================
+    # Temporal context
+    # ============================================================
+
+    @staticmethod
+    def _build_temporal_context(
+        procedure_definitions: dict[str, str],
+    ) -> dict[str, Any]:
+        """
+        Detect FOR SYSTEM_TIME AS OF in source procedures and
+        provide Delta Lake translation guidance.
+
+        SQL Server system-versioned temporal tables maintain a
+        current table and a history table (with _Archive suffix
+        in WideWorldImporters). Each row has ValidFrom and
+        ValidTo columns defining its validity period.
+
+        FOR SYSTEM_TIME AS OF @timestamp reconstructs the table
+        state at a point in time by UNIONing current and history
+        rows and filtering on the validity window.
+
+        In Databricks, if source tables have been ingested as
+        Delta tables with ValidFrom/ValidTo columns and archive
+        tables, the equivalent is:
+
+            SELECT * FROM (
+                SELECT * FROM schema.table
+                UNION ALL
+                SELECT * FROM schema.table_Archive
+            ) combined
+            WHERE @timestamp >= ValidFrom
+              AND @timestamp < ValidTo
+        """
+        import re
+
+        all_sql = " \n".join(
+            procedure_definitions.values()
+        )
+
+        temporal_pattern = re.compile(
+            r"FOR\s+SYSTEM_TIME\s+AS\s+OF",
+            re.IGNORECASE,
+        )
+
+        if not temporal_pattern.search(all_sql):
+            return {
+                "has_temporal_queries": False,
+            }
+
+        # Extract table names referenced in
+        # FOR SYSTEM_TIME AS OF clauses.
+        table_pattern = re.compile(
+            r"(?:FROM|JOIN)\s+"
+            r"(\w+\.\w+)"
+            r"\s+FOR\s+SYSTEM_TIME\s+AS\s+OF",
+            re.IGNORECASE,
+        )
+
+        temporal_tables = sorted(
+            set(table_pattern.findall(all_sql))
+        )
+
+        return {
+            "has_temporal_queries": True,
+            "source_tables_with_temporal": temporal_tables,
+            "validity_columns": {
+                "valid_from": "ValidFrom",
+                "valid_to": "ValidTo",
+            },
+            "archive_table_pattern": (
+                "{schema}.{table}_Archive"
+            ),
+            "translation_guidance": (
+                "FOR SYSTEM_TIME AS OF @timestamp "
+                "is equivalent to querying the UNION ALL "
+                "of the current table and its _Archive "
+                "table, filtered by: "
+                "@timestamp >= ValidFrom AND "
+                "@timestamp < ValidTo. "
+                "Both current and archive tables contain "
+                "ValidFrom and ValidTo columns. "
+                "Do NOT use Delta Lake time travel "
+                "(TIMESTAMP AS OF) as a substitute — "
+                "use the row-level ValidFrom/ValidTo "
+                "validity window instead."
+            ),
+        }
 
     @staticmethod
     def _to_dict(

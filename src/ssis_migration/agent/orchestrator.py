@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
+from ssis_migration.agent.code_validator import validate_generated_code
 from .context_builder import AIMigrationContextBuilder
 from .models import AIMigrationResult
 from .planner import AIMigrationPlanner
@@ -40,6 +41,7 @@ class AIMigrationOrchestrator:
     def run(
         self,
         migration_step: Any,
+        procedure_definitions: dict[str, str] | None = None,
     ) -> AIMigrationResult:
 
         # --------------------------------------------------
@@ -78,13 +80,14 @@ class AIMigrationOrchestrator:
             package_ir=getattr(
                 migration_step,
                 "package_ir",
-                None,
+                None,   
             ),
             databases=getattr(
                 migration_step,
                 "databases",
                 None,
             ),
+            procedure_definitions=procedure_definitions,
         )
 
         # --------------------------------------------------
@@ -146,20 +149,69 @@ class AIMigrationOrchestrator:
                 },
             )
 
+        
         # --------------------------------------------------
-        # 5. Convert validated response
+        # 5. Static validation of generated migration code
         # --------------------------------------------------
 
+        code_validation = validate_generated_code(
+            code=response["code"],
+            step_name=migration_step_data.get("name", ""),
+        )
+
+        metadata = dict(response.get("metadata") or {})
+        metadata["static_code_validation"] = code_validation
+
+        if code_validation["status"] == "REJECTED":
+            issues = code_validation.get("issues", [])
+
+            error_messages = [
+                (
+                    f"{issue['code']}: {issue['message']}"
+                    + (
+                        f" (line {issue['line']})"
+                        if issue.get("line")
+                        else ""
+                    )
+                )
+                for issue in issues
+                if issue.get("severity") == "ERROR"
+            ]
+
+            return AIMigrationResult(
+                status="UNRESOLVED",
+                language=response["language"],
+                code=response["code"],
+                assumptions=response["assumptions"],
+                unresolved_items=[
+                    *response["unresolved_items"],
+                    "Static code validation rejected the generated code.",
+                    *error_messages,
+                ],
+                validation_requirements=[
+                    *response["validation_requirements"],
+                    "Correct all static validation errors and regenerate "
+                    "or revalidate the migration before acceptance.",
+                    "Do not execute or publish rejected migration code.",
+                ],
+                metadata=metadata,
+            )
+
+        # A REVIEW_REQUIRED result from the AI remains review-required.
+        # Static checks do not override the AI's unresolved items.
+        final_status = response["status"]
+
+        if code_validation["status"] == "REVIEW_REQUIRED":
+            if final_status not in {"UNRESOLVED", "REVIEW_REQUIRED"}:
+                final_status = "REVIEW_REQUIRED"
+
         return AIMigrationResult(
-            status=response["status"],
+            status=final_status,
             language=response["language"],
             code=response["code"],
             assumptions=response["assumptions"],
-            unresolved_items=response[
-                "unresolved_items"
-            ],
-            validation_requirements=response[
-                "validation_requirements"
-            ],
-            metadata=response["metadata"],
+            unresolved_items=response["unresolved_items"],
+            validation_requirements=response["validation_requirements"],
+            metadata=metadata,
         )
+

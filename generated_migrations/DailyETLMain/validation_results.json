@@ -1,0 +1,130 @@
+[
+  {
+    "step_id": "load_city_dimension",
+    "step_name": "Load City Dimension",
+    "validator": "code_validator",
+    "status": "REVIEW_REQUIRED",
+    "issues": [
+      {
+        "code": "TEMPORAL_HISTORY_NOT_EVIDENT",
+        "severity": "WARNING",
+        "message": "No recognizable ValidFrom/ValidTo history fields were found. Confirm that the required source history is available before claiming temporal equivalence.",
+        "line": null
+      }
+    ]
+  },
+  {
+    "step_id": "load_customer_dimension",
+    "step_name": "Load Customer Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_employee_dimension",
+    "step_name": "Load Employee Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_movement_fact",
+    "step_name": "Load Movement Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_order_fact",
+    "step_name": "Load Order Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_payment_method_dimension",
+    "step_name": "Load Payment Method Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_purchase_fact",
+    "step_name": "Load Purchase Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_sale_fact",
+    "step_name": "Load Sale Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_stock_holding_fact",
+    "step_name": "Load Stock Holding Fact",
+    "validator": "sql_semantic",
+    "status": "PASS",
+    "checks": {
+      "projection_structure": true,
+      "union_count": true,
+      "union_all_semantics": true,
+      "source_tables": true
+    },
+    "failures": []
+  },
+  {
+    "step_id": "load_stock_item_dimension",
+    "step_name": "Load Stock Item Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_supplier_dimension",
+    "step_name": "Load Supplier Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_transaction_fact",
+    "step_name": "Load Transaction Fact",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  },
+  {
+    "step_id": "load_transaction_type_dimension",
+    "step_name": "Load Transaction Type Dimension",
+    "validator": "code_validator",
+    "status": "PASS",
+    "issues": []
+  }
+]

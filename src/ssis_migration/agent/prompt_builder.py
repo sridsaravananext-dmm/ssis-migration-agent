@@ -52,6 +52,11 @@ class AIMigrationPromptBuilder:
             {},
         )
 
+        temporal_context = request.get(
+            "temporal_context",
+            {},
+        )
+
         instructions = request.get(
             "instructions",
             [],
@@ -65,6 +70,7 @@ class AIMigrationPromptBuilder:
             "destination": destination,
             "requirements": requirements,
             "evidence": evidence,
+            "temporal_context": temporal_context,
         }
 
         serialized_context = json.dumps(
@@ -193,6 +199,61 @@ CODE REQUIREMENTS
 
 15. The generated code must be self-contained for the supplied
     migration step.
+
+============================================================
+MIGRATION BOUNDARIES — MANDATORY
+============================================================
+
+16. The source procedure definitions are authoritative business
+    logic to TRANSLATE, not procedures to call at runtime.
+
+17. Do not invoke, execute, or depend on the original source
+    stored procedures. Do not use pyodbc, pandas.read_sql,
+    cursor-based source procedure execution, or equivalent
+    pass-through execution to reuse the old ETL implementation.
+
+18. Ingestion is handled separately. Do not generate source
+    ingestion or connectivity code unless the migration step
+    explicitly requires it.
+
+19. Translate the supplied source procedure logic into the
+    target platform's native transformations, using only
+    source tables, historical data, schemas, mappings, and
+    dependencies supported by the supplied context.
+
+20. Do not invent Databricks table names, historical versions,
+    credentials, connection strings, or column representations.
+
+21. If the source uses temporal queries such as
+    FOR SYSTEM_TIME AS OF, determine whether equivalent
+    historical data and temporal boundaries are available
+    in the supplied context. If they are not, report the
+    missing prerequisite in unresolved_items. Do not silently
+    substitute current-state tables for historical state.
+
+22. Translate destination procedure logic separately from
+    source extraction logic. Preserve staging behavior,
+    dimension version closure, insert behavior, lineage
+    updates, cutoff updates, and transaction requirements
+    where supported by the supplied context.
+
+23. Never claim the migration is complete merely because
+    code was generated or passed schema validation.
+
+24. If the supplied context is insufficient for a faithful
+    translation, return REVIEW_REQUIRED or UNRESOLVED and
+    explain the exact missing information rather than
+    generating a misleading implementation.
+
+25. Never treat Delta Lake TIMESTAMP AS OF, VERSION AS OF, or time travel as automatically equivalent to SQL Server FOR SYSTEM_TIME AS OF.
+
+26. Delta Lake time travel represents table snapshots at transaction commit timestamps or versions. It does not, by itself, reproduce row-level system-versioned temporal history at arbitrary business timestamps.
+
+27. When translating FOR SYSTEM_TIME AS OF, require evidence of a compatible historical-data model, including the source row keys, effective/system validity boundaries, and historical versions needed to reconstruct each related table at the requested timestamp. If temporal_context is supplied with has_temporal_queries=True, the ValidFrom/ValidTo columns and archive table pattern provided there constitute the required evidence.
+
+28. If compatible row history is not present in the supplied context (temporal_context is absent or has_temporal_queries is False), do not invent it and do not substitute current-state data or Delta time travel. Return REVIEW_REQUIRED or UNRESOLVED and identify the exact missing historical-data prerequisite.
+
+29. Do not claim that the City Dimension migration is complete until the translated source result has been compared with the original procedure for identical cutoff parameters, including row values, duplicate behavior, and Valid To intervals.
 
 ============================================================
 IMPORTANT

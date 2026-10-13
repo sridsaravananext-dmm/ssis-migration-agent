@@ -1,0 +1,134 @@
+{
+  "artifact_id": "load_purchase_fact_spark_sql",
+  "name": "Load Purchase Fact_spark_sql",
+  "artifact_type": "NOTEBOOK_CELL",
+  "target_platform": "databricks",
+  "language": "spark_sql",
+  "source_step_id": "load_purchase_fact",
+  "metadata": {
+    "generator": "SparkSQLGenerator",
+    "status": "GENERATED",
+    "procedure": "Integration.GetPurchaseUpdates",
+    "translation": {
+      "status": "TRANSLATED",
+      "sql": "SELECT CAST(po.OrderDate AS date) AS `Date Key`,\r\n           po.PurchaseOrderID AS `WWI Purchase Order ID`,\r\n           pol.OrderedOuters AS `Ordered Outers`,\r\n           pol.OrderedOuters * si.QuantityPerOuter AS `Ordered Quantity`,\r\n           pol.ReceivedOuters AS `Received Outers`,\r\n           pt.PackageTypeName AS Package,\r\n           pol.IsOrderLineFinalized AS `Is Order Finalized`,\r\n           po.SupplierID AS `WWI Supplier ID`,\r\n           pol.StockItemID AS `WWI Stock Item ID`,\r\n           CASE WHEN pol.LastEditedWhen > po.LastEditedWhen THEN pol.LastEditedWhen ELSE po.LastEditedWhen END AS `Last Modified When`\r\n    FROM Purchasing.PurchaseOrders AS po\r\n    INNER JOIN Purchasing.PurchaseOrderLines AS pol\r\n    ON po.PurchaseOrderID = pol.PurchaseOrderID\r\n    INNER JOIN Warehouse.StockItems AS si\r\n    ON pol.StockItemID = si.StockItemID\r\n    INNER JOIN Warehouse.PackageTypes AS pt\r\n    ON pol.PackageTypeID = pt.PackageTypeID\r\n    WHERE CASE WHEN pol.LastEditedWhen > po.LastEditedWhen THEN pol.LastEditedWhen ELSE po.LastEditedWhen END > :LastCutoff\r\n    AND CASE WHEN pol.LastEditedWhen > po.LastEditedWhen THEN pol.LastEditedWhen ELSE po.LastEditedWhen END <= :NewCutoff\r\n    ORDER BY po.PurchaseOrderID",
+      "parameters": [
+        "LastCutoff",
+        "NewCutoff"
+      ],
+      "source_objects": [
+        "Purchasing.PurchaseOrderLines",
+        "Purchasing.PurchaseOrders",
+        "Warehouse.PackageTypes",
+        "Warehouse.StockItems"
+      ],
+      "evidence": {
+        "source_sql_length": 1442,
+        "translated_sql_length": 1226
+      }
+    },
+    "migration_strategy": {
+      "strategy": "DETERMINISTIC",
+      "requires_ai": false,
+      "complexity_signals": [],
+      "patterns": [
+        "INCREMENTAL_RELATIONAL"
+      ]
+    },
+    "migration_intent": {
+      "load_name": "Load Purchase Fact",
+      "load_type": "FACT_LOAD",
+      "source_objects": [
+        "Integration.GetPurchaseUpdates"
+      ],
+      "target_objects": [
+        "Integration.Purchase_Staging"
+      ],
+      "control_flow_operations": [
+        "EXTRACT_TO_STAGING",
+        "GET_LAST_CUTOFF",
+        "GET_LINEAGE_KEY",
+        "MIGRATE_STAGED_DATA",
+        "SET_TABLE_NAME",
+        "CLEAR_STAGING"
+      ],
+      "source_procedures": [
+        {
+          "procedure": "Integration.GetPurchaseUpdates",
+          "definition": "\r\nCREATE PROCEDURE Integration.GetPurchaseUpdates\r\n@LastCutoff datetime2(7),\r\n@NewCutoff datetime2(7)\r\nWITH EXECUTE AS OWNER\r\nAS\r\nBEGIN\r\n    SET NOCOUNT ON;\r\n    SET XACT_ABORT ON;\r\n\r\n\r\n    SELECT CAST(po.OrderDate AS date) AS [Date Key],\r\n           po.PurchaseOrderID AS [WWI Purchase Order ID],\r\n           pol.OrderedOuters AS [Ordered Outers],\r\n           pol.OrderedOuters * si.QuantityPerOuter AS [Ordered Quantity],\r\n           pol.ReceivedOuters AS [Received Outers],\r\n           pt.PackageTypeName AS Package,\r\n           pol.IsOrderLineFinalized AS [Is Order Finalized],\r\n           po.SupplierID AS [WWI Supplier ID],\r\n           pol.StockItemID AS [WWI Stock Item ID],\r\n           CASE WHEN pol.LastEditedWhen > po.LastEditedWhen THEN pol.LastEditedWhen ELSE po.LastEditedWhen END AS [Last Modified When]\r\n    FROM Purchasing.PurchaseOrders AS po\r\n    INNER JOIN Purchasing.PurchaseOrderLines AS pol\r\n    ON po.PurchaseOrderID = pol.PurchaseOrderID\r\n    INNER JOIN Warehouse.StockItems AS si\r\n    ON pol.StockItemID = si.StockItemID\r\n    INNER JOIN Warehouse.PackageTypes AS pt\r\n    ON pol.PackageTypeID = pt.PackageTypeID\r\n    WHERE CASE WHEN pol.LastEditedWhen > po.LastEditedWhen THEN pol.LastEditedWhen ELSE po.LastEditedWhen END > @LastCutoff\r\n    AND CASE WHEN pol.LastEditedWhen > po.LastEditedWhen THEN pol.LastEditedWhen ELSE po.LastEditedWhen END <= @NewCutoff\r\n    ORDER BY po.PurchaseOrderID;\r\n\r\n    RETURN 0;\r\nEND;\r\n",
+          "pattern": "INCREMENTAL_RELATIONAL",
+          "extraction_pattern": "INCREMENTAL_QUERY",
+          "execution_style": "RELATIONAL",
+          "operations": [
+            "SELECT"
+          ],
+          "relational_features": [
+            "JOIN",
+            "CASE",
+            "ORDER_BY"
+          ],
+          "temporary_tables": [],
+          "has_cursor": false,
+          "has_loop": false,
+          "has_cutoff_parameters": true,
+          "has_cutoff_filter": true,
+          "has_temporal_logic": false,
+          "has_point_in_time_lookup": false
+        }
+      ],
+      "destination_procedures": [
+        {
+          "procedure": "Integration.MigrateStagedPurchaseData",
+          "role": "DATA_MIGRATION",
+          "operations": [
+            "SELECT",
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "EXEC",
+            "ORDER_BY"
+          ],
+          "target_objects": [
+            "Dimension.Stock Item",
+            "Dimension.Supplier",
+            "Fact.Purchase",
+            "Integration.ETL Cutoff",
+            "Integration.Lineage",
+            "Integration.Purchase_Staging"
+          ]
+        }
+      ],
+      "data_flows": [
+        {
+          "name": "Extract Updated Purchase Data to Staging",
+          "source_components": [
+            "Integration_GetPurchaseUpdates"
+          ],
+          "destination_components": [
+            "Integration_Purchase_Staging"
+          ],
+          "mapping_count": 10
+        }
+      ]
+    },
+    "language_decision": {
+      "target_platform": "databricks",
+      "language": "spark_sql",
+      "ai_required": false,
+      "confidence": "high",
+      "reasons": [
+        "Relational SQL constructs detected",
+        "No procedural constructs detected"
+      ],
+      "unsupported_features": [],
+      "evidence": {
+        "procedural_features": [],
+        "relational_features": [
+          "SELECT",
+          "JOIN",
+          "CASE"
+        ]
+      }
+    }
+  }
+}

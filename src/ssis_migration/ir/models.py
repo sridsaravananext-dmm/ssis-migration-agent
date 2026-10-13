@@ -57,6 +57,10 @@ class PrecedenceConstraintIR:
     ref_id: str | None = None
     from_executable: str | None = None
     to_executable: str | None = None
+    logical_and: bool | None = None
+    evaluation_operation: str | None = None
+    value: str | None = None
+    expression: str | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
 
 
