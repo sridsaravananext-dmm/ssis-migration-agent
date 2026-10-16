@@ -8,12 +8,14 @@ version = "0.1.0"
 description = "AI-assisted SSIS to Databricks migration accelerator"
 requires-python = ">=3.10"
 dependencies = [
-    "openai>=1.0.0",
     "sqlglot>=26.0.0",
-    "streamlit>=1.42,<2",
+    "streamlit>=1.38,<2",
 ]
 
 [project.optional-dependencies]
+ai = [
+    "openai>=1.0.0",
+]
 dev = [
     "pytest>=8.0",
 ]
