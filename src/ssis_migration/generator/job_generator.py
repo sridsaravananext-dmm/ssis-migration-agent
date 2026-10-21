@@ -134,7 +134,6 @@ class JobGenerator:
                     "base_parameters": {
                         "step_id": step_id,
                         "catalog": catalog,
-                        "schema": schema,
                     },
                     "source": "WORKSPACE",
                 },
@@ -154,7 +153,6 @@ class JobGenerator:
 
         parameters = [
             {"name": "catalog", "default": catalog},
-            {"name": "schema", "default": schema},
         ]
 
         return JobDefinition(

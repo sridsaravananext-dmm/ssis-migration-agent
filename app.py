@@ -85,26 +85,45 @@ def _artifact_tree(base):
             items.append({"path": rel, "is_dir": False, "size": path.stat().st_size})
     return items
 
-def _run_migration(source_path, output_dir, mapping_path):
+def _run_migration(source_path, output_dir, mapping_path, procedures_path=None, ddl_path=None):
     from ssis_migration.migrate import run_migration
     return run_migration(
         source=str(source_path), output=str(output_dir),
         catalog=catalog.strip() or None,
         connection_mapping=str(mapping_path) if mapping_path else None,
         base_path=str(ROOT), execute=False, ai=ai_enabled,
+        ai_provider="databricks",
+        ddl_path=str(ddl_path) if ddl_path else None,
+        procedures_path=str(procedures_path) if procedures_path else None,
     )
 
-def _generate_ddl(metadata_path, catalog_name):
-    from ssis_migration.ddl_generator import generate_ddl
-    with metadata_path.open(encoding="utf-8") as f:
-        metadata = json.load(f)
-    return generate_ddl(metadata=metadata, catalog=catalog_name, column_mapping=True)
+def _classify_dependency(filename, content_bytes):
+    """Auto-classify an uploaded dependency file by its content."""
+    name = filename.lower()
+    try:
+        text = content_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        return "unknown"
+    upper = text.upper()
+    if name.endswith(".json"):
+        return "connection_mapping"
+    if name.endswith(".sql") or name.endswith(".txt"):
+        has_proc = bool(re.search(r"CREATE\s+(OR\s+ALTER\s+)?PROC", upper))
+        has_table = bool(re.search(r"CREATE\s+TABLE", upper))
+        if has_proc and has_table:
+            return "mixed_sql"
+        if has_proc:
+            return "procedures"
+        if has_table:
+            return "ddl"
+        return "sql_other"
+    return "unknown"
 
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_upload, tab_run, tab_artifacts, tab_ddl, tab_deploy = st.tabs([
-    "📦 Upload & Configure", "🚀 Run Migration", "📂 Artifacts", "📋 DDL Preview", "📤 Deploy"])
+tab_upload, tab_run, tab_artifacts, tab_ddl = st.tabs([
+    "📦 Upload & Configure", "🚀 Run Migration", "📂 Artifacts", "📋 DDL Preview"])
 
 # === TAB 1: Upload & Configure ===
 with tab_upload:
@@ -120,41 +139,62 @@ with tab_upload:
             st.error("WWI sample not found. Upload a package instead.")
 
     st.divider()
-    st.header("2. Connection Mapping & Metadata")
-    mapping_mode = st.radio("Connection mapping source", ["Use existing repository mapping", "Upload mapping & metadata files"], horizontal=True)
-    mapping_path = None
+    st.header("2. Upload Dependencies (optional)")
+    st.caption("Upload any dependency files — they are auto-classified by content. "
+               "SQL files with `CREATE PROCEDURE` become procedure definitions; "
+               "SQL files with `CREATE TABLE` become DDL; JSON files become connection mappings. "
+               "Connection setup (catalogs/schemas) can also be done manually in Databricks.")
+    uploaded_deps = st.file_uploader(
+        "Upload dependency files (.sql, .json, .txt)",
+        type=["sql", "json", "txt"],
+        accept_multiple_files=True,
+        key="deps_upload",
+    )
 
-    if mapping_mode == "Use existing repository mapping":
-        available_mappings = list(EXAMPLES.rglob("connection_mapping.json")) if EXAMPLES.exists() else []
-        if available_mappings:
-            mapping_choices = {str(p.relative_to(ROOT)): p for p in available_mappings}
-            selected = st.selectbox("Select connection mapping", options=list(mapping_choices.keys()))
-            mapping_path = mapping_choices[selected]
-            with st.expander("View mapping JSON"):
-                st.json(json.loads(mapping_path.read_text()))
-        else:
-            st.warning("No connection_mapping.json files found.")
-    else:
-        uploaded_mapping = st.file_uploader("Upload connection_mapping.json", type=["json"], key="mapping_upload")
-        uploaded_metadata = st.file_uploader("Upload database metadata files", type=["json"], accept_multiple_files=True, key="metadata_upload")
-        if uploaded_mapping is not None:
-            upload_dir = RUN_ROOT / "uploads" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-            upload_dir.mkdir(parents=True, exist_ok=True)
-            mapping_path = upload_dir / uploaded_mapping.name
-            mapping_path.write_bytes(uploaded_mapping.getvalue())
-            if uploaded_metadata:
-                for f in uploaded_metadata:
-                    (upload_dir / f.name).write_bytes(f.getvalue())
-            st.success(f"Mapping saved: `{mapping_path}`")
+    mapping_path = None
+    procedures_path = None
+    ddl_path = None
+
+    if uploaded_deps:
+        upload_dir = RUN_ROOT / "uploads" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        st.write("**Detected dependencies:**")
+        for f in uploaded_deps:
+            ftype = _classify_dependency(f.name, f.getvalue())
+            saved = upload_dir / f.name
+            saved.write_bytes(f.getvalue())
+
+            label = {
+                "procedures": "📋 Procedures",
+                "ddl": "🏗 DDL",
+                "connection_mapping": "🔗 Connection Mapping",
+                "mixed_sql": "📋+🏗 Mixed (Procedures + DDL)",
+                "sql_other": "📄 SQL (unclassified)",
+                "unknown": "❓ Unknown",
+            }.get(ftype, "❓ Unknown")
+
+            st.write(f"- `{f.name}` → {label}")
+
+            if ftype in ("procedures", "mixed_sql") and procedures_path is None:
+                procedures_path = saved
+            elif ftype in ("ddl", "mixed_sql") and ddl_path is None:
+                ddl_path = saved
+                st.session_state.ddl_text = saved.read_text(encoding="utf-8")
+            elif ftype == "connection_mapping" and mapping_path is None:
+                mapping_path = saved
+            elif ftype == "sql_other":
+                # Unclassified SQL: check if it has CREATE TABLE at least
+                st.warning(f"`{f.name}` has SQL content but no CREATE PROCEDURE or CREATE TABLE detected.")
 
     st.divider()
     st.header("3. Summary")
     has_package = (package_mode == "Use WWI sample" and SAMPLE_PACKAGE.is_file()) or (uploaded_package is not None)
-    can_run = has_package and mapping_path is not None
+    can_run = has_package
     c1, c2, c3 = st.columns(3)
     c1.metric("Package", "✅" if has_package else "❌")
-    c2.metric("Mapping", "✅" if mapping_path else "❌")
-    c3.metric("Ready", "✅" if can_run else "❌")
+    c2.metric("Procedures", "✅" if procedures_path else "—")
+    c3.metric("DDL", "✅" if ddl_path else "—")
 
 # === TAB 2: Run Migration ===
 with tab_run:
@@ -162,7 +202,7 @@ with tab_run:
     if not can_run:
         st.info("Complete configuration in the **Upload & Configure** tab first.")
     else:
-        st.markdown("Pipeline: Parse → IR → Analyze → Plan → Generate → Validate")
+        st.markdown("Pipeline: Parse → IR → Analyze → Plan → Generate → Notebook")
         if st.button("🚀 Run Migration", type="primary"):
             run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
             run_dir = RUN_ROOT / run_id
@@ -175,8 +215,8 @@ with tab_run:
                 progress = st.progress(0, text="Starting...")
                 with st.spinner("Running migration pipeline..."):
                     progress.progress(20, text="Parsing & analyzing...")
-                    report = _run_migration(source_path, output_dir, mapping_path)
-                    progress.progress(80, text="Generating artifacts...")
+                    report = _run_migration(source_path, output_dir, mapping_path, procedures_path, ddl_path)
+                    progress.progress(80, text="Generating notebook...")
                     st.session_state.migration_result = report
                     st.session_state.migration_output = str(output_dir)
                     progress.progress(100, text="Done!")
@@ -210,12 +250,11 @@ with tab_run:
                     st.write("**Artifacts:**")
                     for name, path_str in artifacts.items():
                         st.write(f"{'✅' if Path(path_str).exists() else '❌'} `{name}`")
-                    for key, label in [("analysis", "Analysis"), ("plan", "Plan"), ("validation", "Validation")]:
-                        fp = artifacts.get(key)
-                        if fp and Path(fp).is_file():
-                            with st.expander(f"View {label}"):
-                                try: st.json(json.loads(Path(fp).read_text()))
-                                except: st.code(Path(fp).read_text()[:5000])
+                # Show the review report inline (not nested in expander)
+                review_fp = artifacts.get("review")
+                if review_fp and Path(review_fp).is_file():
+                    st.markdown("---")
+                    st.markdown(Path(review_fp).read_text())
         if output_value and Path(output_value).is_dir():
             archive = Path(output_value).parent / "migration_artifacts.zip"
             with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as a:
@@ -261,88 +300,15 @@ with tab_artifacts:
 # === TAB 4: DDL Preview ===
 with tab_ddl:
     st.header("DDL Preview")
-    st.markdown("Generate CREATE TABLE DDL from database metadata for table provisioning.")
-    metadata_files = list(EXAMPLES.rglob("database_metadata_*.json")) if EXAMPLES.exists() else []
-    if not metadata_files:
-        st.warning("No metadata files found.")
+    ddl_text = st.session_state.ddl_text
+    if not ddl_text:
+        st.info("Upload a DDL file in the **Upload & Configure** tab to preview it here.")
     else:
-        metadata_choices = {str(p.relative_to(ROOT)): p for p in metadata_files}
-        selected_metadata = st.selectbox("Metadata file", options=list(metadata_choices.keys()))
-        metadata_path = metadata_choices[selected_metadata]
-        with st.expander("Metadata summary"):
-            try:
-                meta = json.loads(metadata_path.read_text())
-                st.write(f"**Database:** {meta.get('database', '?')}")
-                st.write(f"**Tables:** {len(meta.get('tables', []))}")
-            except: pass
-        catalog_name = st.text_input("Catalog name", value=catalog)
-        if st.button("Generate DDL", type="primary"):
-            try:
-                with st.spinner("Generating..."):
-                    ddl_text, ddl_report = _generate_ddl(metadata_path, catalog_name)
-                    st.session_state.ddl_text = ddl_text
-                    st.session_state.ddl_report = ddl_report
-                st.success("✅ DDL generated!")
-            except Exception as exc:
-                st.error(f"Failed: {exc}")
-                with st.expander("Error"): st.exception(exc)
-        ddl_text = st.session_state.ddl_text
-        ddl_report = st.session_state.ddl_report
-        if ddl_text:
-            st.divider()
-            if ddl_report:
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Tables", ddl_report.get("generated_table_count", 0))
-                c2.metric("Status", ddl_report.get("status", "?"))
-                c3.metric("Findings", len(ddl_report.get("review_items", [])))
-                if ddl_report.get("review_items"):
-                    with st.expander("⚠️ Review findings"):
-                        for item in ddl_report["review_items"]:
-                            st.write(f"• `{item.get('object', '?')}` -> {item.get('issue', '?')}")
-            create_count = len(re.findall(r"CREATE\s+TABLE", ddl_text, re.IGNORECASE))
-            st.caption(f"{create_count} CREATE TABLE statements")
-            st.code(ddl_text, language="sql")
-            st.download_button("📥 Download DDL", data=ddl_text.encode(), file_name="generated_dw_ddl.sql")
-
-# === TAB 5: Deploy ===
-with tab_deploy:
-    st.header("Deploy DABs Bundle")
-    st.markdown("Deploy the generated DABs bundle. Requires `databricks` CLI.")
-    output_value = st.session_state.migration_output
-    if not output_value or not Path(output_value).is_dir():
-        st.info("Run a migration first.")
-    else:
-        dabs_files = list(Path(output_value).rglob("databricks.yml")) + list(Path(output_value).rglob("databricks.yaml"))
-        if not dabs_files:
-            st.warning("No DABs files found.")
-        else:
-            for dabs_path in dabs_files:
-                pkg_name = dabs_path.parent.name
-                st.write(f"**Package:** `{pkg_name}`")
-                with st.expander("View databricks.yml"):
-                    st.code(dabs_path.read_text(), language="yaml")
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button(f"✅ Validate ({pkg_name})", key=f"val_{pkg_name}"):
-                        try:
-                            r = subprocess.run(["databricks", "bundle", "validate"], cwd=str(dabs_path.parent), capture_output=True, text=True, timeout=30)
-                            if r.returncode == 0: st.success("Validation passed!")
-                            else: st.error("Failed!")
-                            st.code(r.stdout or r.stderr)
-                        except FileNotFoundError: st.error("`databricks` CLI not found.")
-                        except Exception as e: st.error(str(e))
-                with c2:
-                    if st.button(f"📤 Deploy ({pkg_name})", type="primary", key=f"dep_{pkg_name}"):
-                        try:
-                            r = subprocess.run(["databricks", "bundle", "deploy"], cwd=str(dabs_path.parent), capture_output=True, text=True, timeout=60)
-                            if r.returncode == 0:
-                                st.success("✅ Deployed!")
-                                st.info("Check Jobs UI to run the job.")
-                            else: st.error("Deploy failed!")
-                            st.code(r.stdout or r.stderr)
-                        except FileNotFoundError: st.error("`databricks` CLI not found.")
-                        except Exception as e: st.error(str(e))
-                st.divider()
+        st.markdown("Preview of the uploaded DDL file.")
+        create_count = len(re.findall(r"CREATE\s+TABLE", ddl_text, re.IGNORECASE))
+        st.caption(f"{create_count} CREATE TABLE statements")
+        st.code(ddl_text, language="sql")
+        st.download_button("📥 Download DDL", data=ddl_text.encode(), file_name="ddl.sql")
 
 st.divider()
 st.caption("SSIS -> Databricks Migration Accelerator | Review artifacts before deployment.")

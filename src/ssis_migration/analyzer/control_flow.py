@@ -150,20 +150,10 @@ def _build_execution_edges(
     edges = []
 
     for constraint in constraints:
-        attributes = constraint.get(
-            "attributes",
-            {},
-        )
 
-        source = (
-            constraint.get("from_executable")
-            or attributes.get("From")
-        )
+        source = constraint.get("from_executable")
 
-        target = (
-            constraint.get("to_executable")
-            or attributes.get("To")
-        )
+        target = constraint.get("to_executable")
 
         if not source or not target:
             continue
@@ -172,12 +162,22 @@ def _build_execution_edges(
             {
                 "from": source,
                 "to": target,
-                "logical_and": attributes.get(
-                    "LogicalAnd"
+                "logical_and": constraint.get(
+                    "logical_and"
                 ),
-                "object_name": attributes.get(
-                    "ObjectName"
+                "evaluation_operation": constraint.get(
+                    "evaluation_operation"
                 ),
+                "value": constraint.get("value"),
+                "expression": constraint.get(
+                    "expression"
+                ),
+                "defaulted_fields": constraint.get(
+                    "defaulted_fields", []
+                ),
+                "object_name": constraint.get(
+                    "attributes", {}
+                ).get("ObjectName"),
             }
         )
 

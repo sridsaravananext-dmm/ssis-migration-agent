@@ -361,6 +361,8 @@ class IRBuilder:
 
         attributes = constraint.get("attributes", {})
 
+        defaulted_fields: list[str] = []
+
         logical_and = constraint.get("logical_and")
         if logical_and is None:
             logical_and = attributes.get("LogicalAnd")
@@ -370,6 +372,7 @@ class IRBuilder:
 
         if logical_and is None:
             logical_and = True
+            defaulted_fields.append("logical_and")
 
         # -------------------------------------------------
         # Evaluation operation (EvalOp)
@@ -391,6 +394,7 @@ class IRBuilder:
         )
         if eval_op is None:
             eval_op = "Constraint"
+            defaulted_fields.append("evaluation_operation")
         elif isinstance(eval_op, str) and eval_op in _EVAL_OP_MAP:
             eval_op = _EVAL_OP_MAP[eval_op]
 
@@ -412,6 +416,7 @@ class IRBuilder:
         )
         if value is None:
             value = "Success"
+            defaulted_fields.append("value")
         elif isinstance(value, str) and value in _VALUE_MAP:
             value = _VALUE_MAP[value]
 
@@ -443,6 +448,7 @@ class IRBuilder:
             value=value,
             expression=expression,
             attributes=attributes,
+            defaulted_fields=defaulted_fields,
         )
 
     # =========================================================

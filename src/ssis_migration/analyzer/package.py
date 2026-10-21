@@ -6,9 +6,11 @@ from .data_flow import analyze_data_flow
 from .dependency import analyze_dependencies
 from .load_strategy import detect_load_strategy
 from .control_flow import analyze_control_flow
+from .sql_task_classifier import classify_execute_sql_tasks
 
 def analyze_package(
     package: dict[str, Any],
+    procedure_bodies: dict[str, str] | None = None,
 ) -> dict[str, Any]:
 
     data_flows = package.get(
@@ -59,6 +61,11 @@ def analyze_package(
         )
     )
 
+    sql_task_analysis = classify_execute_sql_tasks(
+        executables=package.get("executables", []),
+        procedure_bodies=procedure_bodies,
+    )
+
     return {
         "package_name": package.get("package_name"),
         "source_file": package.get("source_file"),
@@ -84,6 +91,7 @@ def analyze_package(
                     []
                 )
             ),
+            "execute_sql_tasks": sql_task_analysis["task_count"],
         },
 
         "component_type_counts": component_types,
@@ -91,6 +99,8 @@ def analyze_package(
         "control_flow": analyze_control_flow(package),
 
         "dependencies": dependency_analysis,
+
+        "sql_tasks": sql_task_analysis,
 
         "data_flows": analyzed_flows,
     }

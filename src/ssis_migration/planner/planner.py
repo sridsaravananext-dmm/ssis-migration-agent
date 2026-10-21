@@ -340,6 +340,36 @@ class MigrationPlanner:
                                 qualified_name
                             )
             # -------------------------------------------------
+            # Fallback: if no database metadata was supplied,
+            # use destination_target_objects directly.
+            # -------------------------------------------------
+
+            if not target_objects and destination_target_objects:
+                target_objects = list(destination_target_objects)
+
+            if not source_objects:
+                # Derive source objects from OLE DB Source component
+                # OpenRowset property (same pattern as destination).
+                for flow in package.data_flows:
+                    if not load_ref:
+                        continue
+                    flow_belongs = any(
+                        c.ref_id and c.ref_id.startswith(load_ref + "\\")
+                        for c in flow.components
+                    )
+                    if not flow_belongs:
+                        continue
+                    for component in flow.components:
+                        if component.detected_type == "OLE_DB_SOURCE":
+                            props = component.properties or {}
+                            src_obj = props.get("OpenRowset")
+                            if src_obj and not any(
+                                existing.lower() == src_obj.lower()
+                                for existing in source_objects
+                            ):
+                                source_objects.append(src_obj)
+
+            # -------------------------------------------------
             # Classify load
             # -------------------------------------------------
 

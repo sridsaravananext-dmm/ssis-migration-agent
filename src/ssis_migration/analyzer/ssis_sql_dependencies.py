@@ -76,10 +76,18 @@ def extract_ssis_sql_dependencies(
                 [],
             ):
 
-                database_objects.add(obj)
+                # Objects may be dicts (from analyze_sql_dependency);
+                # convert to a hashable string key.
+                obj_key = (
+                    f"{obj.get('schema', '')}.{obj.get('name', '')}"
+                    if isinstance(obj, dict)
+                    else str(obj)
+                )
+
+                database_objects.add(obj_key)
 
                 object_connections.setdefault(
-                    obj,
+                    obj_key,
                     set(),
                 ).update(connection_refs)
 

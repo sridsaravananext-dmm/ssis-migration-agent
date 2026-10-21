@@ -62,6 +62,7 @@ class PrecedenceConstraintIR:
     value: str | None = None
     expression: str | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
+    defaulted_fields: list[str] = field(default_factory=list)
 
 
 @dataclass

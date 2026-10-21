@@ -82,7 +82,10 @@ def object_to_dict(value: Any) -> Any:
     return str(value)
 
 
-def analyze_one_package(package_path: Path) -> dict[str, Any]:
+def analyze_one_package(
+    package_path: Path,
+    procedures_path: str | Path | None = None,
+) -> dict[str, Any]:
     """
     Run the repository's real parser -> IR builder -> analyzer pipeline.
 
@@ -96,9 +99,18 @@ def analyze_one_package(package_path: Path) -> dict[str, Any]:
     parsed = SSISPackageParser(str(package_path)).parse()
     package_ir = IRBuilder().build(parsed)
 
+    # Load procedure bodies if a procedures file is supplied.
+    procedure_bodies: dict[str, str] | None = None
+    if procedures_path:
+        from ssis_migration.procedure_file_loader import load_procedures
+        procedure_bodies = load_procedures(procedures_path)
+
     # Keep the established repository API: analyze the built IR, not
     # the original parser result.
-    analysis = analyze_package(package_ir.to_dict())
+    analysis = analyze_package(
+        package_ir.to_dict(),
+        procedure_bodies=procedure_bodies,
+    )
 
     return {
         "parsed": parsed,
@@ -112,26 +124,27 @@ def _run_ai_assisted_generation(
     all_artifacts: list[Any],
     artifacts_dir: Path,
     validation_results: list[dict[str, Any]],
+    *,
+    ai_provider: str = "databricks",
 ) -> list[dict[str, Any]]:
     """
     Call the LLM orchestrator for AI_ASSISTED steps.
 
-    For each step with strategy AI_ASSISTED, sends the
-    migration context to the Databricks Foundation Model
-    and replaces the AI contract placeholder with
-    LLM-generated code.
+    This is a per-item fallback: only steps whose deterministic
+    code is a placeholder are sent to the LLM. Steps that already
+    have real generated code are left untouched.
 
     Returns additional validation results for the
     LLM-generated code.
     """
-    from ssis_migration.agent.databricks_provider import (
-        DatabricksProvider,
+    from ssis_migration.agent.provider_factory import (
+        create_provider,
     )
     from ssis_migration.agent.orchestrator import (
         AIMigrationOrchestrator,
     )
 
-    provider = DatabricksProvider()
+    provider = create_provider(ai_provider)
     orchestrator = AIMigrationOrchestrator(provider)
 
     artifacts_by_step = {
@@ -155,6 +168,16 @@ def _run_ai_assisted_generation(
         artifact = artifacts_by_step.get(step_id)
 
         if artifact is None:
+            continue
+
+        # Per-item fallback: only invoke the LLM when the
+        # deterministic path produced a placeholder. If the
+        # artifact already has real generated code, skip it.
+        if (
+            artifact.code
+            and "AI_ASSISTED" not in artifact.code
+            and "placeholder" not in artifact.code.lower()
+        ):
             continue
 
         # Extract procedure definitions from the
@@ -245,27 +268,381 @@ def _run_ai_assisted_generation(
     return ai_validation
 
 
+def _generate_review_report(
+    package_name: str,
+    plan_dict: dict[str, Any],
+    analysis: dict[str, Any],
+    catalog: str,
+    notebook_file: str,
+    operations_by_step: dict[str, list[dict[str, Any]]] | None = None,
+) -> str:
+    """
+    Generate a human-readable markdown review report
+    summarizing the migration analysis and output.
+    """
+    lines: list[str] = []
+
+    summary = analysis.get("summary", {})
+    sql_tasks = analysis.get("sql_tasks", {})
+    control_flow = analysis.get("control_flow", {})
+
+    lines.append(f"# Migration Review: {package_name}")
+    lines.append("")
+    lines.append(f"- **Catalog:** {catalog}")
+    lines.append(f"- **Notebook:** `{notebook_file}`")
+    lines.append("")
+
+    # --- Package summary ---
+    lines.append("## Package Summary")
+    lines.append("")
+    lines.append(f"- Executables: {summary.get('executables', 0)}")
+    lines.append(f"- Data flows: {summary.get('data_flows', 0)}")
+    lines.append(f"- Execute SQL tasks: {summary.get('execute_sql_tasks', 0)}")
+    lines.append(f"- Precedence constraints: {summary.get('precedence_constraints', 0)}")
+    lines.append(f"- Variables: {summary.get('variables', 0)}")
+    lines.append("")
+
+    # --- SQL task classification ---
+    if sql_tasks:
+        lines.append("## Execute SQL Task Classification")
+        lines.append("")
+        lines.append("| Classification | Count |")
+        lines.append("| --- | ---: |")
+        for cls, count in sorted(
+            sql_tasks.get("classification_counts", {}).items()
+        ):
+            lines.append(f"| {cls} | {count} |")
+        lines.append("")
+        unresolved = sql_tasks.get("unresolved_procedures", [])
+        if unresolved:
+            lines.append(f"### Unresolved Procedures ({len(unresolved)})")
+            lines.append("")
+            for proc in unresolved:
+                lines.append(f"- `{proc}`")
+            lines.append("")
+        else:
+            lines.append("*All procedures resolved.*")
+            lines.append("")
+
+    # --- Control flow ---
+    if control_flow:
+        edges = control_flow.get("execution_edges", [])
+        lines.append("## Control Flow")
+        lines.append("")
+        lines.append(f"- Execution edges: {len(edges)}")
+        lines.append("")
+
+    # --- Data flows ---
+    data_flows = analysis.get("data_flows", [])
+    if data_flows:
+        lines.append("## Data Flows")
+        lines.append("")
+        lines.append("| Flow | Components | Mappings |")
+        lines.append("| --- | ---: | ---: |")
+        for flow in data_flows:
+            lines.append(
+                f"| {flow.get('name', '?')} "
+                f"| {flow.get('component_count', 0)} "
+                f"| {flow.get('mapping_count', 0)} |"
+            )
+        lines.append("")
+
+        # --- Column lineage validation per data flow ---
+        lines.append("### Column Lineage Validation")
+        lines.append("")
+        for flow in data_flows:
+            flow_name = flow.get("name") or "?"
+            mappings = flow.get("column_mappings", [])
+            sources = flow.get("sources", [])
+            destinations = flow.get("destinations", [])
+            lineage = flow.get("lineage", {})
+
+            lines.append(f"#### {flow_name}")
+            lines.append("")
+
+            src_names = ", ".join(
+                s.get("name") or "?" for s in sources
+            ) if sources else "N/A"
+            dst_names = ", ".join(
+                d.get("name") or "?" for d in destinations
+            ) if destinations else "N/A"
+            lines.append(f"- **Source:** {src_names}")
+            lines.append(f"- **Destination:** {dst_names}")
+            lines.append(f"- **Column mappings:** {len(mappings)}")
+
+            # Flag flows with no mappings
+            if not mappings:
+                lines.append("- **WARNING:** No column mappings found. Lineage may be lost.")
+                lines.append("")
+                continue
+
+            # Show source -> destination column lineage
+            lines.append("")
+            lines.append("| Source Column | Destination Column | Type |")
+            lines.append("| --- | --- | --- |")
+            for m in mappings:
+                src_col = m.get("source_column") or "?"
+                dst_col = m.get("destination_column") or "?"
+                map_type = m.get("mapping_type") or "DIRECT"
+                lines.append(
+                    f"| {src_col} | {dst_col} | {map_type} |"
+                )
+            lines.append("")
+
+            # Check for unmapped destination columns
+            mapped_dst = {
+                (m.get("destination_column") or "").lower()
+                for m in mappings
+            }
+            for dst in destinations:
+                for col in dst.get("columns", []):
+                    col_name = col.get("name") or ""
+                    if col_name and col_name.lower() not in mapped_dst:
+                        lines.append(
+                            f"- **WARNING:** Destination column `{col_name}` has no source mapping."
+                        )
+            lines.append("")
+
+    # --- Migration plan steps with AI utilization ---
+    steps = plan_dict.get("steps", [])
+    if steps:
+        # Classify steps by strategy
+        strategy_counts: dict[str, int] = {}
+        ai_required_steps: list[str] = []
+        deterministic_steps: list[str] = []
+        review_required_steps: list[str] = []
+
+        for step in steps:
+            strat = (
+                step.get("metadata", {})
+                .get("migration_strategy", {})
+                .get("strategy", "UNKNOWN")
+            )
+            strategy_counts[strat] = strategy_counts.get(strat, 0) + 1
+
+            step_name = step.get("name", "?")
+            if strat == "AI_ASSISTED":
+                ai_required_steps.append(step_name)
+            elif strat == "DETERMINISTIC":
+                deterministic_steps.append(step_name)
+            elif strat == "REVIEW_REQUIRED":
+                review_required_steps.append(step_name)
+
+        # AI Utilization Summary
+        total_steps = len(steps)
+        ai_count = len(ai_required_steps)
+        det_count = len(deterministic_steps)
+        review_count = len(review_required_steps)
+        det_pct = round(det_count / total_steps * 100, 1) if total_steps else 0
+        ai_pct = round(ai_count / total_steps * 100, 1) if total_steps else 0
+        review_pct = round(review_count / total_steps * 100, 1) if total_steps else 0
+
+        lines.append("## AI Utilization Summary")
+        lines.append("")
+        lines.append(f"- **Total steps:** {total_steps}")
+        lines.append(f"- **Deterministic:** {det_count} ({det_pct}%)")
+        lines.append(f"- **AI-Assisted:** {ai_count} ({ai_pct}%)")
+        lines.append(f"- **Review required:** {review_count} ({review_pct}%)")
+        lines.append("")
+
+        if deterministic_steps:
+            lines.append(f"**Deterministic steps:** {', '.join(deterministic_steps)}")
+            lines.append("")
+        if ai_required_steps:
+            lines.append(f"**AI-Assisted steps:** {', '.join(ai_required_steps)}")
+            lines.append("")
+        if review_required_steps:
+            lines.append(f"**Review-required steps:** {', '.join(review_required_steps)}")
+            lines.append("")
+
+        # Operation-level breakdown (deterministic vs AI-required)
+        if operations_by_step:
+            det_ops_total = 0
+            ai_ops_total = 0
+            error_ops_total = 0
+            for step_id, ops in operations_by_step.items():
+                for op in ops:
+                    if "error" in op:
+                        error_ops_total += 1
+                    else:
+                        op_code = op.get("code", "")
+                        if "AI_REQUIRED" in op_code or "placeholder" in op_code.lower():
+                            ai_ops_total += 1
+                        else:
+                            det_ops_total += 1
+            total_ops = det_ops_total + ai_ops_total + error_ops_total
+            if total_ops:
+                det_op_pct = round(det_ops_total / total_ops * 100, 1)
+                ai_op_pct = round(ai_ops_total / total_ops * 100, 1)
+                lines.append("### Operation-Level Breakdown")
+                lines.append("")
+                lines.append(f"- **Total operations generated:** {total_ops}")
+                lines.append(f"- **Deterministic operations:** {det_ops_total} ({det_op_pct}%) — control flow, staging, lineage, cutoff")
+                lines.append(f"- **AI-required operations:** {ai_ops_total} ({ai_op_pct}%) — extract & migrate SQL")
+                if error_ops_total:
+                    lines.append(f"- **Failed operations:** {error_ops_total} — see step table for details")
+                lines.append("")
+
+        # Detailed step table with validation status
+        lines.append("## Migration Plan Steps")
+        lines.append("")
+        lines.append("| Step | Strategy | Language | Source Objects | Target Objects | Status |")
+        lines.append("| --- | --- | --- | --- | --- | --- |")
+        for step in steps:
+            strat = (
+                step.get("metadata", {})
+                .get("migration_strategy", {})
+                .get("strategy", "?")
+            )
+            name = step.get("name") or "?"
+            lang = step.get("target_language") or "?"
+            src = ", ".join(step.get("source_objects", [])) or "N/A"
+            tgt = ", ".join(step.get("target_objects", [])) or "N/A"
+
+            # Validation status
+            if strat == "DETERMINISTIC":
+                status = "✅ Ready"
+            elif strat == "AI_ASSISTED":
+                status = "🤖 AI needed"
+            elif strat == "REVIEW_REQUIRED":
+                status = "⚠️ Review"
+            else:
+                status = "❓ Unknown"
+
+            lines.append(
+                f"| {name} | {strat} | {lang} | {src} | {tgt} | {status} |"
+            )
+        lines.append("")
+
+        # Validation recommendations
+        lines.append("## Validation Recommendations")
+        lines.append("")
+        lines.append("### Static Validation")
+        lines.append(f"- Review report generated with {total_steps} steps")
+        lines.append(f"- {det_count} steps have deterministic code (control flow + SQL)")
+        if ai_count > 0 or review_count > 0:
+            lines.append(f"- {ai_count + review_count} steps require AI generation or manual review")
+            lines.append("- Supply stored procedure definitions to enable AI generation")
+        lines.append("")
+        lines.append("### Runtime Validation")
+        lines.append("- Execute the generated notebook on Databricks")
+        lines.append("- Compare row counts between source and target tables")
+        lines.append("- Verify column types match the original schema")
+        lines.append("- Check execution order matches the original SSIS control flow")
+        lines.append("")
+
+    # --- Component type counts ---
+    comp_counts = analysis.get("component_type_counts", {})
+    if comp_counts:
+        lines.append("## Component Types")
+        lines.append("")
+        for comp_type, count in sorted(comp_counts.items()):
+            lines.append(f"- {comp_type}: {count}")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    lines.append("*Generated by ssis-migration-agent*")
+
+    return "\n".join(lines)
+
+
+def _apply_procedure_file_fallback(
+    operations: list[Any],
+    procedures_defs: dict[str, str],
+    translator: Any,
+) -> None:
+    """
+    Substitute user-supplied procedure definitions when the
+    database-metadata definition cannot be deterministically
+    translated.
+
+    Precedence:
+
+    1. Database metadata definition (real source) — used when it
+       translates successfully.
+    2. Procedures-file definition (user-supplied) — used when the
+       metadata definition fails deterministic translation.
+
+    The substituted source is recorded in operation metadata
+    (``sql_source``) for traceability; nothing is fabricated.
+    """
+
+    for operation in operations:
+
+        if operation.operation_type == "EXTRACT":
+
+            name = operation.metadata.get("source_procedure")
+
+            current_sql = operation.sql
+
+            if current_sql and translator.translate(
+                current_sql
+            ).status == "TRANSLATED":
+                operation.metadata["sql_source"] = "database_metadata"
+                continue
+
+            fallback = procedures_defs.get(name or "")
+
+            if (
+                fallback
+                and translator.translate(fallback).status
+                == "TRANSLATED"
+            ):
+                operation.sql = fallback
+                operation.metadata["sql_source"] = "procedures_file"
+                operation.metadata[
+                    "source_procedure_definition"
+                ] = fallback
+
+        elif operation.operation_type in ("INSERT", "MERGE"):
+
+            name = operation.metadata.get("procedure")
+
+            current_definition = operation.metadata.get(
+                "procedure_definition"
+            )
+
+            if current_definition and translator.translate(
+                current_definition
+            ).status == "TRANSLATED":
+                operation.metadata["sql_source"] = "database_metadata"
+                continue
+
+            fallback = procedures_defs.get(name or "")
+
+            if (
+                fallback
+                and translator.translate(fallback).status
+                == "TRANSLATED"
+            ):
+                operation.metadata["procedure_definition"] = fallback
+                operation.metadata["sql_source"] = "procedures_file"
+
+
 def generate_migration_artifacts(
     package_ir: Any,
     analysis: dict[str, Any],
-    connection_mapping_path: Path,
+    connection_mapping_path: Path | None,
     base_path: Path,
     package_output: Path,
     *,
     ai: bool = False,
+    ai_provider: str = "databricks",
     catalog: str | None = None,
     package_name: str = "",
+    ddl_path: str | Path | None = None,
+    procedures_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """
-    Run planner -> generator -> validator on the analyzed package.
+    Run planner -> generator -> notebook + review report.
 
-    Requires a connection mapping file with database metadata paths.
-    Produces migration_plan.json, generated_artifacts/, and
-    validation_results.json in the package output directory.
+    When connection_mapping_path is provided, loads external database
+    metadata via the mapping. When None, derives table/column metadata
+    from the .dtsx package IR alone.
+    Produces a Databricks notebook (.ipynb) and a review report (.md)
+    in the package output directory.
     """
-    from ssis_migration.database.connection_mapping_loader import (
-        load_connection_mapping,
-    )
     from ssis_migration.context.builder import build_migration_context
     from ssis_migration.planner.planner import MigrationPlanner
     from ssis_migration.generator.dispatcher import GeneratorDispatcher
@@ -273,34 +650,30 @@ def generate_migration_artifacts(
     from ssis_migration.generator.databricks_operations import (
         DatabricksOperationGenerator,
     )
-    from ssis_migration.validator.sql_semantic import SQLSemanticValidator
-    from ssis_migration.generator.sql_translator import (
-        SQLServerToSparkSQLTranslator,
-    )
-    from ssis_migration.agent.code_validator import (
-        validate_generated_code,
-    )
     from ssis_migration.generator.notebook import (
         NotebookAssembler,
     )
 
-    connection_mapping = load_connection_mapping(
-        connection_mapping_path
-    )
+    connection_mapping = None
+    if connection_mapping_path is not None:
+        from ssis_migration.database.connection_mapping_loader import (
+            load_connection_mapping,
+        )
+        connection_mapping = load_connection_mapping(
+            connection_mapping_path
+        )
 
     context = build_migration_context(
         package_ir=package_ir,
         ssis_analysis=analysis,
         connection_mapping=connection_mapping,
         base_path=base_path,
+        ddl_path=ddl_path,
     )
 
     planner = MigrationPlanner()
     plan = planner.build_plan(context)
     plan_dict = plan.to_dict()
-
-    plan_file = package_output / "migration_plan.json"
-    write_json(plan_file, plan_dict)
 
     if not package_name:
         package_name = safe_name(
@@ -310,107 +683,34 @@ def generate_migration_artifacts(
     dispatcher = GeneratorDispatcher()
     op_builder = MigrationOperationBuilder()
     op_generator = DatabricksOperationGenerator()
-    sql_validator = SQLSemanticValidator()
-    translator = SQLServerToSparkSQLTranslator()
 
-    generated_artifacts: list[dict[str, Any]] = []
-    validation_results: list[dict[str, Any]] = []
+    # User-supplied procedure definitions are a translation fallback
+    # for operations whose database-metadata definition cannot be
+    # deterministically translated.
+    procedures_defs: dict[str, str] = {}
+    if procedures_path:
+        from ssis_migration.procedure_file_loader import (
+            load_procedures,
+        )
+        procedures_defs = load_procedures(procedures_path)
+
     all_artifacts: list[Any] = []
     operations_by_step: dict[str, list[dict[str, Any]]] = {}
 
-    artifacts_dir = package_output / "generated_artifacts"
-    artifacts_dir.mkdir(parents=True, exist_ok=True)
-
     for step in plan_dict["steps"]:
         step_id = step["step_id"]
-        step_name = step["name"]
 
         artifact = dispatcher.generate(step)
         all_artifacts.append(artifact)
 
-        ext = "py" if artifact.language == "pyspark" else "sql"
-        code_file = artifacts_dir / f"{step_id}.{ext}"
-        code_file.write_text(
-            artifact.code, encoding="utf-8"
-        )
-
-        artifact_meta = {
-            k: v
-            for k, v in artifact.to_dict().items()
-            if k != "code"
-        }
-        meta_file = artifacts_dir / f"{step_id}_meta.json"
-        write_json(meta_file, artifact_meta)
-
-        generated_artifacts.append({
-            "step_id": step_id,
-            "step_name": step_name,
-            "artifact_type": artifact.artifact_type,
-            "language": artifact.language,
-            "code_file": str(code_file),
-            "metadata_file": str(meta_file),
-        })
-
-        strat = step.get(
-            "metadata", {}
-        ).get("migration_strategy", {})
-
-        if strat.get("strategy") == "DETERMINISTIC":
-            source_procedures = step[
-                "metadata"
-            ].get(
-                "migration_intent", {}
-            ).get("source_procedures", [])
-            if source_procedures:
-                source_sql_full = source_procedures[
-                    0
-                ].get("definition", "")
-                source_query = (
-                    translator._extract_main_query(
-                        source_sql_full
-                    )
-                )
-                trans = artifact.metadata.get(
-                    "translation", {}
-                )
-                translated_sql = trans.get("sql", "")
-
-                if source_query and translated_sql:
-                    sql_result = sql_validator.validate(
-                        source_sql=source_query,
-                        target_sql=translated_sql,
-                        source_dialect="tsql",
-                        target_dialect="spark",
-                    )
-                    validation_results.append({
-                        "step_id": step_id,
-                        "step_name": step_name,
-                        "validator": "sql_semantic",
-                        "status": sql_result.status,
-                        "checks": dict(
-                            sql_result.checks
-                        ),
-                        "failures": list(
-                            sql_result.failures
-                        ),
-                    })
-
-        if (
-            artifact.language == "pyspark"
-            and artifact.code
-        ):
-            code_result = validate_generated_code(
-                artifact.code, step_name
-            )
-            validation_results.append({
-                "step_id": step_id,
-                "step_name": step_name,
-                "validator": "code_validator",
-                "status": code_result["status"],
-                "issues": code_result["issues"],
-            })
-
         operations = op_builder.build(step)
+
+        if procedures_defs:
+            _apply_procedure_file_fallback(
+                operations,
+                procedures_defs,
+                op_generator.translator,
+            )
         op_results: list[dict[str, Any]] = []
         for op in operations:
             try:
@@ -431,44 +731,25 @@ def generate_migration_artifacts(
                     "error": str(op_exc),
                 })
 
-        ops_file = artifacts_dir / f"{step_id}_operations.json"
-        write_json(ops_file, op_results)
         operations_by_step[step_id] = op_results
 
     # -------------------------------------------------
-    # AI-assisted generation for AI_ASSISTED steps
+    # AI-assisted generation (per-item fallback)
     # -------------------------------------------------
 
     if ai:
         ai_results = _run_ai_assisted_generation(
             plan_dict=plan_dict,
             all_artifacts=all_artifacts,
-            artifacts_dir=artifacts_dir,
-            validation_results=validation_results,
+            artifacts_dir=package_output,
+            validation_results=[],
+            ai_provider=ai_provider,
         )
-        validation_results.extend(ai_results)
 
-        # Re-write meta files for artifacts modified by
-        # AI generation so they include ai_generated,
-        # ai_status, ai_assumptions, and ai_unresolved.
-        for artifact in all_artifacts:
-            if artifact.metadata.get("ai_generated"):
-                step_id = artifact.source_step_id
-                artifact_meta = {
-                    k: v
-                    for k, v in artifact.to_dict().items()
-                    if k != "code"
-                }
-                meta_file = (
-                    artifacts_dir / f"{step_id}_meta.json"
-                )
-                write_json(meta_file, artifact_meta)
+    # -------------------------------------------------
+    # Assemble the Databricks notebook (.ipynb)
+    # -------------------------------------------------
 
-    validation_file = package_output / "validation_results.json"
-    write_json(validation_file, validation_results)
-
-    # Assemble all generated artifacts into a single
-    # Databricks notebook (.ipynb).
     notebook_assembler = NotebookAssembler()
     notebook_file = notebook_assembler.assemble_and_write(
         plan_dict=plan_dict,
@@ -477,115 +758,27 @@ def generate_migration_artifacts(
         operations_by_step=operations_by_step,
     )
 
-    # Generate Databricks Job definition and DABs YAML
-    # from the migration plan.
-    from ssis_migration.generator.job_generator import (
-        JobGenerator,
-    )
-
-    job_gen = JobGenerator()
-    job_def = job_gen.generate(
-        plan_dict,
-        notebook_path=str(notebook_file),
-        catalog=catalog or "main",
-    )
-    job_file = package_output / f"{package_name}_job.json"
-    job_file.write_text(
-        job_def.to_json(), encoding="utf-8"
-    )
-
-    dabs_yaml = job_gen.generate_dabs_yaml(
-        plan_dict,
-        notebook_path=str(notebook_file),
-        catalog=catalog or "main",
-    )
-    dabs_file = package_output / "databricks.yml"
-    dabs_file.write_text(
-        dabs_yaml, encoding="utf-8"
-    )
-
     # -------------------------------------------------
-    # Generate data validation queries
+    # Generate the migration review report (markdown)
     # -------------------------------------------------
 
-    data_validation_file: str | None = None
-    data_validation_notebook: str | None = None
-    data_validation_report: str | None = None
-
-    try:
-        from ssis_migration.validator.data_validation import (
-            DataValidator,
-        )
-
-        source_meta: dict[str, Any] = {}
-        target_meta: dict[str, Any] = {}
-
-        for m in connection_mapping.mappings:
-            meta_path = (
-                base_path / m.metadata_file
-                if not Path(m.metadata_file).is_absolute()
-                else Path(m.metadata_file)
-            )
-            if not meta_path.is_file():
-                continue
-            meta_data = json.loads(
-                meta_path.read_text(encoding="utf-8")
-            )
-            if m.role == "source":
-                source_meta = meta_data
-            elif m.role == "destination":
-                target_meta = meta_data
-
-        if source_meta or target_meta:
-            dv = DataValidator()
-            dv_report = dv.generate(
-                plan_dict,
-                source_meta,
-                target_meta,
-                catalog=catalog or "main",
-            )
-
-            dv_sql = dv.generate_sql_file(dv_report)
-            dv_sql_file = (
-                package_output / f"{package_name}_data_validation.sql"
-            )
-            dv_sql_file.write_text(dv_sql, encoding="utf-8")
-            data_validation_file = str(dv_sql_file)
-
-            dv_nb = dv.generate_notebook(dv_report)
-            dv_nb_file = (
-                package_output
-                / f"{package_name}_Data_Validation.ipynb"
-            )
-            dv_nb_file.write_text(
-                json.dumps(dv_nb, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            data_validation_notebook = str(dv_nb_file)
-
-            dv_report_file = (
-                package_output / "data_validation_report.json"
-            )
-            dv_report_file.write_text(
-                dv_report.to_json(), encoding="utf-8"
-            )
-            data_validation_report = str(dv_report_file)
-
-    except Exception:
-        pass
+    review_file = package_output / f"{package_name}_review.md"
+    review_file.write_text(
+        _generate_review_report(
+            package_name=package_name,
+            plan_dict=plan_dict,
+            analysis=analysis,
+            catalog=catalog or "main",
+            notebook_file=str(notebook_file),
+            operations_by_step=operations_by_step,
+        ),
+        encoding="utf-8",
+    )
 
     return {
-        "plan_file": str(plan_file),
-        "artifacts": generated_artifacts,
-        "validation_file": str(validation_file),
         "notebook_file": str(notebook_file),
-        "job_file": str(job_file),
-        "dabs_file": str(dabs_file),
-        "data_validation_file": data_validation_file,
-        "data_validation_notebook": data_validation_notebook,
-        "data_validation_report": data_validation_report,
-        "artifact_count": len(generated_artifacts),
-        "validation_count": len(validation_results),
+        "review_file": str(review_file),
+        "artifact_count": len(all_artifacts),
     }
 
 
@@ -598,6 +791,9 @@ def run_migration(
     base_path: str | None = None,
     execute: bool = False,
     ai: bool = False,
+    ai_provider: str = "databricks",
+    ddl_path: str | None = None,
+    procedures_path: str | None = None,
 ) -> dict[str, Any]:
     """
     Discover and analyze SSIS packages and create a per-package migration
@@ -647,18 +843,12 @@ def run_migration(
         }
 
         try:
-            result = analyze_one_package(package_path)
+            result = analyze_one_package(
+                package_path,
+                procedures_path=procedures_path,
+            )
             package_ir = result["package_ir"]
             analysis = result["analysis"]
-
-            ir_data = object_to_dict(package_ir)
-            analysis_data = object_to_dict(analysis)
-
-            ir_file = package_output / "package_ir.json"
-            analysis_file = package_output / "analysis.json"
-
-            write_json(ir_file, ir_data)
-            write_json(analysis_file, analysis_data)
 
             # -------------------------------------------------
             # Resolve connection mapping
@@ -684,16 +874,8 @@ def run_migration(
             )
 
             # -------------------------------------------------
-            # Run planner -> generator -> validator
+            # Run planner -> generator -> notebook + report
             # -------------------------------------------------
-
-            generation_stages: dict[str, str] = {
-                "target_metadata_discovery": "NOT_CONNECTED",
-                "transformation_generation": "NOT_CONNECTED",
-                "data_validation": "NOT_IMPLEMENTED",
-            }
-
-            generation_artifacts: dict[str, Any] = {}
 
             if mapping_path and mapping_path.is_file():
                 gen_result = generate_migration_artifacts(
@@ -703,98 +885,46 @@ def run_migration(
                     base_path=resolved_base,
                     package_output=package_output,
                     ai=ai,
+                    ai_provider=ai_provider,
                     catalog=catalog,
                     package_name=package_name,
+                    ddl_path=ddl_path,
+                    procedures_path=procedures_path,
                 )
+                metadata_stage = "SUCCEEDED"
+            else:
+                gen_result = generate_migration_artifacts(
+                    package_ir=package_ir,
+                    analysis=analysis,
+                    connection_mapping_path=None,
+                    base_path=resolved_base,
+                    package_output=package_output,
+                    ai=ai,
+                    ai_provider=ai_provider,
+                    catalog=catalog,
+                    package_name=package_name,
+                    ddl_path=ddl_path,
+                    procedures_path=procedures_path,
+                )
+                metadata_stage = "SUCCEEDED_DTSX_DERIVED"
 
-                generation_stages = {
-                    "target_metadata_discovery": "SUCCEEDED",
-                    "transformation_generation": "SUCCEEDED",
-                    "data_validation": (
-                        "SUCCEEDED"
-                        if gen_result.get("data_validation_report")
-                        else "NOT_AVAILABLE"
-                    ),
-                }
-
-                generation_artifacts = {
-                    "plan": gen_result["plan_file"],
-                    "validation": gen_result[
-                        "validation_file"
-                    ],
-                    "notebook": gen_result[
-                        "notebook_file"
-                    ],
-                    "job": gen_result.get(
-                        "job_file"
-                    ),
-                    "dabs": gen_result.get(
-                        "dabs_file"
-                    ),
-                    "data_validation": gen_result.get(
-                        "data_validation_file"
-                    ),
-                    "data_validation_notebook": gen_result.get(
-                        "data_validation_notebook"
-                    ),
-                    "data_validation_report": gen_result.get(
-                        "data_validation_report"
-                    ),
-                    "generated_dir": str(
-                        package_output
-                        / "generated_artifacts"
-                    ),
-                    "artifact_count": gen_result[
-                        "artifact_count"
-                    ],
-                    "validation_count": gen_result[
-                        "validation_count"
-                    ],
-                }
-
-            # The manifest is derived from actual
-            # parser/analyzer output. It does not contain
-            # hard-coded WWI schemas or table names.
-            manifest = {
-                "package_name": package_path.stem,
-                "source_package": str(package_path),
-                "target": {
-                    "platform": "databricks",
-                    "catalog": catalog,
-                },
+            entry.update({
+                "status": "MIGRATED",
                 "artifacts": {
-                    "ir": str(ir_file),
-                    "analysis": str(analysis_file),
-                    **generation_artifacts,
+                    "notebook": gen_result["notebook_file"],
+                    "review": gen_result["review_file"],
                 },
                 "stages": {
                     "package_discovery": "SUCCEEDED",
                     "parsing": "SUCCEEDED",
                     "ir_build": "SUCCEEDED",
                     "analysis": "SUCCEEDED",
-                    **generation_stages,
-                    "job_pipeline_generation": "SUCCEEDED",
+                    "target_metadata_discovery": metadata_stage,
+                    "transformation_generation": "SUCCEEDED",
+                    "notebook_generation": "SUCCEEDED",
                     "deployment": "NOT_IMPLEMENTED",
                     "data_migration": "NOT_IMPLEMENTED",
                 },
-            }
-
-            manifest_file = package_output / "migration_manifest.json"
-            write_json(manifest_file, manifest)
-
-            entry.update({
-                "status": (
-                    "MIGRATED"
-                    if mapping_path
-                    else "ANALYZED"
-                ),
-                "artifacts": {
-                    "ir": str(ir_file),
-                    "analysis": str(analysis_file),
-                    "manifest": str(manifest_file),
-                    **generation_artifacts,
-                },
-                "stages": manifest["stages"],
             })
 
         except Exception as exc:
@@ -888,10 +1018,19 @@ def main() -> None:
         "--ai",
         action="store_true",
         help=(
-            "Enable LLM-assisted generation for AI_ASSISTED "
-            "steps. Uses the Databricks Foundation Model "
-            "API to generate migration code for steps "
-            "that cannot be deterministically translated."
+            "Enable LLM-assisted generation as a per-item "
+            "fallback for steps that cannot be deterministically "
+            "translated. Off by default."
+        ),
+    )
+
+    parser.add_argument(
+        "--ai-provider",
+        default="databricks",
+        choices=["databricks", "openai", "puter", "mock"],
+        help=(
+            "AI provider to use when --ai is enabled. "
+            "Default: databricks."
         ),
     )
 
@@ -911,6 +1050,7 @@ def main() -> None:
         base_path=args.base_path,
         execute=False,
         ai=args.ai,
+        ai_provider=args.ai_provider,
     )
     print(json.dumps(result, indent=2, ensure_ascii=False))
 

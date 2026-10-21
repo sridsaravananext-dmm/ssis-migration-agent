@@ -90,11 +90,15 @@ class NotebookAssembler:
             "# every step in dependency order.\n"
             "dbutils.widgets.text('step_id', 'all', 'Step ID to execute')\n"
             "dbutils.widgets.text('catalog', 'main', 'Target catalog')\n"
-            "dbutils.widgets.text('schema', 'default', 'Target schema')\n"
             "_step_id = dbutils.widgets.get('step_id')\n"
             "_catalog = dbutils.widgets.get('catalog')\n"
-            "_schema = dbutils.widgets.get('schema')\n"
         ))
+
+        # -------------------------------------------------
+        # Setup cell: ETL control-table helpers
+        # -------------------------------------------------
+
+        cells.append(self._code_cell(self._setup_helpers_code()))
 
         # -------------------------------------------------
         # Unresolved items warning
@@ -343,6 +347,116 @@ class NotebookAssembler:
         )
 
         return notebook_file
+
+    @staticmethod
+    def _setup_helpers_code() -> str:
+        """
+        Python source for the notebook setup cell.
+
+        Deterministic equivalents of the WWI Integration control
+        procedures used by every load step:
+
+        - get_last_etl_cutoff  <- Integration.GetLastETLCutoffTime
+        - get_lineage_key      <- Integration.GetLineageKey
+        - complete_lineage     <- lineage row completion
+        - update_etl_cutoff    <- Integration.RecordLastETLCutoffTime
+        - new_cutoff           <- Calculate ETL Cutoff Time +
+                                  Trim Any Milliseconds
+
+        The Lineage table uses a Delta identity column for
+        ``Lineage Key`` (matching the SQL Server IDENTITY in the
+        source warehouse), so concurrent job tasks cannot
+        collide on keys.
+        """
+        return '''# ------------------------------------------------------------
+# Setup: ETL control-table helpers
+# ------------------------------------------------------------
+from datetime import datetime, timezone
+
+_ETL_CUTOFF_TABLE = f"{_catalog}.Integration.ETL_Cutoff"
+_LINEAGE_TABLE = f"{_catalog}.Integration.Lineage"
+
+
+def _control_table_key(table_name: str) -> str:
+    """Control tables are keyed by schema.table (SQL Server
+    semantics), without the catalog prefix."""
+    if table_name.startswith(_catalog + "."):
+        return table_name.split(".", 1)[1]
+    return table_name
+
+
+def _fmt_cutoff(value) -> str:
+    """Format a datetime for safe SQL string embedding."""
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S.%f")
+    return str(value)
+
+
+# SSIS: Calculate ETL Cutoff Time + Trim Any Milliseconds
+new_cutoff = datetime.now(timezone.utc).replace(
+    tzinfo=None, microsecond=0
+)
+
+
+def get_last_etl_cutoff(table_name: str) -> datetime:
+    """Integration.GetLastETLCutoffTime: MAX(Cutoff Time) for
+    the table; 0001-01-01 when the table has no row yet."""
+    row = spark.sql(
+        "SELECT MAX(`Cutoff Time`) AS cutoff "
+        f"FROM {_ETL_CUTOFF_TABLE} "
+        f"WHERE `Table Name` = '{_control_table_key(table_name)}'"
+    ).collect()[0]
+    if row["cutoff"] is None:
+        return datetime(1, 1, 1)
+    return row["cutoff"]
+
+
+def get_lineage_key(table_name: str, cutoff_time) -> int:
+    """Integration.GetLineageKey: start a lineage record and
+    return its key."""
+    spark.sql(
+        f"INSERT INTO {_LINEAGE_TABLE} "
+        "(`Data Load Started`, `Table Name`, `Was Successful`, "
+        "`Source System Cutoff Time`) "
+        "VALUES (current_timestamp(), "
+        f"'{_control_table_key(table_name)}', false, "
+        f"'{_fmt_cutoff(cutoff_time)}')"
+    )
+    row = spark.sql(
+        "SELECT `Lineage Key` AS lineage_key "
+        f"FROM {_LINEAGE_TABLE} "
+        f"WHERE `Table Name` = '{_control_table_key(table_name)}' "
+        "ORDER BY `Data Load Started` DESC, `Lineage Key` DESC "
+        "LIMIT 1"
+    ).collect()[0]
+    return row["lineage_key"]
+
+
+def complete_lineage(lineage_key: int) -> None:
+    """Mark the lineage record as successfully completed."""
+    spark.sql(
+        f"UPDATE {_LINEAGE_TABLE} "
+        "SET `Was Successful` = true, "
+        "`Data Load Completed` = current_timestamp() "
+        f"WHERE `Lineage Key` = {lineage_key}"
+    )
+
+
+def update_etl_cutoff(table_name: str, cutoff_time) -> None:
+    """Integration.RecordLastETLCutoffTime: upsert the cutoff."""
+    spark.sql(
+        f"MERGE INTO {_ETL_CUTOFF_TABLE} AS tgt "
+        "USING (SELECT "
+        f"'{_control_table_key(table_name)}' AS table_name, "
+        f"'{_fmt_cutoff(cutoff_time)}' AS cutoff) AS src "
+        "ON tgt.`Table Name` = src.table_name "
+        "WHEN MATCHED THEN UPDATE SET "
+        "tgt.`Cutoff Time` = src.cutoff "
+        "WHEN NOT MATCHED THEN INSERT "
+        "(`Table Name`, `Cutoff Time`) "
+        "VALUES (src.table_name, src.cutoff)"
+    )
+'''
 
     def _order_steps(
         self,

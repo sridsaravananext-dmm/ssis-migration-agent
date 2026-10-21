@@ -1,0 +1,42 @@
+{
+  "tool": "ssis-migration-agent",
+  "created_at_utc": "2026-10-21T12:34:15.511431+00:00",
+  "mode": "ANALYZE_ONLY",
+  "target": {
+    "platform": "databricks",
+    "catalog": "dev_catalog"
+  },
+  "source": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/examples/wwi/DailyETLMain.dtsx",
+  "output": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/examples/wwi/output_medallion",
+  "package_count": 1,
+  "packages": [
+    {
+      "package": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/examples/wwi/DailyETLMain.dtsx",
+      "name": "DailyETLMain",
+      "status": "MIGRATED",
+      "artifacts": {
+        "notebook": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/examples/wwi/output_medallion/DailyETLMain/DailyETLMain_Migration.ipynb",
+        "review": "/Workspace/Users/sridsaravanan.ext@deloitte.com/ssis-migration-agent/examples/wwi/output_medallion/DailyETLMain/DailyETLMain_review.md"
+      },
+      "stages": {
+        "package_discovery": "SUCCEEDED",
+        "parsing": "SUCCEEDED",
+        "ir_build": "SUCCEEDED",
+        "analysis": "SUCCEEDED",
+        "target_metadata_discovery": "SUCCEEDED",
+        "transformation_generation": "SUCCEEDED",
+        "notebook_generation": "SUCCEEDED",
+        "deployment": "NOT_IMPLEMENTED",
+        "data_migration": "NOT_IMPLEMENTED"
+      }
+    }
+  ],
+  "deployment": {
+    "status": "NOT_IMPLEMENTED",
+    "message": "No target artifacts have been deployed. Connect validated DDL, transformation generation, and resource deployment adapters before enabling execution."
+  },
+  "analyzed_package_count": 1,
+  "migrated_package_count": 1,
+  "failed_package_count": 0,
+  "status": "MIGRATION_COMPLETE_DEPLOYMENT_PENDING"
+}
