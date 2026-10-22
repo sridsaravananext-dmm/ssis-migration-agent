@@ -1,0 +1,265 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mapping_version",
+    "export_format",
+    "source_bundle_sha256",
+    "semantic_profile",
+    "max_rows",
+    "models",
+    "units",
+    "fixture_cases"
+  ],
+  "properties": {
+    "mapping_version": {
+      "const": "1.0"
+    },
+    "export_format": {
+      "const": "tm1_databricks_mapping_v1"
+    },
+    "source_bundle_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "semantic_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "numeric_domain",
+        "complete_coordinate_domains",
+        "canonical_identifiers_only",
+        "no_hidden_rules_or_feeders",
+        "full_cell_visibility",
+        "record_order_semantics"
+      ],
+      "properties": {
+        "name": {
+          "const": "dense_numeric_leaf_snapshot_v1"
+        },
+        "numeric_domain": {
+          "const": "EXACT_INTEGER_53"
+        },
+        "complete_coordinate_domains": {
+          "const": true
+        },
+        "canonical_identifiers_only": {
+          "const": true
+        },
+        "no_hidden_rules_or_feeders": {
+          "const": true
+        },
+        "full_cell_visibility": {
+          "const": true
+        },
+        "record_order_semantics": {
+          "const": "SOURCE_RECORD_ORDINAL"
+        }
+      }
+    },
+    "max_rows": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "model_id",
+          "cube",
+          "coordinates",
+          "value_column",
+          "input_table",
+          "value_semantics"
+        ],
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+          },
+          "cube": {
+            "type": "string",
+            "minLength": 1
+          },
+          "coordinates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "dimension",
+                "hierarchy",
+                "column"
+              ],
+              "properties": {
+                "dimension": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "hierarchy": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "column": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+                }
+              }
+            },
+            "minItems": 1
+          },
+          "value_column": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+          },
+          "input_table": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "value_semantics": {
+            "enum": [
+              "STORED_WITHOUT_RULES",
+              "STORED_BEFORE_SUPPLIED_CONSTANT_RULES",
+              "EVALUATED_WITHOUT_RULES"
+            ]
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unit_id",
+          "model_id",
+          "datasource_table",
+          "order_column",
+          "parameters"
+        ],
+        "properties": {
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+          },
+          "datasource_table": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "order_column": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "fixture_cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "unit_id",
+          "cells",
+          "rows",
+          "parameters",
+          "expected",
+          "provenance"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+          },
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cells": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 100000
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 100000
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
+          },
+          "expected": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 100000
+          },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "description"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "SYNTHETIC",
+                  "SOURCE_OBSERVATION"
+                ]
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "minItems": 1
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:tm1_databricks_mapping:1.0"
+}

@@ -1103,6 +1103,7 @@ def run_migration(
     dependency_files: list[str] | None = None,
     source_platform: str | None = None,
     file_roles: dict[str, str] | None = None,
+    target_mapping: str | None = None,
 ) -> dict[str, Any]:
     """
     Discover and analyze SSIS packages and create a per-package migration
@@ -1116,6 +1117,22 @@ def run_migration(
     """
     if execute:
         raise ValueError("Execution is not implemented; generate and review artifacts with execute=False.")
+
+    from ssis_migration.intake import describe_file
+    selected = str(source_platform or '').strip().lower().replace('-', '_').replace(' ', '_')
+    explicit_tm1 = selected in {'tm1', 'ibm_tm1', 'planning_analytics'}
+    detected_tm1 = source_platform is None and Path(source).expanduser().is_file() and describe_file(source)['format'] == 'tm1_source_bundle_v1'
+    if explicit_tm1 or detected_tm1:
+        if ai or any((catalog, connection_mapping, ddl_path, procedures_path, dependency_files, file_roles, base_path)):
+            raise ValueError('TM1 uses explicit bundle roles and target mappings; declare dependencies inside its manifest. AI generation is unavailable.')
+        if target_mapping is not None:
+            from ssis_migration.generator.tm1.pipeline import run_tm1_generation
+            return run_tm1_generation(source, output, target_mapping)
+        from ssis_migration.adapters.tm1.pipeline import run_tm1_review
+        return run_tm1_review(source, output)
+
+    if target_mapping is not None:
+        raise ValueError('Target mappings are currently supported only for explicit TM1 native bundles.')
 
     from ssis_migration.validator.readiness import summarize_readiness
     from ssis_migration.intake import build_intake_manifest
@@ -1491,12 +1508,12 @@ def run_migration(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Inventory offline legacy exports and migrate supported SSIS packages to Databricks."
+        description="Inventory offline exports, migrate SSIS packages, or generate bounded TM1 Databricks candidates with an explicit target mapping."
     )
     parser.add_argument(
         "--source",
         required=True,
-        help="Path to an exported source file or input directory; only the SSIS adapter generates target artifacts.",
+        help="Path to an SSIS export, input directory, or explicit TM1 bundle manifest; TM1 candidate generation requires --target-mapping.",
     )
     parser.add_argument(
         "--output",
@@ -1540,6 +1557,7 @@ def main() -> None:
     parser.add_argument("--file-role", action="append", default=[], metavar="PATH=ROLE", help="Confirm a supplied file's role; contradictory content remains a blocker.")
     parser.add_argument("--ddl", help="Explicitly selected DDL export file.")
     parser.add_argument("--procedures", help="Explicitly selected procedure definitions export file.")
+    parser.add_argument("--target-mapping", help="Explicit TM1 Databricks mapping JSON; opt into bounded candidate generation.")
 
     parser.add_argument(
         "--ai",
@@ -1592,6 +1610,7 @@ def main() -> None:
         dependency_files=args.dependency,
         source_platform=args.source_platform,
         file_roles=file_roles,
+        target_mapping=args.target_mapping,
     )
     print(json.dumps(result, indent=2, ensure_ascii=False))
 

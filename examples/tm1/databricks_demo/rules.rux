@@ -1,0 +1,2 @@
+# Synthetic full-coordinate constant leaf rule.
+['Product':'A','Measures':'Quantity'] = N: 2 * 3;

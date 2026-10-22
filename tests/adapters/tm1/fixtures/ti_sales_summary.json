@@ -1,0 +1,21 @@
+{
+  "status": "STRUCTURED",
+  "process_name": "SyntheticSalesLoad",
+  "source_export_version": null,
+  "sections": [
+    {"name":"prolog","statement_kinds":["assignment","assignment","assignment"],"edge_kinds":["SEQUENCE","SEQUENCE","SEQUENCE","SECTION_ENTRY"]},
+    {"name":"metadata","statement_kinds":["invoke"],"edge_kinds":["SEQUENCE","SECTION_ENTRY"]},
+    {"name":"data","statement_kinds":["if","invoke","control"],"edge_kinds":["SEQUENCE","BRANCH","CONTROL_TRANSFER","BRANCH","SECTION_ENTRY"]},
+    {"name":"epilog","statement_kinds":["invoke","invoke"],"edge_kinds":["SEQUENCE","SEQUENCE","SECTION_ENTRY"]}
+  ],
+  "effects": [
+    ["prolog","SYNCHRONOUS_PROCESS_CALL","PrepareLoad"],
+    ["metadata","DIMENSION_MUTATION","Product"],
+    ["data","CUBE_WRITE","Sales"],
+    ["epilog","FILE_WRITE",null],
+    ["epilog","ASYNCHRONOUS_PROCESS_CALL","AuditLoad"]
+  ],
+  "dependency_count": 24,
+  "semantic_status": "NOT_VERIFIED",
+  "migration_accepted": false
+}

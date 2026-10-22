@@ -1,0 +1,7 @@
+# Synthetic example only; cube and dimensional metadata are deliberately absent.
+FEEDSTRINGS;
+SKIPCHECK;
+['Measures':'Revenue'] = N: ['Measures':'Units'] * DB('Rates', !Year, 'Price');
+['Measures':'Margin'] = N: IF(['Measures':'Revenue'] > 0, CONTINUE, STET);
+FEEDERS;
+['Measures':'Units'] => ['Measures':'Revenue'];

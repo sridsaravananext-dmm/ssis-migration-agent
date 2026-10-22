@@ -1,0 +1,111 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "export_format",
+    "platform",
+    "name",
+    "source_export_version",
+    "units",
+    "metadata_files"
+  ],
+  "properties": {
+    "manifest_version": {
+      "const": "1.0"
+    },
+    "export_format": {
+      "const": "tm1_source_bundle_v1"
+    },
+    "platform": {
+      "const": "tm1"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_export_version": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unit_id",
+          "language",
+          "path",
+          "sha256",
+          "source_cube",
+          "process_name"
+        ],
+        "properties": {
+          "unit_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          },
+          "language": {
+            "enum": [
+              "mdx",
+              "tm1_rules",
+              "tm1_turbointegrator"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "source_cube": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "process_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 16
+    },
+    "metadata_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "maxItems": 32
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:tm1_source_bundle:1.0"
+}

@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:normalized_ir:2.0",
+  "title": "Native source structural graph, version 2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ir_version",
+    "ir_id",
+    "source",
+    "evidence_files",
+    "nodes",
+    "edges",
+    "diagnostics",
+    "semantic_status",
+    "status",
+    "capability_gaps",
+    "provenance",
+    "extensions"
+  ],
+  "properties": {
+    "ir_version": {
+      "const": "2.0"
+    },
+    "ir_id": {
+      "type": "string",
+      "pattern": "^ir-[a-f0-9]{64}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "format",
+        "export_version",
+        "file_id"
+      ],
+      "properties": {
+        "platform": {
+          "enum": [
+            "ssis",
+            "tm1",
+            "informatica",
+            "bods",
+            "odi"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "export_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidence_files": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/file"
+      },
+      "minItems": 1
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "node_id",
+          "kind",
+          "operation",
+          "name",
+          "source_ref",
+          "semantic_status",
+          "attributes",
+          "extensions",
+          "evidence"
+        ],
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "TASK",
+              "DATA_FLOW",
+              "SOURCE",
+              "TARGET",
+              "TRANSFORMATION",
+              "PARAMETER",
+              "CONNECTION",
+              "EXPRESSION",
+              "REQUIREMENT",
+              "REFERENCE"
+            ]
+          },
+          "operation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "semantic_status": {
+            "const": "NOT_VERIFIED"
+          },
+          "attributes": {
+            "type": "object"
+          },
+          "extensions": {
+            "type": "object"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+            },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "edge_id",
+          "kind",
+          "source_id",
+          "target_id",
+          "resolution",
+          "attributes",
+          "extensions",
+          "evidence"
+        ],
+        "properties": {
+          "edge_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "CONTROL_FLOW",
+              "DATA_FLOW",
+              "CONTAINS",
+              "USES_CONNECTION",
+              "COLUMN_LINEAGE",
+              "HAS_EXPRESSION",
+              "REQUIRES",
+              "DECLARED_RELATION",
+              "DECLARES_EFFECT"
+            ]
+          },
+          "source_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution": {
+            "enum": [
+              "RESOLVED",
+              "UNRESOLVED"
+            ]
+          },
+          "attributes": {
+            "type": "object"
+          },
+          "extensions": {
+            "type": "object"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+            },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/diagnostic"
+      }
+    },
+    "semantic_status": {
+      "const": "NOT_VERIFIED"
+    },
+    "status": {
+      "enum": [
+        "REVIEW_REQUIRED",
+        "BLOCKED"
+      ]
+    },
+    "capability_gaps": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "builder",
+        "version",
+        "source_analysis_sha256",
+        "evidence_scope",
+        "limitations"
+      ],
+      "properties": {
+        "builder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "const": "1.0"
+        },
+        "source_analysis_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "evidence_scope": {
+          "const": "SOURCE_ANALYSIS"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_analysis"
+      ],
+      "properties": {
+        "source_analysis": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

@@ -51,6 +51,8 @@ def document_digest(value: Any) -> str:
 def load_package(package_dir: Path) -> dict[str, Any]:
     """Read the current generation and bind every contract back to its plan step."""
     root = package_dir.resolve(strict=True)
+    if (root / 'source_envelope.json').is_file() and _read(root / 'source_envelope.json').get('envelope_version') == '2.0':
+        raise ValueError('Native source review outputs have no target implementation and cannot be accepted as a migration.')
     bundle = _read(root / "migration_contracts.json")
     if bundle.get("contract_bundle_version") != "1.0":
         raise ValueError("Unsupported contract bundle version.")

@@ -1,0 +1,10 @@
+# Synthetic only: two writes before ItemSkip retain the first write.
+nValue = vQuantity * pFactor;
+IF(nValue < 0);
+  ItemSkip;
+ENDIF;
+CellPutN(nValue, 'LoadCube', vProduct, 'Quantity');
+IF(vStop > 0);
+  ItemSkip;
+ENDIF;
+CellPutN(nValue + 1, 'LoadCube', vProduct, 'Quantity');

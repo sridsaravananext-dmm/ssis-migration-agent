@@ -162,7 +162,7 @@
               "pyspark"
             ]
           },
-          "minItems": 1,
+          "minItems": 0,
           "uniqueItems": true
         },
         "execution_status": {
@@ -182,7 +182,10 @@
       ],
       "properties": {
         "execution_mode": {
-          "const": "GENERATE_ONLY"
+          "enum": [
+            "GENERATE_ONLY",
+            "REVIEW_ONLY"
+          ]
         },
         "deployment": {
           "const": "DISABLED"
@@ -441,5 +444,42 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "target_design": {
+            "properties": {
+              "execution_mode": {
+                "const": "REVIEW_ONLY"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "target_capabilities": {
+            "properties": {
+              "generation_languages": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "target_capabilities": {
+            "properties": {
+              "generation_languages": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

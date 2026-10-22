@@ -1,0 +1,504 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "metadata_version",
+    "export_format",
+    "platform",
+    "source_system",
+    "source_export_version",
+    "identifier_matching",
+    "dimensions",
+    "cubes",
+    "subsets",
+    "processes",
+    "datasources"
+  ],
+  "properties": {
+    "metadata_version": {
+      "const": "1.0"
+    },
+    "export_format": {
+      "const": "tm1_metadata_v1"
+    },
+    "platform": {
+      "const": "tm1"
+    },
+    "source_system": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_export_version": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "identifier_matching": {
+      "const": "EXACT_CANONICAL_NAMES"
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "hierarchies"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hierarchies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "default_member",
+                "members"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "default_member": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1
+                },
+                "members": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "name",
+                      "type",
+                      "children"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "type": {
+                        "enum": [
+                          "N",
+                          "S",
+                          "C"
+                        ]
+                      },
+                      "children": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "member",
+                            "weight"
+                          ],
+                          "properties": {
+                            "member": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "weight": {
+                              "type": "string",
+                              "pattern": "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "cubes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "dimensions"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "dimension",
+                "hierarchy"
+              ],
+              "properties": {
+                "dimension": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "hierarchy": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "subsets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "dimension",
+          "hierarchy",
+          "scope",
+          "owner",
+          "members",
+          "expression"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dimension": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hierarchy": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scope": {
+            "enum": [
+              "public",
+              "private"
+            ]
+          },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "members": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "expression": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "scope": {
+                  "const": "public"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "owner": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "owner": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "not": {
+              "properties": {
+                "members": {
+                  "type": "array"
+                },
+                "expression": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "processes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "parameters",
+          "variables",
+          "datasource"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "data_type",
+                "required"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "data_type": {
+                  "enum": [
+                    "STRING",
+                    "NUMERIC"
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "default": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "data_type": {
+                        "const": "STRING"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "default": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "data_type": {
+                        "const": "NUMERIC"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "default": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "data_type",
+                "role",
+                "column"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "data_type": {
+                  "enum": [
+                    "STRING",
+                    "NUMERIC"
+                  ]
+                },
+                "role": {
+                  "enum": [
+                    "LOCAL",
+                    "DATASOURCE_COLUMN",
+                    "SYSTEM"
+                  ]
+                },
+                "column": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "datasource": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "datasources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "kind",
+          "columns",
+          "location_reference",
+          "connection_reference",
+          "sql_dialect",
+          "cube",
+          "view"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "ASCII",
+              "ODBC",
+              "CUBE_VIEW",
+              "NONE",
+              "OTHER"
+            ]
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "data_type"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "data_type": {
+                  "enum": [
+                    "STRING",
+                    "NUMERIC"
+                  ]
+                }
+              }
+            }
+          },
+          "location_reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "connection_reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "sql_dialect": {
+            "enum": [
+              null,
+              "tsql",
+              "plsql",
+              "other"
+            ]
+          },
+          "cube": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "view": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "client_location_reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:tm1_metadata:1.0"
+}

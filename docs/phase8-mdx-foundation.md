@@ -151,3 +151,8 @@ legacy-IR projection boundary; this change does not fabricate an SSIS PackageIR
 for multidimensional source or mislabel an MDX report as a migrated package.
 Databricks generation follows only after the relevant source behavior and
 migration contract have been established and checked.
+
+
+The subsequent [TM1 rules and feeder increment](phase8-tm1-rules-feeders.md)
+adds ordered plain-text rule analysis and unresolved feeder/dependency reporting.
+The MDX and rules analyzers remain separate; package migration is not enabled.

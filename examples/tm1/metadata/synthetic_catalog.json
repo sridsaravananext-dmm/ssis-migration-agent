@@ -1,0 +1,212 @@
+{
+  "metadata_version": "1.0",
+  "export_format": "tm1_metadata_v1",
+  "platform": "tm1",
+  "source_system": "SYNTHETIC_EXAMPLE_ONLY",
+  "source_export_version": null,
+  "identifier_matching": "EXACT_CANONICAL_NAMES",
+  "dimensions": [
+    {
+      "name": "Product",
+      "hierarchies": [
+        {
+          "name": "Product",
+          "default_member": "A",
+          "members": [
+            {
+              "name": "A",
+              "type": "N",
+              "children": []
+            },
+            {
+              "name": "B",
+              "type": "N",
+              "children": []
+            },
+            {
+              "name": "Total",
+              "type": "C",
+              "children": [
+                {
+                  "member": "A",
+                  "weight": "1"
+                },
+                {
+                  "member": "B",
+                  "weight": "-0.5"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Measures",
+      "hierarchies": [
+        {
+          "name": "Measures",
+          "default_member": null,
+          "members": [
+            {
+              "name": "Quantity",
+              "type": "N",
+              "children": []
+            },
+            {
+              "name": "Label",
+              "type": "S",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "cubes": [
+    {
+      "name": "Sales",
+      "dimensions": [
+        {
+          "dimension": "Product",
+          "hierarchy": "Product"
+        },
+        {
+          "dimension": "Measures",
+          "hierarchy": "Measures"
+        }
+      ]
+    }
+  ],
+  "subsets": [
+    {
+      "name": "Active",
+      "dimension": "Product",
+      "hierarchy": "Product",
+      "scope": "public",
+      "owner": null,
+      "members": [
+        "A",
+        "B"
+      ],
+      "expression": null
+    }
+  ],
+  "datasources": [
+    {
+      "name": "InputRows",
+      "kind": "ASCII",
+      "columns": [
+        {
+          "name": "ProductCode",
+          "data_type": "STRING"
+        },
+        {
+          "name": "Quantity",
+          "data_type": "NUMERIC"
+        }
+      ],
+      "location_reference": "/legacy/input.csv",
+      "connection_reference": null,
+      "sql_dialect": null,
+      "cube": null,
+      "view": null
+    },
+    {
+      "name": "NoRows",
+      "kind": "NONE",
+      "columns": [],
+      "location_reference": null,
+      "connection_reference": null,
+      "sql_dialect": null,
+      "cube": null,
+      "view": null
+    }
+  ],
+  "processes": [
+    {
+      "name": "SyntheticSalesLoad",
+      "parameters": [
+        {
+          "name": "pInputFile",
+          "data_type": "STRING",
+          "required": true,
+          "default": "/legacy/input.csv"
+        },
+        {
+          "name": "pMode",
+          "data_type": "STRING",
+          "required": false,
+          "default": "delta"
+        },
+        {
+          "name": "pBatch",
+          "data_type": "STRING",
+          "required": true
+        },
+        {
+          "name": "pLogFile",
+          "data_type": "STRING",
+          "required": true
+        }
+      ],
+      "variables": [
+        {
+          "name": "DataSourceType",
+          "data_type": "STRING",
+          "role": "SYSTEM",
+          "column": null
+        },
+        {
+          "name": "DataSourceNameForServer",
+          "data_type": "STRING",
+          "role": "SYSTEM",
+          "column": null
+        },
+        {
+          "name": "nPrepareStatus",
+          "data_type": "NUMERIC",
+          "role": "LOCAL",
+          "column": null
+        },
+        {
+          "name": "vProduct",
+          "data_type": "STRING",
+          "role": "DATASOURCE_COLUMN",
+          "column": "ProductCode"
+        },
+        {
+          "name": "vQuantity",
+          "data_type": "NUMERIC",
+          "role": "DATASOURCE_COLUMN",
+          "column": "Quantity"
+        }
+      ],
+      "datasource": "InputRows"
+    },
+    {
+      "name": "PrepareLoad",
+      "parameters": [
+        {
+          "name": "pMode",
+          "data_type": "STRING",
+          "required": true
+        }
+      ],
+      "variables": [],
+      "datasource": "NoRows"
+    },
+    {
+      "name": "AuditLoad",
+      "parameters": [
+        {
+          "name": "pBatch",
+          "data_type": "STRING",
+          "required": true
+        }
+      ],
+      "variables": [],
+      "datasource": "NoRows"
+    }
+  ]
+}

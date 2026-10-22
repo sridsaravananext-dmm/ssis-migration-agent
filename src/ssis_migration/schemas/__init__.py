@@ -23,12 +23,23 @@ class SchemaValidationError(ValueError):
 _SCHEMA_FILES = {
     "intake_manifest": "intake_manifest.v1.json",
     "source_envelope": "source_envelope.v1.json",
+    "source_envelope_v2": "source_envelope.v2.json",
     "migration_contract": "migration_contract.v1.json",
     "acceptance_policy": "acceptance_policy.v1.json",
     "acceptance_evidence": "acceptance_evidence.v1.json",
     "normalized_ir": "normalized_ir.v1.json",
+    "normalized_ir_v2": "normalized_ir.v2.json",
+    "tm1_source_bundle": "tm1_source_bundle.v1.json",
+    "tm1_bundle_analysis": "tm1_bundle_analysis.v1.json",
+    "tm1_databricks_mapping": "tm1_databricks_mapping.v1.json",
+    "tm1_databricks_contract": "tm1_databricks_contract.v1.json",
     "sql_analysis": "sql_analysis.v1.json",
     "mdx_analysis": "mdx_analysis.v1.json",
+    "tm1_rules_analysis": "tm1_rules_analysis.v1.json",
+    "tm1_ti_analysis": "tm1_ti_analysis.v1.json",
+    "tm1_ti_manifest": "tm1_ti_manifest.v1.json",
+    "tm1_metadata": "tm1_metadata.v1.json",
+    "tm1_metadata_binding": "tm1_metadata_binding.v1.json",
     "csharp_assessment": "csharp_assessment.v1.json",
     "csharp_syntax": "csharp_syntax.v1.json",
     "csharp_translation_spec": "csharp_translation_spec.v1.json",
@@ -56,16 +67,16 @@ def _validator(kind: str) -> Draft202012Validator:
     if filename is None:
         raise SchemaValidationError(f"Unknown source schema kind: {kind!r}.")
     schema_root = resources.files(__name__)
-    documents = [
-        json.loads(schema_root.joinpath(name).read_text(encoding="utf-8"))
+    documents = {
+        name: json.loads(schema_root.joinpath(name).read_text(encoding="utf-8"))
         for name in (_COMMON_FILE, *_SCHEMA_FILES.values())
-    ]
-    for document in documents:
+    }
+    for document in documents.values():
         Draft202012Validator.check_schema(document)
     registry = Registry(retrieve=_deny_retrieval).with_resources(
-        (document["$id"], Resource.from_contents(document)) for document in documents
+        (document["$id"], Resource.from_contents(document)) for document in documents.values()
     )
-    schema = next(document for document in documents if document["$id"].endswith(f":{kind}:1.0"))
+    schema = documents[filename]
     return Draft202012Validator(schema, registry=registry)
 
 

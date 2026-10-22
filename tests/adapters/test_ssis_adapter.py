@@ -56,7 +56,7 @@ def test_registry_exposes_shared_protocol_and_only_implemented_adapter():
     assert isinstance(get_adapter("SSIS"), SSISAdapter)
 
 
-@pytest.mark.parametrize("platform", ["tm1", "informatica", "powercenter", "bods", "odi"])
+@pytest.mark.parametrize("platform", ["informatica", "powercenter", "bods", "odi"])
 def test_roadmap_platforms_are_explicitly_unimplemented(platform):
     with pytest.raises(UnsupportedSourceError, match="not implemented"):
         get_adapter(platform)

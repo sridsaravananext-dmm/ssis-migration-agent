@@ -1,0 +1,453 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bundle_version",
+    "bundle_id",
+    "platform",
+    "manifest",
+    "metadata_inputs",
+    "units"
+  ],
+  "properties": {
+    "bundle_version": {
+      "const": "1.0"
+    },
+    "bundle_id": {
+      "type": "string",
+      "pattern": "^tm1-bundle-[a-f0-9]{64}$"
+    },
+    "platform": {
+      "const": "tm1"
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_id",
+        "text",
+        "sha256",
+        "size_bytes",
+        "document"
+      ],
+      "properties": {
+        "file_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "document": {
+          "$ref": "urn:ssis-migration:schema:tm1_source_bundle:1.0"
+        }
+      }
+    },
+    "metadata_inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document",
+          "source"
+        ],
+        "properties": {
+          "document": {
+            "$ref": "urn:ssis-migration:schema:tm1_metadata:1.0"
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "file_id",
+              "locator",
+              "path",
+              "text",
+              "sha256",
+              "size_bytes"
+            ],
+            "properties": {
+              "file_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "text": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 8388608
+              }
+            }
+          }
+        }
+      },
+      "maxItems": 32
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unit_id",
+          "manifest_index",
+          "analysis",
+          "metadata_binding",
+          "source_file"
+        ],
+        "properties": {
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "manifest_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "analysis": {
+            "type": "object",
+            "required": [
+              "language"
+            ],
+            "properties": {
+              "language": {
+                "enum": [
+                  "mdx",
+                  "tm1_rules",
+                  "tm1_turbointegrator"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "language": {
+                      "const": "mdx"
+                    }
+                  },
+                  "required": [
+                    "language"
+                  ]
+                },
+                "then": {
+                  "$ref": "urn:ssis-migration:schema:mdx_analysis:1.0"
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "language": {
+                      "const": "tm1_rules"
+                    }
+                  },
+                  "required": [
+                    "language"
+                  ]
+                },
+                "then": {
+                  "$ref": "urn:ssis-migration:schema:tm1_rules_analysis:1.0"
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "language": {
+                      "const": "tm1_turbointegrator"
+                    }
+                  },
+                  "required": [
+                    "language"
+                  ]
+                },
+                "then": {
+                  "$ref": "urn:ssis-migration:schema:tm1_ti_analysis:1.0"
+                }
+              }
+            ]
+          },
+          "metadata_binding": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "binding_report_id",
+              "status",
+              "bindings",
+              "metadata_issues",
+              "runtime_requirements"
+            ],
+            "properties": {
+              "binding_report_id": {
+                "type": "string",
+                "pattern": "^tm1-binding-[a-f0-9]{64}$"
+              },
+              "status": {
+                "enum": [
+                  "BOUND_REVIEW_REQUIRED",
+                  "PARTIAL",
+                  "BLOCKED"
+                ]
+              },
+              "bindings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "binding_id",
+                    "kind",
+                    "requested",
+                    "status",
+                    "section",
+                    "span",
+                    "source_evidence",
+                    "metadata_evidence",
+                    "details",
+                    "reason"
+                  ],
+                  "properties": {
+                    "binding_id": {
+                      "type": "string",
+                      "pattern": "^binding-[a-f0-9]{24}$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "requested": {
+                      "type": "object"
+                    },
+                    "status": {
+                      "enum": [
+                        "MATCHED_DECLARATION",
+                        "MISSING",
+                        "AMBIGUOUS",
+                        "CONFLICT",
+                        "DYNAMIC",
+                        "UNSUPPORTED"
+                      ]
+                    },
+                    "section": {
+                      "enum": [
+                        null,
+                        "prolog",
+                        "metadata",
+                        "data",
+                        "epilog"
+                      ]
+                    },
+                    "span": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "start",
+                            "end"
+                          ],
+                          "properties": {
+                            "start": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "end": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "source_evidence": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "file_id",
+                            "locator",
+                            "rule"
+                          ],
+                          "properties": {
+                            "file_id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "locator": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "rule": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "metadata_evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "file_id",
+                          "locator",
+                          "rule"
+                        ],
+                        "properties": {
+                          "file_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "locator": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "rule": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      }
+                    },
+                    "details": {
+                      "type": "object"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              },
+              "metadata_issues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "severity",
+                    "message",
+                    "evidence"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "severity": {
+                      "const": "ERROR"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "file_id",
+                          "locator",
+                          "rule"
+                        ],
+                        "properties": {
+                          "file_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "locator": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "rule": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "runtime_requirements": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            }
+          },
+          "source_file": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "file_id",
+              "text",
+              "sha256",
+              "size_bytes"
+            ],
+            "properties": {
+              "file_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "text": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 16
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:tm1_bundle_analysis:1.0"
+}

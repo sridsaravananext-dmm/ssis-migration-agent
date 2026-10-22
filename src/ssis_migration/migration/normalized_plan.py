@@ -80,11 +80,15 @@ def bind_plan_to_ir(plan: dict[str, Any], graph: dict[str, Any]) -> dict[str, An
         diagnostic('AMBIGUOUS_NEUTRAL_OWNERSHIP', f'{len(ambiguous)} neutral nodes belong to overlapping step scopes; retained for review, without choosing an implementation owner.')
     if 'task_hierarchy' in graph['capability_gaps']:
         diagnostic('UNVERIFIED_TASK_OWNERSHIP', 'The graph lacks extracted task hierarchy; descendant ownership is incomplete.')
+    digest_key = 'legacy_ir_sha256' if graph['ir_version'] == '1.0' else 'source_analysis_sha256'
     scopes = {s['step_id']: {
-        'ir_id': graph['ir_id'], 'legacy_ir_sha256': graph['provenance']['legacy_ir_sha256'],
+        'ir_id': graph['ir_id'], digest_key: graph['provenance'][digest_key],
         'source_platform': graph['source']['platform'], 'root_node_id': roots[s['step_id']],
         'nodes': [], 'edges': [], 'diagnostics': [], 'semantic_status': 'NOT_VERIFIED',
     } for s in steps}
+    if graph['ir_version'] == '2.0':
+        for scoped in scopes.values():
+            scoped['ir_version'] = '2.0'
     for identity, node in nodes.items():
         if owners[identity] is not None:
             scopes[owners[identity]]['nodes'].append({'record': copy.deepcopy(node), 'obligation_scope': scope[identity]})
@@ -131,7 +135,8 @@ def validate_plan_ir_binding(plan: dict[str, Any], graph: dict[str, Any]) -> Non
 
 def validate_normalized_scope(scope: dict[str, Any]) -> None:
     """Validate a contract scope locally; the package also checks the whole graph."""
-    required = {'ir_id', 'legacy_ir_sha256', 'source_platform', 'root_node_id', 'nodes', 'edges', 'diagnostics', 'semantic_status'}
+    required = {'ir_id', 'source_platform', 'root_node_id', 'nodes', 'edges', 'diagnostics', 'semantic_status'}
+    required |= {'source_analysis_sha256', 'ir_version'} if isinstance(scope, dict) and scope.get('ir_version') == '2.0' else {'legacy_ir_sha256'}
     if not isinstance(scope, dict) or set(scope) != required or scope['semantic_status'] != 'NOT_VERIFIED':
         raise SchemaValidationError('Invalid normalized source scope.')
     identities = set()

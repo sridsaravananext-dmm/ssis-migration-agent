@@ -1,0 +1,13 @@
+{
+  "status": "STRUCTURED",
+  "source_cube": null,
+  "source_export_version": null,
+  "statement_kinds": ["directive", "directive", "calculation", "calculation", "directive", "feeder"],
+  "calculation_qualifiers": ["N", "N"],
+  "declared_db_cubes": ["Rates"],
+  "feeder_count": 1,
+  "dependency_count": 16,
+  "features": ["CALCULATION:N", "DIRECTIVE:FEEDERS", "DIRECTIVE:FEEDSTRINGS", "DIRECTIVE:SKIPCHECK", "FEEDER_DECLARATION", "FUNCTION:DB", "FUNCTION:IF", "OPERATOR:*", "OPERATOR:>", "RULE_CONTROL:CONTINUE", "RULE_CONTROL:STET"],
+  "semantic_status": "NOT_VERIFIED",
+  "migration_accepted": false
+}

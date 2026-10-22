@@ -1,0 +1,271 @@
+{
+  "mapping_version": "1.0",
+  "export_format": "tm1_databricks_mapping_v1",
+  "source_bundle_sha256": "ab0b734eeeb0c25e1e6b00308d67e20b49ac821e4ba45b11e22b7d3dd5f878b7",
+  "semantic_profile": {
+    "name": "dense_numeric_leaf_snapshot_v1",
+    "numeric_domain": "EXACT_INTEGER_53",
+    "complete_coordinate_domains": true,
+    "canonical_identifiers_only": true,
+    "no_hidden_rules_or_feeders": true,
+    "full_cell_visibility": true,
+    "record_order_semantics": "SOURCE_RECORD_ORDINAL"
+  },
+  "max_rows": 100,
+  "models": [
+    {
+      "model_id": "load",
+      "cube": "LoadCube",
+      "coordinates": [
+        {
+          "dimension": "Product",
+          "hierarchy": "Product",
+          "column": "product"
+        },
+        {
+          "dimension": "Measures",
+          "hierarchy": "Measures",
+          "column": "measure"
+        }
+      ],
+      "value_column": "value",
+      "input_table": null,
+      "value_semantics": "STORED_WITHOUT_RULES"
+    },
+    {
+      "model_id": "query",
+      "cube": "QueryCube",
+      "coordinates": [
+        {
+          "dimension": "Product",
+          "hierarchy": "Product",
+          "column": "product"
+        },
+        {
+          "dimension": "Measures",
+          "hierarchy": "Measures",
+          "column": "measure"
+        }
+      ],
+      "value_column": "value",
+      "input_table": null,
+      "value_semantics": "EVALUATED_WITHOUT_RULES"
+    },
+    {
+      "model_id": "rules",
+      "cube": "RuleCube",
+      "coordinates": [
+        {
+          "dimension": "Product",
+          "hierarchy": "Product",
+          "column": "product"
+        },
+        {
+          "dimension": "Measures",
+          "hierarchy": "Measures",
+          "column": "measure"
+        }
+      ],
+      "value_column": "value",
+      "input_table": null,
+      "value_semantics": "STORED_BEFORE_SUPPLIED_CONSTANT_RULES"
+    }
+  ],
+  "units": [
+    {
+      "unit_id": "load",
+      "model_id": "load",
+      "datasource_table": null,
+      "order_column": "record_ordinal",
+      "parameters": {
+        "pFactor": 2
+      }
+    },
+    {
+      "unit_id": "query",
+      "model_id": "query",
+      "datasource_table": null,
+      "order_column": null,
+      "parameters": {}
+    },
+    {
+      "unit_id": "rules",
+      "model_id": "rules",
+      "datasource_table": null,
+      "order_column": null,
+      "parameters": {}
+    }
+  ],
+  "fixture_cases": [
+    {
+      "case_id": "ordered_duplicate_and_skip",
+      "unit_id": "load",
+      "cells": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        }
+      ],
+      "rows": [
+        {
+          "record_ordinal": 3,
+          "ProductCode": "A",
+          "Quantity": 9,
+          "StopAfterFirst": 1
+        },
+        {
+          "record_ordinal": 2,
+          "ProductCode": "B",
+          "Quantity": -7,
+          "StopAfterFirst": 0
+        },
+        {
+          "record_ordinal": 1,
+          "ProductCode": "A",
+          "Quantity": 4,
+          "StopAfterFirst": 0
+        }
+      ],
+      "parameters": {
+        "pFactor": 2
+      },
+      "expected": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 18
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        }
+      ],
+      "provenance": {
+        "kind": "SYNTHETIC",
+        "description": "Manually enumerated expected values for this synthetic fixture; not an observed TM1 execution."
+      }
+    },
+    {
+      "case_id": "complete_write",
+      "unit_id": "load",
+      "cells": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        }
+      ],
+      "rows": [
+        {
+          "record_ordinal": 1,
+          "ProductCode": "B",
+          "Quantity": 4,
+          "StopAfterFirst": 0
+        }
+      ],
+      "parameters": {
+        "pFactor": 3
+      },
+      "expected": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 13
+        }
+      ],
+      "provenance": {
+        "kind": "SYNTHETIC",
+        "description": "Manually enumerated expected values for this synthetic fixture; not an observed TM1 execution."
+      }
+    },
+    {
+      "case_id": "literal_axis_order",
+      "unit_id": "query",
+      "cells": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        }
+      ],
+      "rows": [],
+      "parameters": {},
+      "expected": [
+        {
+          "axis_0": 0,
+          "axis_1": 0,
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        },
+        {
+          "axis_0": 1,
+          "axis_1": 0,
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        }
+      ],
+      "provenance": {
+        "kind": "SYNTHETIC",
+        "description": "Manually enumerated expected values for this synthetic fixture; not an observed TM1 execution."
+      }
+    },
+    {
+      "case_id": "constant_leaf_rule",
+      "unit_id": "rules",
+      "cells": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        }
+      ],
+      "rows": [],
+      "parameters": {},
+      "expected": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 6
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        }
+      ],
+      "provenance": {
+        "kind": "SYNTHETIC",
+        "description": "Manually enumerated expected values for this synthetic fixture; not an observed TM1 execution."
+      }
+    }
+  ]
+}

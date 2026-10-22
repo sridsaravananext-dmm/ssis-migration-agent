@@ -1,0 +1,30 @@
+{
+  "node_count": 254,
+  "edge_count": 394,
+  "node_kinds": {
+    "CONNECTION": 1,
+    "EXPRESSION": 51,
+    "PARAMETER": 6,
+    "REFERENCE": 46,
+    "REQUIREMENT": 110,
+    "SOURCE": 2,
+    "TARGET": 2,
+    "TASK": 16,
+    "TRANSFORMATION": 20
+  },
+  "edge_kinds": {
+    "CONTAINS": 202,
+    "CONTROL_FLOW": 14,
+    "DECLARED_RELATION": 3,
+    "DECLARES_EFFECT": 5,
+    "HAS_EXPRESSION": 51,
+    "REQUIRES": 119
+  },
+  "unit_languages": [
+    "mdx",
+    "tm1_rules",
+    "tm1_turbointegrator"
+  ],
+  "status": "REVIEW_REQUIRED",
+  "semantic_status": "NOT_VERIFIED"
+}

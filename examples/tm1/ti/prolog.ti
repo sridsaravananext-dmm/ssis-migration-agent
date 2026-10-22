@@ -1,0 +1,4 @@
+# Synthetic section source; not a native TM1 export.
+DataSourceType = 'ASCII';
+DataSourceNameForServer = pInputFile;
+nPrepareStatus = ExecuteProcess('PrepareLoad', 'pMode', pMode);

@@ -1,0 +1,5 @@
+IF(vQuantity > 0);
+    CellPutN(vQuantity, 'Sales', vProduct, 'Quantity');
+ELSE;
+    ItemSkip;
+ENDIF;

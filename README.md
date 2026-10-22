@@ -2,12 +2,35 @@
 
 **Last updated date - 10/22/2026**
 
-Updated MDX analysis: added bounded offline TM1 MDX parsing, source evidence,
-missing-dependency reporting and a CLI. Structural parsing does not establish
-migration acceptance. See [Phase 8 MDX analysis](docs/phase8-mdx-foundation.md).
+TM1 language analysis now includes bounded offline [MDX](docs/phase8-mdx-foundation.md),
+[rules/feeders](docs/phase8-tm1-rules-feeders.md) and
+[TurboIntegrator sections/control flow](docs/phase8-turbointegrator-analysis.md).
+Reports preserve source evidence and unresolved dependencies. Structural parsing
+does not establish migration acceptance. Databricks is the current migration target.
 
-Latest validation: **715 tests passed, 4 live integration tests skipped**.
+Supplied [dimensional metadata and process binding](docs/phase8-tm1-metadata-binding.md)
+now supports evidence-backed cube/member, parameter and datasource declarations.
+Dynamic values and missing/ambiguous definitions remain unresolved; metadata
+matching does not establish runtime equivalence.
+
+The [TM1 bundle adapter](docs/phase8-tm1-native-integration.md) now builds native
+IR v2 and review-only migration contracts through the shared API/CLI. The SSIS
+v1 pipeline remains supported. An explicit target mapping now enables
+[bounded TM1 Databricks candidates](docs/tm1-databricks-candidate.md): numeric TI
+row snapshots, literal MDX leaf queries and constant leaf rules. Unsupported
+behavior blocks executable output. Native `.pro` decoding is not implemented.
+
+Generation produces self-contained preview/reconciliation notebooks, job/DAB
+templates, source-bound contracts, reports and a review ZIP. It stops for your
+Databricks review: no deployment, persistent writes or acceptance. Semantic
+coverage and source equivalence remain unverified. This checkpoint stops at
+generation pending your Databricks review.
 Working branch: `GenericAITool-version01`.
+
+Validation: **1,034 regression tests passed, 12 skipped**; **72 focused candidate
+tests passed**. Installed-wheel generation, source/contract replay, ZIP integrity
+and SSIS compatibility checks passed. Databricks execution and source equivalence
+await your review.
 
 # ============================================================
 # README.md

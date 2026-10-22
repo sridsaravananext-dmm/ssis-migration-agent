@@ -33,3 +33,26 @@ def test_mdx_with_ti_looking_member_is_language_hint_without_platform_confirmati
     manifest=build_intake_manifest(source)
     assert manifest['files'][0]['format']=='mdx'
     assert manifest['files'][0]['platform']=='unknown'
+
+
+def test_plain_rux_extension_is_only_a_language_hint(tmp_path):
+    source=tmp_path/'Sales.rux';source.write_text("['Revenue']=N:1;")
+    record=build_intake_manifest(source)['files'][0]
+    assert record['format']=='tm1_rules'
+    assert record['platform']=='unknown' and record['export_version'] is None
+
+
+@pytest.mark.parametrize('suffix,text,format', [
+    ('.ti', 'n=1;', 'tm1_ti_section_hint'),
+    ('.ti', '', 'tm1_ti_section_hint'),
+    ('.pro', '572,0\n573,1\n', 'tm1_pro_unverified'),
+])
+def test_ti_extensions_do_not_confirm_platform_or_native_layout(tmp_path, suffix, text, format, monkeypatch):
+    import sqlglot
+    def forbidden(*args, **kwargs):raise AssertionError('TI hints must not enter SQL analysis.')
+    monkeypatch.setattr(sqlglot, 'parse', forbidden)
+    monkeypatch.setattr(sqlglot, 'tokenize', forbidden)
+    source=tmp_path/('unconfirmed'+suffix);source.write_text(text)
+    record=build_intake_manifest(source)['files'][0]
+    assert record['platform']=='unknown' and record['export_version'] is None
+    assert record['format']==format

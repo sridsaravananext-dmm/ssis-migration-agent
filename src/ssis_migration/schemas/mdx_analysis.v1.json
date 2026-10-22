@@ -356,388 +356,489 @@
   "$id": "urn:ssis-migration:schema:mdx_analysis:1.0",
   "$defs": {
     "expression": {
-      "oneOf": [
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "member_path",
+            "literal",
+            "function",
+            "group",
+            "set",
+            "tuple",
+            "set_operator"
+          ]
+        }
+      },
+      "allOf": [
         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "span",
-            "category",
-            "segments",
-            "property"
-          ],
-          "properties": {
-            "kind": {
-              "const": "member_path"
-            },
-            "span": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "start",
-                "end"
-              ],
-              "properties": {
-                "start": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "end": {
-                  "type": "integer",
-                  "minimum": 0
-                }
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "member_path"
               }
             },
-            "category": {
-              "enum": [
-                "SET",
-                "MEMBER",
-                "TUPLE",
-                "STRING",
-                "INTEGER",
-                "NUMBER",
-                "UNKNOWN"
-              ]
-            },
-            "segments": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span",
+              "category",
+              "segments",
+              "property"
+            ],
+            "properties": {
+              "kind": {
+                "const": "member_path"
+              },
+              "span": {
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
-                  "kind",
-                  "value"
+                  "start",
+                  "end"
                 ],
                 "properties": {
-                  "kind": {
-                    "enum": [
-                      "NAME",
-                      "KEY"
-                    ]
+                  "start": {
+                    "type": "integer",
+                    "minimum": 0
                   },
-                  "value": {
-                    "type": "string",
-                    "minLength": 1
+                  "end": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 }
+              },
+              "category": {
+                "enum": [
+                  "SET",
+                  "MEMBER",
+                  "TUPLE",
+                  "STRING",
+                  "INTEGER",
+                  "NUMBER",
+                  "UNKNOWN"
+                ]
+              },
+              "segments": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "kind",
+                    "value"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "NAME",
+                        "KEY"
+                      ]
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              },
+              "property": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
-            },
-            "property": {
-              "type": [
-                "string",
-                "null"
-              ]
             }
           }
         },
         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "span",
-            "category",
-            "value"
-          ],
-          "properties": {
-            "kind": {
-              "const": "literal"
-            },
-            "span": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "start",
-                "end"
-              ],
-              "properties": {
-                "start": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "end": {
-                  "type": "integer",
-                  "minimum": 0
-                }
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "literal"
               }
             },
-            "category": {
-              "enum": [
-                "SET",
-                "MEMBER",
-                "TUPLE",
-                "STRING",
-                "INTEGER",
-                "NUMBER",
-                "UNKNOWN"
-              ]
-            },
-            "value": {
-              "type": "string"
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span",
+              "category",
+              "value"
+            ],
+            "properties": {
+              "kind": {
+                "const": "literal"
+              },
+              "span": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "start": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "category": {
+                "enum": [
+                  "SET",
+                  "MEMBER",
+                  "TUPLE",
+                  "STRING",
+                  "INTEGER",
+                  "NUMBER",
+                  "UNKNOWN"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
             }
           }
         },
         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "span",
-            "category",
-            "name",
-            "arguments"
-          ],
-          "properties": {
-            "kind": {
-              "const": "function"
-            },
-            "span": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "start",
-                "end"
-              ],
-              "properties": {
-                "start": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "end": {
-                  "type": "integer",
-                  "minimum": 0
-                }
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "function"
               }
             },
-            "category": {
-              "enum": [
-                "SET",
-                "MEMBER",
-                "TUPLE",
-                "STRING",
-                "INTEGER",
-                "NUMBER",
-                "UNKNOWN"
-              ]
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span",
+              "category",
+              "name",
+              "arguments"
+            ],
+            "properties": {
+              "kind": {
+                "const": "function"
+              },
+              "span": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "start": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "category": {
+                "enum": [
+                  "SET",
+                  "MEMBER",
+                  "TUPLE",
+                  "STRING",
+                  "INTEGER",
+                  "NUMBER",
+                  "UNKNOWN"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "arguments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/expression"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "group"
+              }
             },
-            "name": {
-              "type": "string",
-              "minLength": 1
-            },
-            "arguments": {
-              "type": "array",
-              "items": {
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span",
+              "category",
+              "expression"
+            ],
+            "properties": {
+              "kind": {
+                "const": "group"
+              },
+              "span": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "start": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "category": {
+                "enum": [
+                  "SET",
+                  "MEMBER",
+                  "TUPLE",
+                  "STRING",
+                  "INTEGER",
+                  "NUMBER",
+                  "UNKNOWN"
+                ]
+              },
+              "expression": {
                 "$ref": "#/$defs/expression"
               }
             }
           }
         },
         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "span",
-            "category",
-            "expression"
-          ],
-          "properties": {
-            "kind": {
-              "const": "group"
-            },
-            "span": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "start",
-                "end"
-              ],
-              "properties": {
-                "start": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "end": {
-                  "type": "integer",
-                  "minimum": 0
-                }
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "set"
               }
             },
-            "category": {
-              "enum": [
-                "SET",
-                "MEMBER",
-                "TUPLE",
-                "STRING",
-                "INTEGER",
-                "NUMBER",
-                "UNKNOWN"
-              ]
-            },
-            "expression": {
-              "$ref": "#/$defs/expression"
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span",
+              "category",
+              "items"
+            ],
+            "properties": {
+              "kind": {
+                "const": "set"
+              },
+              "span": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "start": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "category": {
+                "enum": [
+                  "SET",
+                  "MEMBER",
+                  "TUPLE",
+                  "STRING",
+                  "INTEGER",
+                  "NUMBER",
+                  "UNKNOWN"
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/expression"
+                }
+              }
             }
           }
         },
         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "span",
-            "category",
-            "items"
-          ],
-          "properties": {
-            "kind": {
-              "const": "set"
-            },
-            "span": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "start",
-                "end"
-              ],
-              "properties": {
-                "start": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "end": {
-                  "type": "integer",
-                  "minimum": 0
-                }
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "tuple"
               }
             },
-            "category": {
-              "enum": [
-                "SET",
-                "MEMBER",
-                "TUPLE",
-                "STRING",
-                "INTEGER",
-                "NUMBER",
-                "UNKNOWN"
-              ]
-            },
-            "items": {
-              "type": "array",
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span",
+              "category",
+              "items"
+            ],
+            "properties": {
+              "kind": {
+                "const": "tuple"
+              },
+              "span": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "start": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "category": {
+                "enum": [
+                  "SET",
+                  "MEMBER",
+                  "TUPLE",
+                  "STRING",
+                  "INTEGER",
+                  "NUMBER",
+                  "UNKNOWN"
+                ]
+              },
               "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/expression"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "set_operator"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "span",
+              "category",
+              "operator",
+              "left",
+              "right"
+            ],
+            "properties": {
+              "kind": {
+                "const": "set_operator"
+              },
+              "span": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "start": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "category": {
+                "enum": [
+                  "SET",
+                  "MEMBER",
+                  "TUPLE",
+                  "STRING",
+                  "INTEGER",
+                  "NUMBER",
+                  "UNKNOWN"
+                ]
+              },
+              "operator": {
+                "enum": [
+                  "+",
+                  "-",
+                  "*",
+                  ":"
+                ]
+              },
+              "left": {
+                "$ref": "#/$defs/expression"
+              },
+              "right": {
                 "$ref": "#/$defs/expression"
               }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "span",
-            "category",
-            "items"
-          ],
-          "properties": {
-            "kind": {
-              "const": "tuple"
-            },
-            "span": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "start",
-                "end"
-              ],
-              "properties": {
-                "start": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "end": {
-                  "type": "integer",
-                  "minimum": 0
-                }
-              }
-            },
-            "category": {
-              "enum": [
-                "SET",
-                "MEMBER",
-                "TUPLE",
-                "STRING",
-                "INTEGER",
-                "NUMBER",
-                "UNKNOWN"
-              ]
-            },
-            "items": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/expression"
-              }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "span",
-            "category",
-            "operator",
-            "left",
-            "right"
-          ],
-          "properties": {
-            "kind": {
-              "const": "set_operator"
-            },
-            "span": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "start",
-                "end"
-              ],
-              "properties": {
-                "start": {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                "end": {
-                  "type": "integer",
-                  "minimum": 0
-                }
-              }
-            },
-            "category": {
-              "enum": [
-                "SET",
-                "MEMBER",
-                "TUPLE",
-                "STRING",
-                "INTEGER",
-                "NUMBER",
-                "UNKNOWN"
-              ]
-            },
-            "operator": {
-              "enum": [
-                "+",
-                "-",
-                "*",
-                ":"
-              ]
-            },
-            "left": {
-              "$ref": "#/$defs/expression"
-            },
-            "right": {
-              "$ref": "#/$defs/expression"
             }
           }
         }

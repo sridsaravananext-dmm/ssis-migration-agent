@@ -1,0 +1,24 @@
+{
+  "manifest_version": "1.0",
+  "export_format": "ti_section_files_v1",
+  "process_name": "SyntheticLoad",
+  "source_export_version": null,
+  "sections": {
+    "prolog": {
+      "path": "prolog.ti",
+      "sha256": "71f0aca967f5bdc3597329f5814bb0a8a25b394363bcc8354c116776503b6240"
+    },
+    "metadata": {
+      "path": "metadata.ti",
+      "sha256": "92ca925d606f3cb1fa77cb5b548faa6189790fb277f697c951216d29ca46c7bb"
+    },
+    "data": {
+      "path": "data.ti",
+      "sha256": "ad83546b238ddca996b4bb1b8b67f6f0fba7d74bdd40cbb59c7a02c5111eaf22"
+    },
+    "epilog": {
+      "path": "epilog.ti",
+      "sha256": "92ca925d606f3cb1fa77cb5b548faa6189790fb277f697c951216d29ca46c7bb"
+    }
+  }
+}

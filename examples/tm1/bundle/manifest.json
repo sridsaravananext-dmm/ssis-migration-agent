@@ -1,0 +1,39 @@
+{
+  "manifest_version": "1.0",
+  "export_format": "tm1_source_bundle_v1",
+  "platform": "tm1",
+  "name": "SyntheticTM1Review",
+  "source_export_version": null,
+  "units": [
+    {
+      "unit_id": "sales_axes",
+      "language": "mdx",
+      "path": "../mdx/sales_axes.mdx",
+      "sha256": "d08f023ec5b83c73aed769e68b47e999f42470a17031693b6fd3ac6199723710",
+      "source_cube": null,
+      "process_name": null
+    },
+    {
+      "unit_id": "sales_rules",
+      "language": "tm1_rules",
+      "path": "../rules/sales_rules.rux",
+      "sha256": "bf80417727e664f8e4058fc3b45bb63eccb0ebc37c402d0d8a4ebef18c463ba1",
+      "source_cube": "Sales",
+      "process_name": null
+    },
+    {
+      "unit_id": "sales_load",
+      "language": "tm1_turbointegrator",
+      "path": "../ti/manifest.json",
+      "sha256": "206659f4981a5a99e95db93b4a258b77db24acdf916d0d79cfefb1771081c83a",
+      "source_cube": null,
+      "process_name": null
+    }
+  ],
+  "metadata_files": [
+    {
+      "path": "../metadata/synthetic_catalog.json",
+      "sha256": "38ef9d41a54a863d821be8cd0a534b9073e46249aed3eb32fe97a03f9ee8ad52"
+    }
+  ]
+}

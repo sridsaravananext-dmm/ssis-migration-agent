@@ -173,3 +173,8 @@ def test_set_operator_precedence_and_range_endpoints_are_explicit():
     assert ranged['operator']==':'
     assert ranged['left']['segments'][-1]['value']=='Jan'
     assert ranged['right']['segments'][-1]['value']=='Dec'
+
+
+def test_nested_supported_sets_validate_with_explicit_node_tags():
+    report=analyze('SELECT '+'{'*20+'[A]'+'}'*20+' ON 0 FROM [Cube]')
+    assert report['status']=='STRUCTURED'

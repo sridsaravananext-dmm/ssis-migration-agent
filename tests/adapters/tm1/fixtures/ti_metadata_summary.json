@@ -1,0 +1,14 @@
+{
+  "status": "PARTIAL",
+  "binding_count": 30,
+  "matched_declarations": 27,
+  "unresolved": [
+    ["SOURCE_VERSION", "MISSING"],
+    ["DATASOURCE_CONFIGURATION", "DYNAMIC"],
+    ["COORDINATE", "DYNAMIC"]
+  ],
+  "original_dependency_count": 24,
+  "metadata_issue_count": 0,
+  "semantic_status": "NOT_VERIFIED",
+  "migration_accepted": false
+}

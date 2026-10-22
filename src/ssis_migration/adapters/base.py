@@ -35,6 +35,8 @@ class SourceAdapterResult:
 
     def to_legacy_result(self) -> dict[str, Any]:
         """Keep existing caller keys and add the neutral source envelope."""
+        if self.package_ir is None and self.source_envelope.get('envelope_version') == '2.0':
+            raise UnsupportedSourceError('Native source analysis has no legacy PackageIR; use normalized_ir and source_envelope.')
         result = {
             "parsed": self.parsed,
             "package_ir": self.package_ir,
@@ -50,7 +52,7 @@ class SourceAdapterResult:
 class SourceAdapter(Protocol):
     """Minimal common entry point for source-specific analysis.
 
-    ``package_ir`` remains the existing IR during this incremental migration.
+    ``package_ir`` remains the existing IR for SSIS and is None for native sources.
     Source adapters must normalize syntax before common analysis and preserve
     unsupported behavior explicitly rather than substituting another parser.
     Implemented adapters may additionally return a schema-validated neutral

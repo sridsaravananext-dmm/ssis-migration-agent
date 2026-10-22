@@ -23,7 +23,13 @@ def normalized_ir_id(document: dict[str, Any]) -> str:
 
 def validate_normalized_ir(document: dict[str, Any], *, legacy_ir: dict | None = None) -> None:
     """Validate schema, evidence, identities, graph references and input binding."""
-    validate_document(document, 'normalized_ir')
+    native = document.get('ir_version') == '2.0'
+    validate_document(document, 'normalized_ir_v2' if native else 'normalized_ir')
+    if native:
+        if legacy_ir is not None:
+            raise SchemaValidationError('Native source IR must not bind a fabricated legacy PackageIR.')
+        if document['provenance']['source_analysis_sha256'] != content_digest(document['extensions']['source_analysis']):
+            raise SchemaValidationError('Native source IR analysis binding is stale.')
     validate_evidence_references(document)
     files = {item['file_id'] for item in document['evidence_files']}
     if document['source']['file_id'] not in files:

@@ -1,0 +1,2 @@
+ASCIIOutput(pLogFile, 'Finished');
+RunProcess('AuditLoad', 'pBatch', pBatch);

@@ -86,6 +86,10 @@ def _json_detection(value: Any) -> tuple[dict, list[tuple[str, str, str]]]:
     roles = []
     diagnostics = []
     if isinstance(value, dict):
+        if value.get('platform') == 'tm1' and value.get('export_format') == 'tm1_source_bundle_v1':
+            return {'roles':['package'], 'platform':'tm1', 'format':'tm1_source_bundle_v1',
+                    'version':value.get('source_export_version') if isinstance(value.get('source_export_version'), str) else None,
+                    'locator':'json:/', 'rule':'explicit_tm1_bundle_header'}, []
         if "mappings" in value:
             roles.append("connection_mapping")
             mappings = value["mappings"]
@@ -143,6 +147,12 @@ def _detect(data: bytes, path: Path) -> tuple[dict, list[tuple[str, str, str]]]:
         return {"roles": ["package"], "platform": "tm1", "format": "tm1_ti", "version": None, "locator": "text:/", "rule": "tm1_turbointegrator_signature"}, diagnostics
     if re.search(r"(?im)^\s*SKIPCHECK\s*;", tm1_code) or re.search(r"(?im)^\s*FEEDERS\s*;", tm1_code):
         return {"roles": ["script"], "platform": "tm1", "format": "tm1_rules", "version": None, "locator": "text:/", "rule": "tm1_rules_signature"}, diagnostics
+    if suffix == ".rux":
+        diagnostics.append(("UNSUPPORTED_LANGUAGE", "WARNING", "Plain-text TM1 rules have a bounded offline analyzer; the source version, dimensional semantics and TM1 package adapter remain unverified. No SQL interpretation is applied."))
+        return {"roles": ["script"], "platform": "unknown", "format": "tm1_rules", "version": None, "locator": "text:/", "rule": "tm1_rules_language_hint"}, diagnostics
+    if suffix in {".ti", ".pro"}:
+        diagnostics.append(("UNSUPPORTED_LANGUAGE", "WARNING", "TurboIntegrator requires explicit section declarations; serialized native .pro layouts are not decoded by a filename hint. No SQL interpretation is applied."))
+        return {"roles": ["script"], "platform": "unknown", "format": "tm1_ti_section_hint" if suffix == ".ti" else "tm1_pro_unverified", "version": None, "locator": "text:/", "rule": "ti_language_hint"}, diagnostics
     if suffix == ".atl" and re.search(r"(?im)\bCREATE\s+(?:DATAFLOW|WORKFLOW)\b", text):
         return {"roles": ["package"], "platform": "bods", "format": "bods_atl", "version": None, "locator": "text:/", "rule": "sap_atl_workflow_signature"}, diagnostics
     if suffix == ".mdx" or re.search(r"(?is)\bSELECT\b.*\bON\s+(?:COLUMNS|ROWS|0|1)\b.*\bFROM\s+\[", text):
@@ -224,7 +234,7 @@ def _inspect(path: Path, root: Path) -> tuple[dict, list[dict]]:
     diagnostics = [_diagnostic(code, severity, message, record) for code, severity, message in messages]
     if record["platform"] in _EXCLUDED or path.suffix.lower() in {".dsx", ".mp"}:
         diagnostics.append(_diagnostic("EXCLUDED_PLATFORM", "ERROR", "DataStage and Ab Initio exports are explicitly excluded from this framework.", record))
-    elif record["platform"] not in {"ssis", "unknown"}:
+    elif record["platform"] not in {"ssis", "unknown"} and record['format'] != 'tm1_source_bundle_v1':
         diagnostics.append(_diagnostic("UNSUPPORTED_PLATFORM", "ERROR", f"Detected {record['platform']} export; its adapter is not implemented.", record))
     if path.suffix.lower() == ".dtsx" and record["format"] != "ssis_dtsx_xml":
         diagnostics.append(_diagnostic("UNCONFIRMED_PACKAGE_FORMAT", "ERROR", "A .dtsx name alone does not establish a supported SSIS export; the SSIS XML signature was not found.", record))
@@ -380,7 +390,8 @@ def build_intake_manifest(
         diagnostics.append(_diagnostic("MIXED_SOURCE_PLATFORMS", "ERROR", f"Supplied files identify multiple source platforms: {', '.join(observed)}."))
     if requested in _EXCLUDED:
         diagnostics.append(_diagnostic("EXCLUDED_PLATFORM", "ERROR", f"Explicit source platform {requested!r} is excluded."))
-    elif requested not in {None, "ssis"}:
+    elif requested not in {None, "ssis"} and not (requested == 'tm1' and any(
+        f['platform'] == 'tm1' and f['format'] == 'tm1_source_bundle_v1' for f in files.values())):
         diagnostics.append(_diagnostic("UNSUPPORTED_PLATFORM", "ERROR", f"Source platform {requested!r} has no implemented adapter."))
     if requested and any(value != requested for value in observed):
         diagnostics.append(_diagnostic("PLATFORM_CONTENT_CONFLICT", "ERROR", f"Confirmed platform {requested!r} conflicts with detected content {detected!r}."))

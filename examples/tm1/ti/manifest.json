@@ -1,0 +1,24 @@
+{
+  "manifest_version": "1.0",
+  "export_format": "ti_section_files_v1",
+  "process_name": "SyntheticSalesLoad",
+  "source_export_version": null,
+  "sections": {
+    "prolog": {
+      "path": "prolog.ti",
+      "sha256": "dee1b3954668bbebe850a702499244da38de9fea605a74d4af5aa5a47d92e8b8"
+    },
+    "metadata": {
+      "path": "metadata.ti",
+      "sha256": "8e33f461378beb15b9ffab1d2aa5e5559fb166995d07b6432f431373fb525404"
+    },
+    "data": {
+      "path": "data.ti",
+      "sha256": "17560f686c50317b01f98cdd702a5d0b819b5438a8479ed2580b04f945b85e72"
+    },
+    "epilog": {
+      "path": "epilog.ti",
+      "sha256": "a97dfdfa1c039eebffa26ee66594183e93dd34470e844db55966e191e402ed66"
+    }
+  }
+}

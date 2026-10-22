@@ -1,0 +1,76 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "envelope_version",
+    "source",
+    "evidence_files",
+    "diagnostics",
+    "status",
+    "native_analysis"
+  ],
+  "properties": {
+    "envelope_version": {
+      "const": "2.0"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "format",
+        "export_version",
+        "file_id"
+      ],
+      "properties": {
+        "platform": {
+          "enum": [
+            "ssis",
+            "tm1",
+            "informatica",
+            "bods",
+            "odi"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "export_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidence_files": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/file"
+      },
+      "minItems": 1
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/diagnostic"
+      }
+    },
+    "status": {
+      "enum": [
+        "REVIEW_REQUIRED",
+        "BLOCKED"
+      ]
+    },
+    "native_analysis": {
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:source_envelope:2.0"
+}

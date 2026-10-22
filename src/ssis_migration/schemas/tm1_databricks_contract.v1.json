@@ -1,0 +1,147 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "contract_id",
+    "source_platform",
+    "target_platform",
+    "source_ir",
+    "mapping_source",
+    "capabilities",
+    "obligation_ids",
+    "status",
+    "semantic_status",
+    "migration_accepted",
+    "execution_mode",
+    "validation_requirements"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0"
+    },
+    "contract_id": {
+      "type": "string",
+      "pattern": "^tm1-target-[a-f0-9]{64}$"
+    },
+    "source_platform": {
+      "const": "tm1"
+    },
+    "target_platform": {
+      "const": "databricks"
+    },
+    "source_ir": {
+      "$ref": "urn:ssis-migration:schema:normalized_ir:2.0"
+    },
+    "mapping_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "text",
+        "document"
+      ],
+      "properties": {
+        "record": {
+          "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/file"
+        },
+        "text": {
+          "type": "string"
+        },
+        "document": {
+          "$ref": "urn:ssis-migration:schema:tm1_databricks_mapping:1.0"
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unit_id",
+          "language",
+          "decision",
+          "rule",
+          "reasons",
+          "program",
+          "evidence"
+        ],
+        "properties": {
+          "unit_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "language": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decision": {
+            "enum": [
+              "DETERMINISTIC",
+              "UNSUPPORTED"
+            ]
+          },
+          "rule": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "program": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+            },
+            "minItems": 1
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "obligation_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "status": {
+      "enum": [
+        "CANDIDATE_READY",
+        "BLOCKED"
+      ]
+    },
+    "semantic_status": {
+      "const": "NOT_VERIFIED"
+    },
+    "migration_accepted": {
+      "const": false
+    },
+    "execution_mode": {
+      "const": "BOUNDED_PREVIEW"
+    },
+    "validation_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:tm1_databricks_contract:1.0"
+}

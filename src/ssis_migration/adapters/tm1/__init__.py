@@ -1,1 +1,1 @@
-"""TM1 source helpers; a package migration adapter is not registered yet."""
+"""TM1 file-bundle analysis and native IR; target translation is not implemented."""

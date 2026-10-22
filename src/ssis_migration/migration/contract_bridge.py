@@ -71,6 +71,9 @@ def validate_contract(document: dict[str, Any], step: dict[str, Any] | None = No
     scope = legacy.get("metadata", {}).get("normalized_source")
     if scope is not None and scope["source_platform"] != document["source_platform"]:
         raise SchemaValidationError("Neutral graph platform disagrees with the migration contract.")
+    if scope is not None and scope.get('ir_version') == '2.0':
+        if document['target_design']['execution_mode'] != 'REVIEW_ONLY' or document['target_capabilities']['generation_languages']:
+            raise SchemaValidationError('Native source contracts cannot claim target generation capabilities.')
     if _digest(legacy) != document["binding_digest"]:
         raise SchemaValidationError("Migration contract legacy binding digest does not match its snapshot.")
     if document["source_behavior"]["migration_intent"] != legacy.get("metadata", {}).get("migration_intent", {}):
@@ -228,10 +231,10 @@ def build_migration_contract(
         },
         required_behavior={"obligations": obligations, "criticality_status": "UNASSESSED", "coverage_status": "NOT_VERIFIED"},
         target_capabilities={
-            "generation_languages": ["spark_sql", "pyspark"],
+            "generation_languages": [] if scope is not None and scope.get('ir_version') == '2.0' else ["spark_sql", "pyspark"],
             "execution_status": "NOT_RUN", "semantic_equivalence": "NOT_VERIFIED",
         },
-        target_design={"execution_mode": "GENERATE_ONLY", "deployment": "DISABLED"},
+        target_design={"execution_mode": "REVIEW_ONLY" if scope is not None and scope.get('ir_version') == '2.0' else "GENERATE_ONLY", "deployment": "DISABLED"},
         validation_requirements=[
             "Validate contract schema, evidence references and input binding before generation.",
             "Independently validate generated SQL/Python, notebook structure and dependency graphs.",
@@ -263,6 +266,11 @@ def prepare_generation_step(step: dict[str, Any]) -> dict[str, Any]:
     The main migration pipeline always attaches one before calling consumers.
     """
     contract = step.get("metadata", {}).get("migration_contract")
+    scope = step.get('metadata', {}).get('normalized_source') or {}
+    if scope.get('ir_version') == '2.0' or (contract is not None and contract.get('target_design', {}).get('execution_mode') == 'REVIEW_ONLY'):
+        if contract is not None:
+            validate_contract(contract, step)
+        raise ValueError('Native source contracts are review-only; target translation capabilities are not implemented.')
     if contract is None:
         return step
     validate_contract(contract, step)
