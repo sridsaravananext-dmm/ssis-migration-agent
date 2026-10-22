@@ -34,7 +34,7 @@ coverage and source equivalence remain unverified. This checkpoint stops at
 generation pending your Databricks review.
 Working branch: `GenericAITool-version01`.
 
-Validation: **1,070 regression tests passed, 12 skipped**, including **38 workbench
+Validation: **1,080 regression tests passed, 12 skipped**, including **48 workbench
 tests** and **72 candidate tests**. Installed-wheel generation, source/contract
 replay, ZIP integrity, SSIS compatibility and local frontend HTTP checks passed.
 Databricks execution and source equivalence await your review.

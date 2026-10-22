@@ -202,3 +202,52 @@ def test_blocked_native_generation_is_shown_as_blocked_without_success(monkeypat
     assert report['status']=='BLOCKED' and report['generated_artifact_count']==0
     assert any('blocking findings' in w.value for w in app.warning)
     assert not app.success
+
+
+def test_workspace_storage_path_is_blocked_before_run_and_can_reset_to_tmp():
+    app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=20).run()
+    widget(app,'radio','Package source').set_value('Use WWI sample package').run()
+    widget(app,'text_input','Destination workspace folder').set_value('/Workspace/Users/developer/etl')
+    widget(app,'text_input','Artifact destination path').set_value('/Workspace/Users/developer/etl').run()
+    assert not app.exception and widget(app,'button','🚀 Run Migration').disabled
+    assert any('not local app storage' in error.value for error in app.error)
+    widget(app,'button','Use app temporary artifact storage').click().run()
+    assert widget(app,'text_input','Artifact destination path').value.startswith('/tmp/')
+    assert widget(app,'text_input','Destination workspace folder').value=='/Workspace/Users/developer/etl'
+    assert not widget(app,'button','🚀 Run Migration').disabled
+
+
+def test_renamed_uploaded_metadata_is_explicitly_bound_and_consumed(monkeypatch,tmp_path):
+    import json,hashlib
+    root=Path(__file__).resolve().parents[1]
+    uploads=[UploadedFile('connection_mapping.json',(root/'examples/wwi/connection_mapping.json').read_bytes()),
+             UploadedFile('database_metadata_wwi (1).json',(root/'examples/wwi/database_metadata_wwi.json').read_bytes()),
+             UploadedFile('database_metadata_wwi_dw (1).json',(root/'examples/wwi/database_metadata_wwi_dw.json').read_bytes())]
+    package=UploadedFile('DailyETLMain.dtsx',(root/'examples/wwi/DailyETLMain.dtsx').read_bytes())
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**kw:uploads if kw.get('key')=='deps_upload' else package if kw.get('key')=='package_upload' else None)
+    app=AppTest.from_file(str(root/'app.py'),default_timeout=20).run()
+    assert not app.exception
+    assert widget(app,'button','🚀 Run Migration').disabled
+    for index,name in [(1,'database_metadata_wwi (1).json'),(2,'database_metadata_wwi_dw (1).json')]:
+        selection=widget(app,'selectbox',f'Metadata file for connection {index}')
+        # AppTest formats selectbox options; use its stored original values.
+        candidates=[value for value in selection.options if name in value]
+        assert len(candidates)==1
+        # Match the original full path from the current upload directory.
+        selected=Path(app.session_state['dependency_upload_directory'])/name
+        selection.set_value(str(selected)).run()
+    widget(app,'text_input','Artifact destination path').set_value(str(tmp_path/'artifacts')).run()
+    assert not widget(app,'button','🚀 Run Migration').disabled
+    widget(app,'button','🚀 Run Migration').click().run(timeout=45)
+    assert not app.exception
+    report=app.session_state['migration_result']
+    assert report['analyzed_package_count']==1
+    intake=json.loads(Path(report['intake_manifest']).read_text())
+    assert not any(d['code'] in {'MISSING_FILE','MISSING_DEPENDENCY','CONFLICTING_CONNECTION_MAPPING'} for d in intake['diagnostics'])
+    assert not any(d['code']=='UNCONSUMED_DEPENDENCY' and '(1)' in d['message'] for d in intake['diagnostics'])
+    config_dir=Path(app.session_state['migration_output'])/'configuration'
+    assert (config_dir/'original_connection_mapping.json').read_bytes()==uploads[0].content
+    audit=json.loads((config_dir/'connection_metadata_bindings.json').read_text())
+    assert len(audit['bindings'])==2
+    assert audit['original_sha256']==hashlib.sha256(uploads[0].content).hexdigest()
+    assert audit['effective_sha256']==hashlib.sha256((config_dir/'effective_connection_mapping.json').read_bytes()).hexdigest()

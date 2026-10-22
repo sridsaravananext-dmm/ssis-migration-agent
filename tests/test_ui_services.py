@@ -178,3 +178,42 @@ def test_api_does_not_ignore_conflicting_workspace_configuration(settings,tmp_pa
     if change=='output':output=tmp_path/'outside'
     if change=='missing_mapping':kwargs={}
     with pytest.raises(ValueError):run_migration(str(DEMO/'manifest.json'),str(output),workspace_config=settings,**kwargs)
+
+
+@pytest.mark.parametrize('field',['artifact_path','data_destination_path'])
+@pytest.mark.parametrize('value',['/Workspace','/Workspace/Users/developer/etl','/tmp/../Workspace/etl'])
+def test_workspace_folders_are_not_local_artifact_or_data_storage(settings,field,value):
+    settings[field]=value
+    with pytest.raises(ValueError,match='[Ww]orkspace'):validate_workspace_config(settings)
+
+
+def test_run_directory_permission_error_is_actionable_without_silent_fallback(monkeypatch,tmp_path):
+    from ssis_migration.ui import prepare_run_directory
+    original=Path.mkdir
+    root=tmp_path/'not-writable'
+    def deny(path,*args,**kwargs):
+        if path==root:raise PermissionError('app cannot write this path')
+        return original(path,*args,**kwargs)
+    monkeypatch.setattr(Path,'mkdir',deny)
+    with pytest.raises(ValueError,match='not writable.*default /tmp'):
+        prepare_run_directory(root)
+    assert not root.exists()
+
+
+def test_metadata_rebinding_is_explicit_and_keeps_original_mapping_evidence(tmp_path):
+    from ssis_migration.ui import bind_connection_metadata
+    source=tmp_path/'database_metadata_wwi (1).json';source.write_text('{"tables": []}')
+    destination=tmp_path/'database_metadata_wwi_dw (1).json';destination.write_text('{"tables": []}')
+    doc=json.loads((ROOT/'examples/wwi/connection_mapping.json').read_text());original=copy.deepcopy(doc)
+    unchanged,bindings,issues=bind_connection_metadata(doc,{},allowed_files=[source,destination],base_path=tmp_path)
+    assert unchanged==doc and not bindings and len(issues)==2
+    effective,bindings,issues=bind_connection_metadata(doc,{0:source,1:destination},allowed_files=[source,destination],base_path=tmp_path)
+    assert not issues and doc==original
+    assert [entry['metadata_file'] for entry in effective['mappings']]==[str(source),str(destination)]
+    for index,entry in enumerate(effective['mappings']):
+        assert {k:v for k,v in entry.items() if k!='metadata_file'}=={k:v for k,v in doc['mappings'][index].items() if k!='metadata_file'}
+    assert bindings[0]['original_reference']=='examples/wwi/database_metadata_wwi.json'
+    assert bindings[0]['sha256']==hashlib.sha256(source.read_bytes()).hexdigest()
+    assert all(b['resolution']=='USER_SELECTED' for b in bindings)
+    with pytest.raises(ValueError,match='supplied'):
+        bind_connection_metadata(doc,{0:tmp_path/'not-supplied.json'},allowed_files=[source,destination],base_path=tmp_path)

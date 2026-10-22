@@ -19,6 +19,7 @@ from ssis_migration.adapters.tm1.metadata.catalog import read_json
 from ssis_migration.intake import describe_file
 from ssis_migration.schemas import validate_document
 from ssis_migration.ui import (artifact_archive, artifact_files, bundle_candidates, effective_mapping,
+                               bind_connection_metadata, prepare_run_directory,
                                extract_bundle, find_target_mappings, input_inventory, report_summary,
                                run_frontend_migration, validate_bundle_scope)
 from ssis_migration.workspace import validate_workspace_config
@@ -155,6 +156,7 @@ with tab_upload:
 
     mapping_path=procedures_path=ddl_path=dependency_base=None
     dependency_files=[];file_roles={};selected_mapping_path=None;mapping_doc=None
+    metadata_paths=[];connection_choices={};connection_bindings=[];effective_connection_doc=None;connection_error=None
     if not native:
         st.header("2. Upload Dependencies (optional)")
         st.caption("Supply schema metadata, procedure definitions, connection mappings, parameters and other dependencies as files. Review detected roles or confirm them below. Every supplied file remains in the inventory.")
@@ -210,6 +212,7 @@ with tab_upload:
                 if confirmed_role is not None:
                     file_roles[str(saved)] = confirmed_role
                 effective_role = confirmed_role or record.get("role", "unknown")
+                if effective_role=='database_metadata':metadata_paths.append(saved)
                 if effective_role in selected_paths:
                     selected_paths[effective_role].append(saved)
                 elif effective_role in {"ambiguous", "unknown"}:
@@ -228,6 +231,29 @@ with tab_upload:
         if source_path:
             default_base=dependency_base or (source_root if package_mode=='Use source path' else ROOT)
             dependency_base=Path(st.text_input('Metadata reference base path',value=str(default_base),key='metadata_base_'+str(default_base)))
+        if mapping_path:
+            st.subheader('Connection metadata bindings')
+            st.caption('Select a supplied metadata file for each connection when the declared path does not match your uploads. Renamed files, including names with (1), are never matched automatically.')
+            try:
+                connection_document=read_json(mapping_path.read_bytes())
+                entries=connection_document.get('mappings') if isinstance(connection_document,dict) else None
+                if not isinstance(entries,list):raise ValueError('Connection mapping must contain a mappings list.')
+                mapping_signature=hashlib.sha256(mapping_path.read_bytes()).hexdigest()[:16]
+                for index,entry in enumerate(entries):
+                    if not isinstance(entry,dict):raise ValueError('Each connection mapping entry must be an object.')
+                    st.caption(f"Connection {index+1}: {entry.get('connection_reference','Missing name')} · Role: {entry.get('role','Unspecified')} · Database: {entry.get('database_name','Unspecified')} · Declared file: {entry.get('metadata_file','Missing')}")
+                    options=['Keep declared reference',*[str(p) for p in metadata_paths]]
+                    chosen=st.selectbox(f'Metadata file for connection {index+1}',options,
+                        format_func=lambda value:value if value=='Keep declared reference' else str(Path(value).name)+' · '+str(Path(value).parent),
+                        key='connection_metadata_'+mapping_signature+'_'+str(index))
+                    if chosen!='Keep declared reference':connection_choices[index]=Path(chosen)
+                effective_connection_doc,connection_bindings,issues=bind_connection_metadata(
+                    connection_document,connection_choices,allowed_files=metadata_paths,base_path=dependency_base)
+                if issues:
+                    connection_error='Resolve the missing connection metadata bindings before generation.'
+                    for issue in issues:st.error(issue)
+            except (ValueError,OSError,UnicodeError) as exc:
+                connection_error=str(exc);st.error(connection_error)
 
     else:
         st.subheader('TM1 source bundle and target mapping')
@@ -271,9 +297,10 @@ with tab_upload:
         with column:schemas[layer]=st.text_input(layer.title()+' schema',value=layer,key=layer+'_schema')
     st.caption('Layer selection sets the target namespace. Source transformations determine the business logic; selecting a layer does not invent an ETL stage.')
     data_destination=st.text_input('Target data path (proposed)',placeholder='/Volumes/catalog/schema/volume/migrated_data',key='data_destination')
-    st.caption('Saved in notebook parameters and the review configuration. TM1 previews use temporary views; publication to this path requires a later reviewed write strategy.')
+    st.caption('Optional data storage location, such as /Volumes/catalog/schema/volume/data. Leave blank for preview. A /Workspace/... notebook folder is not a data path.')
     artifact_destination=st.text_input('Artifact destination path',value=str(SESSION_ROOT/'artifacts'),key='artifact_destination')
-    st.caption('Generated files are saved here on the app filesystem. Use a writable mounted Volume for durable storage, or download the ZIP.')
+    st.caption('App-local storage: keep the default /tmp/... folder and download the ZIP. /Workspace/... belongs only in Destination workspace folder; the app does not write there directly.')
+    st.button('Use app temporary artifact storage',on_click=lambda:st.session_state.update(artifact_destination=str(SESSION_ROOT/'artifacts')))
     input_mode=st.selectbox('Notebook input mode',['fixtures','tables'],key='input_mode',disabled=not native)
     if not native:st.caption('SSIS retains schema references from the supplied source/metadata; the selected layer supplies notebook and job defaults.')
 
@@ -317,7 +344,7 @@ with tab_upload:
         if source_root and Path(artifact_destination).expanduser().resolve().is_relative_to(source_root.resolve()):
             raise ValueError('Choose an artifact destination outside the supplied source folder.')
     except ValueError as exc:configuration_error=str(exc);st.error(configuration_error)
-    can_run=bool(source_path and not source_error and not configuration_error and (not native or effective_doc))
+    can_run=bool(source_path and not source_error and not connection_error and not configuration_error and (not native or effective_doc))
     st.write('**Target namespace:** `'+catalog+'.'+schemas[target_layer]+'`')
     if source_path:st.caption('Source: '+str(source_path))
     with st.expander('Review run configuration'):
@@ -331,9 +358,28 @@ with tab_run:
     if st.button('🚀 Run Migration',type='primary',disabled=not can_run):
         try:
             st.session_state.last_attempt_error=None
-            output_dir=Path(artifact_destination).expanduser()/('run-'+uuid4().hex)
+            output_dir=prepare_run_directory(artifact_destination)
             configuration_dir=output_dir/'configuration';configuration_dir.mkdir(parents=True,exist_ok=False)
             runtime_mapping=None
+            runtime_connection_mapping=mapping_path
+            runtime_dependencies=list(dependency_files);runtime_roles=dict(file_roles)
+            if connection_bindings:
+                # Source intake excludes generated output directories. Keep
+                # the effective input outside output, and archive exact bytes.
+                binding_dir=SESSION_ROOT/'bindings'/uuid4().hex
+                binding_dir.mkdir(parents=True,exist_ok=False)
+                runtime_connection_mapping=binding_dir/'effective_connection_mapping.json'
+                runtime_connection_mapping.write_text(json.dumps(effective_connection_doc,indent=2,allow_nan=False)+'\n')
+                (configuration_dir/'effective_connection_mapping.json').write_bytes(runtime_connection_mapping.read_bytes())
+                (configuration_dir/'original_connection_mapping.json').write_bytes(mapping_path.read_bytes())
+                (configuration_dir/'connection_metadata_bindings.json').write_text(json.dumps({
+                    'original_mapping':str(mapping_path),'original_sha256':hashlib.sha256(mapping_path.read_bytes()).hexdigest(),
+                    'effective_sha256':hashlib.sha256(runtime_connection_mapping.read_bytes()).hexdigest(),
+                    'bindings':connection_bindings},indent=2)+'\n')
+                # The original is archived as superseded evidence. Intake must
+                # analyze only the explicitly selected effective mapping.
+                runtime_dependencies=[p for p in dependency_files if p.resolve()!=mapping_path.resolve()]
+                runtime_roles.pop(str(mapping_path),None)
             if native:
                 runtime_mapping=configuration_dir/'effective_target_mapping.json'
                 runtime_mapping.write_text(json.dumps(effective_doc,indent=2,allow_nan=False)+'\n')
@@ -347,8 +393,8 @@ with tab_run:
                 st.write('Checking supplied evidence and target configuration.')
                 report=run_frontend_migration(source_path,output_dir,platform=source_platform,
                     target_mapping=runtime_mapping,workspace_config=workspace_config,catalog=catalog,ai=ai_enabled,
-                    mapping=mapping_path,procedures=procedures_path,ddl=ddl_path,dependencies=dependency_files,
-                    file_roles=file_roles,base_path=dependency_base or ROOT)
+                    mapping=runtime_connection_mapping,procedures=procedures_path,ddl=ddl_path,dependencies=runtime_dependencies,
+                    file_roles=runtime_roles,base_path=dependency_base or ROOT)
                 st.session_state.migration_result=report
                 st.session_state.migration_output=str(output_dir)
                 st.session_state.last_run_settings=workspace_config

@@ -27,6 +27,14 @@ separate setting; `/Workspace/...` is used in job templates, not as an artifact
 filesystem directory. Blank workspace/cluster settings remain explicit required
 variables in job/DAB templates; no cloud hardware configuration is guessed.
 
+`/Workspace/...` is rejected for **Artifact destination path** and **Target data
+path**. Use it only for **Destination workspace folder**. In a Databricks App,
+keep the default `/tmp/...` artifact folder and download the ZIP; leave the data
+path blank during preview. The **Use app temporary artifact storage** button
+resets the artifact field without changing the notebook workspace destination.
+App filesystem permission failures report the affected artifact folder and how
+to choose a writable destination instead of attempting workspace publication.
+
 ## First run from the browser
 
 1. Select **Use TM1 sample bundle** under **Package source**. The sample contains
@@ -92,6 +100,20 @@ Confirm ambiguous metadata/procedure/mapping roles instead of selecting an
 arbitrary first file. **Metadata reference base path** controls relative
 connection-mapping references.
 
+When uploaded metadata filenames differ from the mapping references, use
+**Connection metadata bindings**. Each connection shows its role, database and
+original reference. Select the actual uploaded file in **Metadata file for
+connection 1**, **Metadata file for connection 2**, etc. The app never assumes
+that a name such as `database_metadata_wwi (1).json` belongs to a particular
+connection. Missing references prevent generation until resolved.
+
+Explicit replacements produce an effective connection mapping while preserving
+the original mapping bytes, uploaded input inventory and a binding audit with
+source/selected paths and SHA-256 hashes in the run's `configuration` folder.
+Only the effective mapping is used for intake, so obsolete original references
+do not produce duplicate missing-dependency or conflicting-mapping findings.
+Choosing a metadata file does not fabricate metadata or establish equivalence.
+
 The selected catalog initializes notebook `_catalog` and job parameters. Layer
 schemas initialize notebook/job namespace defaults. Existing source-qualified
 SSIS schema references remain explicit; selecting bronze/silver/gold does not
@@ -100,7 +122,7 @@ SSIS missing-evidence, static validation and acceptance gates are preserved.
 
 ## Interface and implementation
 
-Verification: **1,070 passed, 12 skipped**, including **38 workbench tests**.
+Verification: **1,080 passed, 12 skipped**, including **48 workbench tests**.
 The skips cover eight unavailable .NET checks and four live Databricks provider
 checks. The frontend page and health endpoint returned HTTP 200. The installed
 wheel reproduced ZIP intake, all four native fixture results, bound workspace

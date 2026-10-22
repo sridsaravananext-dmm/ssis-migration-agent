@@ -7,6 +7,7 @@ import io
 import json
 from pathlib import Path, PurePosixPath
 import stat
+import tempfile
 import zipfile
 
 from ssis_migration.adapters.tm1.metadata.catalog import read_json
@@ -14,6 +15,50 @@ from ssis_migration.schemas import validate_document
 
 MAX_FILES = 256
 MAX_ARCHIVE_BYTES = 64 * 1048576
+
+
+def prepare_run_directory(artifact_path):
+    from ssis_migration.workspace import is_workspace_path
+    if is_workspace_path(artifact_path):
+        raise ValueError('Use the default /tmp/... artifact folder; /Workspace/... belongs in Destination workspace folder.')
+    root=Path(artifact_path).expanduser().resolve()
+    try:
+        root.mkdir(parents=True,exist_ok=True)
+        return Path(tempfile.mkdtemp(prefix='run-',dir=str(root)))
+    except OSError as exc:
+        raise ValueError('Artifact destination is not writable by this app: '+str(root)+'. Use the default /tmp/... folder and download the ZIP, or choose an app-writable mounted folder.') from exc
+
+
+def bind_connection_metadata(document, choices, *, allowed_files, base_path):
+    """Rebind only explicitly selected mapping entries; retain all original fields."""
+    if not isinstance(document,dict) or not isinstance(document.get('mappings'),list):
+        raise ValueError('Connection mapping must contain a mappings list.')
+    if any(type(i) is not int or i<0 or i>=len(document['mappings']) for i in choices):
+        raise ValueError('Metadata selection identifies an unknown connection mapping entry.')
+    allowed={Path(p).resolve() for p in allowed_files}
+    result=copy.deepcopy(document);bindings=[];issues=[]
+    for index,entry in enumerate(result['mappings']):
+        if (not isinstance(entry,dict) or not isinstance(entry.get('connection_reference'),str)
+            or not entry['connection_reference'].strip() or not isinstance(entry.get('metadata_file'),str)
+            or not entry['metadata_file'].strip()):
+            raise ValueError('Each mapping requires connection_reference and metadata_file strings.')
+        original=entry['metadata_file']
+        if index in choices:
+            selected=Path(choices[index]).resolve()
+            if selected not in allowed or not selected.is_file():
+                raise ValueError('Select a supplied database metadata file for '+entry['connection_reference'])
+            entry['metadata_file']=str(selected)
+            bindings.append({'locator':f'json:/mappings/{index}/metadata_file',
+                             'connection_reference':entry['connection_reference'],
+                             'original_reference':original,'selected_file':str(selected),
+                             'sha256':hashlib.sha256(selected.read_bytes()).hexdigest(),
+                             'resolution':'USER_SELECTED'})
+        else:
+            referenced=Path(original).expanduser()
+            if not referenced.is_absolute():referenced=Path(base_path)/referenced
+            if not referenced.is_file():
+                issues.append('Metadata file '+original+' is missing for '+entry['connection_reference']+'. Select its uploaded metadata file below or correct the mapping/base path.')
+    return result,bindings,issues
 
 
 def extract_bundle(raw, destination):

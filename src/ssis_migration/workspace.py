@@ -4,8 +4,13 @@ from __future__ import annotations
 import copy
 import json
 import re
+from pathlib import Path
 
 from ssis_migration.schemas import validate_document
+
+
+def is_workspace_path(value):
+    return bool(value) and Path(value).expanduser().resolve().is_relative_to(Path('/Workspace'))
 
 
 def validate_workspace_config(config):
@@ -19,6 +24,10 @@ def validate_workspace_config(config):
     root = config['notebook_root']
     if '://' in config['artifact_path'] or config['artifact_path'].startswith('dbfs:'):
         raise ValueError('Artifact destination must be an app-readable filesystem path; use a mounted /Volumes/... path for durable storage.')
+    if is_workspace_path(config['artifact_path']):
+        raise ValueError('Artifact destination cannot be /Workspace/...: Databricks workspace folders are not local app storage. Keep the default /tmp/... artifact folder and download the ZIP. Use /Workspace/... only in Destination workspace folder.')
+    if is_workspace_path(config['data_destination_path']):
+        raise ValueError('Target data path cannot be /Workspace/...: that is a notebook workspace folder. Clear this optional field for a preview, or supply a separate data storage location.')
     if root is not None and (not root.startswith('/Workspace/') or '..' in root.split('/')):
         raise ValueError('Notebook destination must be an absolute /Workspace/... folder without parent traversal.')
     if config['existing_cluster_id'] is not None and not re.fullmatch(r'[A-Za-z0-9_-]+',config['existing_cluster_id']):
