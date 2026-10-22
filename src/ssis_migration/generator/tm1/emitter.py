@@ -135,6 +135,9 @@ for unit_id, program in PROGRAMS.items():
     view = VIEW_NAMES[unit_id]
     result.createOrReplaceTempView(view)
     print('Bounded preview only:', unit_id, len(output), 'rows; temporary view:', view)
+    if 'WORKSPACE_CONFIG' in globals():
+        print('Proposed output table:', WORKSPACE_CONFIG['output_tables'].get(unit_id, 'Unassigned'))
+        print('Proposed data destination:', dbutils.widgets.get('destination_path') or 'Unassigned')
     display(result)
 '''
 
@@ -192,8 +195,14 @@ def render(contract):
                    'Generated code has not established source equivalence. Review the target contract and semantic declarations first. '
                    'Inputs are read-only; results appear in session temporary views. No persistent writes, deployment or source connections. '
                    'Independent units do not imply a source execution order.\n\nContract: ' + contract['contract_id'])
+    config = contract.get('workspace_config')
     common = [('markdown',description),('code',utility),('code',data),('code',SPARK_HELPERS)]
-    preview = _notebook('TM1_Migration', common + [('code',PARAMETERS),('code',RUN_PREVIEW)], contract['contract_id'])
+    parameters = PARAMETERS
+    if config:
+        from ssis_migration.workspace import widget_code
+        common.append(('code',widget_code(config)))
+        parameters = parameters.replace("dbutils.widgets.dropdown('input_mode', 'fixtures',", "dbutils.widgets.dropdown('input_mode', "+repr(config['input_mode'])+",")
+    preview = _notebook('TM1_Migration', common + [('code',parameters),('code',RUN_PREVIEW)], contract['contract_id'])
     validation = _notebook('TM1_Validation', common + [('markdown','# Fixture reconciliation\n\nExpected results were explicitly supplied. Synthetic evidence does not verify source behavior.'),('code',RUN_VALIDATION)], contract['contract_id'])
     # These dependencies describe this target test workflow, not inferred TM1 execution dependencies.
     steps = [{'step_id':'preview_'+str(i),'name':unit,'step_type':'BOUNDED_PREVIEW','dependencies':[]}
@@ -218,6 +227,14 @@ def render(contract):
            'variables':{'existing_cluster_id':{'description':'User-selected Databricks cluster with notebook support.'},
                         'notebook_root':{'description':'Absolute workspace folder containing imported Migration and Validation notebooks.'}},
            'resources':{'jobs':{'tm1_candidate_review':job}}}
+    if config:
+        from ssis_migration.workspace import configure_job
+        job = configure_job(job,config)
+        for task in job['tasks'][:-1]:
+            task['notebook_task']['base_parameters']['input_mode'] = config['input_mode']
+        dab['resources']['jobs']['tm1_candidate_review'] = configure_job(job,config,variables=True)
+        if config['existing_cluster_id']:dab['variables']['existing_cluster_id']['default'] = config['existing_cluster_id']
+        if config['notebook_root']:dab['variables']['notebook_root']['default'] = config['notebook_root']
     return {'Migration.ipynb':preview,'Validation.ipynb':validation,'utilities.py':utility,
             'job.json':job,'databricks.yml':dab,'target_test_plan.json':plan}, fixture_results
 

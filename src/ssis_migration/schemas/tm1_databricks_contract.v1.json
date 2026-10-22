@@ -140,6 +140,9 @@
         "minLength": 1
       },
       "minItems": 1
+    },
+    "workspace_config": {
+      "$ref": "urn:ssis-migration:schema:databricks_workspace:1.0"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

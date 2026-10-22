@@ -38,7 +38,7 @@ def contract_id(contract):
     return 'tm1-target-' + content_digest({k:v for k,v in contract.items() if k != 'contract_id'})
 
 
-def _build(graph, mapping_source):
+def _build(graph, mapping_source, workspace_config=None):
     mapping = mapping_source['document']; bundle = graph['extensions']['source_analysis']
     if mapping['source_bundle_sha256'] != bundle['manifest']['sha256']:
         raise ValueError('Target mapping is bound to a different source bundle SHA-256.')
@@ -50,13 +50,18 @@ def _build(graph, mapping_source):
                 'status':'CANDIDATE_READY' if all(c['decision']=='DETERMINISTIC' for c in capabilities) else 'BLOCKED',
                 'semantic_status':'NOT_VERIFIED','migration_accepted':False,'execution_mode':'BOUNDED_PREVIEW',
                 'validation_requirements':REQUIREMENTS[:]}
+    if workspace_config is not None:
+        from ssis_migration.workspace import validate_workspace_config
+        contract['workspace_config'] = validate_workspace_config(workspace_config)
+        if set(workspace_config['output_tables']) - {c['unit_id'] for c in capabilities}:
+            raise ValueError('Output table settings reference an unknown source unit.')
     contract['contract_id'] = contract_id(contract)
     return contract
 
 
-def build_contract(graph, mapping_source):
+def build_contract(graph, mapping_source, *, workspace_config=None):
     validate_tm1_normalized_ir(graph)
-    contract = _build(graph, mapping_source)
+    contract = _build(graph, mapping_source, workspace_config)
     validate_contract(contract)
     return contract
 
@@ -68,7 +73,7 @@ def validate_contract(contract):
     if (record['sha256'] != hashlib.sha256(raw).hexdigest() or record['size_bytes'] != len(raw)
         or read_json(raw) != source['document'] or record['status'] != 'AVAILABLE'):
         raise SchemaValidationError('Target mapping bytes, document or file inventory disagree.')
-    if _build(contract['source_ir'], source) != contract:
+    if _build(contract['source_ir'], source, contract.get('workspace_config')) != contract:
         raise SchemaValidationError('Target contract does not reproduce complete source capability analysis; no edited/omitted code is trusted.')
 
 

@@ -102,3 +102,103 @@ def test_duplicate_uploaded_names_are_retained_without_selecting_a_mapping(monke
     assert {Path(path).read_bytes() for path in captured["dependency_files"]} == {upload.content for upload in uploads}
     assert captured["connection_mapping"] is None
     assert any("All are retained separately" in warning.value for warning in app.warning)
+
+
+def widget(app,kind,label):
+    return next(item for item in getattr(app,kind) if item.label==label)
+
+
+def test_tm1_workbench_generates_from_ui_and_applies_developer_settings(tmp_path):
+    import json
+    from ssis_migration.generator.tm1.contract import validate_contract
+    root=Path(__file__).resolve().parents[1]
+    app=AppTest.from_file(str(root/'app.py'),default_timeout=20).run()
+    widget(app,'radio','Package source').set_value('Use TM1 sample bundle').run()
+    widget(app,'text_input','Target catalog').set_value('review_catalog')
+    widget(app,'selectbox','Target layer').set_value('gold')
+    widget(app,'text_input','Gold schema').set_value('published')
+    widget(app,'text_input','Destination workspace folder').set_value('/Workspace/Shared/review')
+    widget(app,'text_input','Existing cluster ID (optional)').set_value('0123-review-cluster')
+    widget(app,'text_input','Artifact destination path').set_value(str(tmp_path/'artifacts')).run()
+    assert not app.exception
+    widget(app,'button','🚀 Run Migration').click().run(timeout=45)
+    assert not app.exception
+    report=app.session_state['migration_result']
+    assert report['status']=='GENERATED' and not report['migration_accepted']
+    config=report['workspace_config']
+    assert config['catalog']=='review_catalog' and config['schemas']['gold']=='published'
+    assert config['output_tables']['load']=='review_catalog.published.load'
+    assert Path(app.session_state['migration_output']).is_relative_to(tmp_path)
+    contract=json.loads(Path(report['artifacts']['generation_contract.json']).read_text());validate_contract(contract)
+    assert [case['status'] for case in report['fixture_results']]==['PASS']*4
+    assert any('NOT_RUN' in text.value for text in app.markdown)
+
+
+def test_ui_table_mode_requires_complete_bindings_and_invalid_catalog_blocks_run():
+    app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=20).run()
+    widget(app,'radio','Package source').set_value('Use TM1 sample bundle').run()
+    widget(app,'selectbox','Notebook input mode').set_value('tables').run()
+    assert widget(app,'button','🚀 Run Migration').disabled
+    assert any('Assign a cell snapshot table' in error.value for error in app.error)
+    widget(app,'selectbox','Notebook input mode').set_value('fixtures')
+    widget(app,'text_input','Target catalog').set_value('invalid catalog').run()
+    assert widget(app,'button','🚀 Run Migration').disabled
+
+
+def test_zip_upload_provides_native_bundle_without_cli(monkeypatch,tmp_path):
+    from ssis_migration.ui import artifact_archive
+    root=Path(__file__).resolve().parents[1]
+    upload=UploadedFile('my_exports.zip',artifact_archive(root/'examples/tm1/databricks_demo'))
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**kw:upload if kw.get('key')=='bundle_upload' else None)
+    app=AppTest.from_file(str(root/'app.py'),default_timeout=20).run()
+    widget(app,'radio','Package source').set_value('Upload a source bundle (.zip)').run()
+    assert not app.exception and not widget(app,'button','🚀 Run Migration').disabled
+    widget(app,'text_input','Artifact destination path').set_value(str(tmp_path/'out')).run()
+    widget(app,'button','🚀 Run Migration').click().run(timeout=45)
+    assert not app.exception and app.session_state['migration_result']['status']=='GENERATED'
+    assert Path(app.session_state['migration_result']['artifacts']['workspace_config']).is_file()
+
+
+def test_malformed_zip_is_a_visible_input_error_and_not_an_app_crash(monkeypatch):
+    upload=UploadedFile('broken.zip',b'not a ZIP')
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**kw:upload if kw.get('key')=='bundle_upload' else None)
+    app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=20).run()
+    widget(app,'radio','Package source').set_value('Upload a source bundle (.zip)').run()
+    assert not app.exception and app.error and widget(app,'button','🚀 Run Migration').disabled
+
+
+def test_source_path_mode_selects_manifest_and_mapping_without_upload():
+    root=Path(__file__).resolve().parents[1]
+    app=AppTest.from_file(str(root/'app.py'),default_timeout=20).run()
+    widget(app,'radio','Package source').set_value('Use source path').run()
+    widget(app,'text_input','Source export path').set_value(str(root/'examples/tm1/databricks_demo')).run()
+    assert not app.exception
+    assert widget(app,'selectbox','Source package / manifest').value=='manifest.json'
+    assert not widget(app,'button','🚀 Run Migration').disabled
+
+
+def test_blocked_native_generation_is_shown_as_blocked_without_success(monkeypatch,tmp_path):
+    import hashlib,json
+    from ssis_migration.ui import artifact_archive
+    root=Path(__file__).resolve().parents[1]
+    import shutil
+    bundle=tmp_path/'input';shutil.copytree(root/'examples/tm1/databricks_demo',bundle)
+    (bundle/'epilog.ti').write_text('ProcessQuit;')
+    process=json.loads((bundle/'process.json').read_text())
+    process['sections']['epilog']['sha256']=hashlib.sha256((bundle/'epilog.ti').read_bytes()).hexdigest()
+    (bundle/'process.json').write_text(json.dumps(process))
+    manifest=json.loads((bundle/'manifest.json').read_text());manifest['units'][0]['sha256']=hashlib.sha256((bundle/'process.json').read_bytes()).hexdigest()
+    (bundle/'manifest.json').write_text(json.dumps(manifest))
+    mapping=json.loads((bundle/'target_mapping.json').read_text());mapping['source_bundle_sha256']=hashlib.sha256((bundle/'manifest.json').read_bytes()).hexdigest()
+    (bundle/'target_mapping.json').write_text(json.dumps(mapping))
+    upload=UploadedFile('blocked.zip',artifact_archive(bundle))
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**kw:upload if kw.get('key')=='bundle_upload' else None)
+    app=AppTest.from_file(str(root/'app.py'),default_timeout=20).run()
+    widget(app,'radio','Package source').set_value('Upload a source bundle (.zip)').run()
+    widget(app,'text_input','Artifact destination path').set_value(str(tmp_path/'out')).run()
+    widget(app,'button','🚀 Run Migration').click().run(timeout=45)
+    assert not app.exception
+    report=app.session_state['migration_result']
+    assert report['status']=='BLOCKED' and report['generated_artifact_count']==0
+    assert any('blocking findings' in w.value for w in app.warning)
+    assert not app.success

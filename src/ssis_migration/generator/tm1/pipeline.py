@@ -84,14 +84,14 @@ def _write(path, value):
     else:path.write_text(json.dumps(value,indent=2,ensure_ascii=False,allow_nan=False)+'\n',encoding='utf-8')
 
 
-def run_tm1_generation(source, output, target_mapping):
+def run_tm1_generation(source, output, target_mapping, *, workspace_config=None):
     # The original review/contract path remains available unchanged. No generic
     # review contract is promoted to executable by this opt-in target contract.
     mapping = load_mapping(target_mapping)
     review = run_tm1_review(source,output)
     directory = Path(review['artifacts']['report']).parent
     graph = json.loads((directory/'normalized_ir.json').read_text(encoding='utf-8'))
-    contract = build_contract(graph,mapping)
+    contract = build_contract(graph,mapping,workspace_config=workspace_config)
     _write(directory/'generation_contract.json',contract)  # Contract precedes any target code.
     _write(directory/'capability_report.json',contract['capabilities'])
     fixtures = verify_fixtures(contract) if contract['status']=='CANDIDATE_READY' else []
@@ -109,6 +109,8 @@ def run_tm1_generation(source, output, target_mapping):
     _write(directory/'fixture_results.json',fixtures)
     _write(directory/'DATABRICKS_REVIEW.md',HANDOFF)
     _write(directory/'target_mapping.json',mapping['document'])
+    if workspace_config is not None:
+        _write(directory/'workspace_config.json',workspace_config)
     evidence = directory/'source_evidence';evidence.mkdir()
     index = []
     for i,record in enumerate(graph['evidence_files']):
@@ -151,6 +153,9 @@ def run_tm1_generation(source, output, target_mapping):
     review['artifacts']['validation'] = str(directory/'source_review_validation.json')
     _write(directory/'source_review_report.json',review)
     report['artifacts']['report'] = str(directory/'migration_report.json')
+    if workspace_config is not None:
+        report['workspace_config'] = workspace_config
+        report['artifacts']['workspace_config'] = str(directory/'workspace_config.json')
     report['artifacts']['bundle'] = str(directory.with_suffix('.zip'))
     _write(directory/'migration_report.json',report)
     inventory = {str(p.relative_to(directory)):hashlib.sha256(p.read_bytes()).hexdigest()

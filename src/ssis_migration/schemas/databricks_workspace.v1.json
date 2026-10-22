@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:databricks_workspace:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "config_version",
+    "catalog",
+    "schemas",
+    "target_layer",
+    "source_path",
+    "artifact_path",
+    "data_destination_path",
+    "notebook_root",
+    "existing_cluster_id",
+    "input_mode",
+    "output_tables"
+  ],
+  "properties": {
+    "config_version": {
+      "const": "1.0"
+    },
+    "catalog": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+    },
+    "schemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bronze",
+        "silver",
+        "gold"
+      ],
+      "properties": {
+        "bronze": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+        },
+        "silver": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+        },
+        "gold": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+        }
+      }
+    },
+    "target_layer": {
+      "enum": [
+        "bronze",
+        "silver",
+        "gold"
+      ]
+    },
+    "source_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data_destination_path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "notebook_root": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "existing_cluster_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "input_mode": {
+      "enum": [
+        "fixtures",
+        "tables"
+      ]
+    },
+    "output_tables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$"
+      }
+    }
+  }
+}

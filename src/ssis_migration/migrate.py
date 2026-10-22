@@ -692,6 +692,7 @@ def generate_migration_artifacts(
     source_evidence: list[dict[str, Any]] | None = None,
     file_dependencies: list[dict[str, Any]] | None = None,
     normalized_ir: dict[str, Any] | None = None,
+    workspace_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Run planner -> generator -> notebook + review report.
@@ -746,6 +747,10 @@ def generate_migration_artifacts(
         plan_dict = bind_plan_to_ir(plan_dict, normalized_ir)
         validate_plan_ir_binding(plan_dict, normalized_ir)
     plan_dict["metadata"]["source_diagnostics"] = source_diagnostics or []
+    if workspace_config is not None:
+        plan_dict['metadata']['workspace_config'] = workspace_config
+        for step in plan_dict['steps']:
+            step.setdefault('metadata',{})['workspace_config'] = workspace_config
     package_output.mkdir(parents=True, exist_ok=True)
     artifacts_dir = package_output / "generated_artifacts"
     artifacts_dir.mkdir(exist_ok=True)
@@ -966,13 +971,25 @@ def generate_migration_artifacts(
     from ssis_migration.generator.job_generator import JobGenerator
 
     job_generator = JobGenerator()
-    job = job_generator.generate(plan_dict, str(notebook_file), catalog=catalog or "main")
+    selected_schema = workspace_config['schemas'][workspace_config['target_layer']] if workspace_config else 'default'
+    job = job_generator.generate(plan_dict, str(notebook_file), catalog=catalog or "main", schema=selected_schema)
     job_file = package_output / f"{package_name}_job.json"
-    write_json(job_file, job.to_dict())
+    job_settings = job.to_dict()
+    if workspace_config:
+        from ssis_migration.workspace import configure_job
+        job_settings = configure_job(job_settings,workspace_config)
+    write_json(job_file, job_settings)
     dabs_file = package_output / "databricks.yml"
-    dabs_file.write_text(job_generator.generate_dabs_yaml(
-        plan_dict, str(notebook_file), catalog=catalog or "main",
-    ), encoding="utf-8")
+    dabs = json.loads(job_generator.generate_dabs_yaml(
+        plan_dict, str(notebook_file), catalog=catalog or "main", schema=selected_schema,
+    ))
+    if workspace_config:
+        for key,settings in dabs['resources']['jobs'].items():
+            dabs['resources']['jobs'][key] = configure_job(settings,workspace_config,variables=True)
+        for name in ('notebook_root','existing_cluster_id'):
+            dabs['variables'][name] = {'description':'User-selected '+name.replace('_',' ')}
+            if workspace_config[name]:dabs['variables'][name]['default'] = workspace_config[name]
+    write_json(dabs_file,dabs)
     validation_results.append({
         "step_id": "package", "step_name": package_name,
         "validator": "job_graph", "scope": "STATIC_JOB_GRAPH",
@@ -1104,6 +1121,7 @@ def run_migration(
     source_platform: str | None = None,
     file_roles: dict[str, str] | None = None,
     target_mapping: str | None = None,
+    workspace_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Discover and analyze SSIS packages and create a per-package migration
@@ -1117,6 +1135,15 @@ def run_migration(
     """
     if execute:
         raise ValueError("Execution is not implemented; generate and review artifacts with execute=False.")
+    if workspace_config is not None:
+        from ssis_migration.workspace import validate_workspace_config
+        workspace_config = validate_workspace_config(workspace_config)
+        if catalog is not None and catalog != workspace_config['catalog']:
+            raise ValueError('Catalog argument conflicts with explicit workspace settings.')
+        if Path(source).expanduser().resolve() != Path(workspace_config['source_path']).expanduser().resolve():
+            raise ValueError('Source path conflicts with explicit workspace settings.')
+        if not Path(output).expanduser().resolve().is_relative_to(Path(workspace_config['artifact_path']).expanduser().resolve()):
+            raise ValueError('Output path must be inside the configured artifact destination.')
 
     from ssis_migration.intake import describe_file
     selected = str(source_platform or '').strip().lower().replace('-', '_').replace(' ', '_')
@@ -1127,12 +1154,16 @@ def run_migration(
             raise ValueError('TM1 uses explicit bundle roles and target mappings; declare dependencies inside its manifest. AI generation is unavailable.')
         if target_mapping is not None:
             from ssis_migration.generator.tm1.pipeline import run_tm1_generation
-            return run_tm1_generation(source, output, target_mapping)
+            return run_tm1_generation(source, output, target_mapping, workspace_config=workspace_config)
+        if workspace_config is not None:
+            raise ValueError('Native TM1 workspace settings require a target mapping for candidate generation.')
         from ssis_migration.adapters.tm1.pipeline import run_tm1_review
         return run_tm1_review(source, output)
 
     if target_mapping is not None:
         raise ValueError('Target mappings are currently supported only for explicit TM1 native bundles.')
+    if workspace_config is not None:
+        catalog = workspace_config['catalog']
 
     from ssis_migration.validator.readiness import summarize_readiness
     from ssis_migration.intake import build_intake_manifest
@@ -1256,6 +1287,10 @@ def run_migration(
         },
     }
 
+    if workspace_config is not None:
+        report['workspace_config'] = workspace_config
+        write_json(output_path/'workspace_config.json',workspace_config)
+
     for package_path, file_record in zip(packages, package_records):
         package_name = safe_name(package_path.stem)
         package_output = output_path / package_name
@@ -1366,6 +1401,7 @@ def run_migration(
                     source_evidence=intake["files"],
                     file_dependencies=intake["dependencies"],
                     normalized_ir=normalized_ir,
+                    workspace_config=workspace_config,
                 )
                 metadata_stage = "SUCCEEDED"
             else:
@@ -1385,6 +1421,7 @@ def run_migration(
                     source_evidence=intake["files"],
                     file_dependencies=intake["dependencies"],
                     normalized_ir=normalized_ir,
+                    workspace_config=workspace_config,
                 )
                 metadata_stage = "SUCCEEDED_DTSX_DERIVED"
 

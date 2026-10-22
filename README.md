@@ -2,6 +2,13 @@
 
 **Last updated date - 10/22/2026**
 
+The [developer workbench](docs/developer-workbench.md) now connects TM1 bundle
+uploads and source paths to Databricks candidate generation. Configure catalog,
+bronze/silver/gold schemas, runtime table bindings and parameters, notebook
+destination, cluster and artifact paths in the browser; download notebooks and
+validation artifacts for your Databricks review. Existing SSIS upload and
+dependency-role controls remain available.
+
 TM1 language analysis now includes bounded offline [MDX](docs/phase8-mdx-foundation.md),
 [rules/feeders](docs/phase8-tm1-rules-feeders.md) and
 [TurboIntegrator sections/control flow](docs/phase8-turbointegrator-analysis.md).
@@ -27,10 +34,10 @@ coverage and source equivalence remain unverified. This checkpoint stops at
 generation pending your Databricks review.
 Working branch: `GenericAITool-version01`.
 
-Validation: **1,034 regression tests passed, 12 skipped**; **72 focused candidate
-tests passed**. Installed-wheel generation, source/contract replay, ZIP integrity
-and SSIS compatibility checks passed. Databricks execution and source equivalence
-await your review.
+Validation: **1,070 regression tests passed, 12 skipped**, including **38 workbench
+tests** and **72 candidate tests**. Installed-wheel generation, source/contract
+replay, ZIP integrity, SSIS compatibility and local frontend HTTP checks passed.
+Databricks execution and source equivalence await your review.
 
 # ============================================================
 # README.md

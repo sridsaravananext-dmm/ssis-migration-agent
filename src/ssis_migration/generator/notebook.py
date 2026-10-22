@@ -98,6 +98,15 @@ class NotebookAssembler:
             "_schema = dbutils.widgets.get('schema')\n"
         ))
         cells[-1]["metadata"]["migration_role"] = "parameters"
+        workspace_config = plan_dict.get('metadata',{}).get('workspace_config')
+        if workspace_config is not None:
+            from ssis_migration.workspace import widget_code
+            # Replace the default parameter cell before assembly, never patch
+            # already validated/generated notebook bytes after publication.
+            parameters = "import json\n" + "dbutils.widgets.text('step_id', 'all', 'Step ID to execute')\n"
+            parameters += widget_code(workspace_config)
+            parameters += "_step_id = dbutils.widgets.get('step_id')\n"
+            cells[-1]['source'] = self._split_source(parameters)
 
         # -------------------------------------------------
         # Setup cell: ETL control-table helpers
