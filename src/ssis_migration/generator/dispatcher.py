@@ -27,6 +27,10 @@ class GeneratorDispatcher:
     target_platform: str = "databricks",
     ) -> GeneratedArtifact:
 
+        from ssis_migration.migration import prepare_generation_step
+
+        migration_step = prepare_generation_step(migration_step)
+
         metadata = migration_step.get(
             "metadata",
             {},
@@ -41,6 +45,28 @@ class GeneratorDispatcher:
             "migration_strategy",
             {},
         )
+        contract = metadata.get("migration_contract")
+        if contract and target_platform.lower() != contract["target_platform"]:
+            raise ValueError("Target platform override conflicts with the validated migration contract.")
+        if contract and sql is not None:
+            source_procedures = migration_intent.get("source_procedures", [])
+            original_sql = source_procedures[0].get("definition") if source_procedures else None
+            if sql != original_sql:
+                raise ValueError("SQL override is not bound to the migration contract; rebuild its source inputs.")
+        if contract and "csharp_translation" in metadata:
+            from .csharp import generate_csharp_candidate
+            if sql is not None:
+                raise ValueError("SQL overrides are not valid for a C# source contract.")
+            return generate_csharp_candidate(contract)
+        if contract and contract["implementation_strategy"]["decision"] == "UNSUPPORTED":
+            return GeneratedArtifact(
+                artifact_id=f"{migration_step['step_id']}_unsupported",
+                name=migration_step["name"], artifact_type="UNRESOLVED",
+                target_platform=target_platform, language="pyspark",
+                code="# REVIEW_REQUIRED: Contract explicitly marks source behavior unsupported.",
+                source_step_id=migration_step["step_id"],
+                metadata={"migration_contract_id": contract["contract_id"], "status": "UNSUPPORTED"},
+            )
 
         # ---------------------------------------------------------
         # Resolve source SQL
@@ -112,6 +138,7 @@ class GeneratorDispatcher:
                     "status": "UNRESOLVED_LANGUAGE",
                     "migration_strategy": migration_strategy,
                     "language_decision": decision.to_dict(),
+                    **({"migration_contract_id": contract["contract_id"]} if contract else {}),
                 },
             )
 
@@ -131,5 +158,7 @@ class GeneratorDispatcher:
         artifact.metadata["language_decision"] = (
             decision.to_dict()
         )
+        if "migration_contract" in metadata:
+            artifact.metadata["migration_contract_id"] = metadata["migration_contract"]["contract_id"]
 
         return artifact

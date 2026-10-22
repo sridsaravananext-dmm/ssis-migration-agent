@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:csharp_execution_trace:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "trace_version": {
+      "const": "1.0"
+    },
+    "side": {
+      "enum": [
+        "SOURCE",
+        "TARGET"
+      ]
+    },
+    "contract_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "candidate_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "compilation_report_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runtime_scope": {
+      "enum": [
+        "SUPPLIED_REFERENCES",
+        "FIXTURE_STUB_RUNTIME",
+        "PYTHON_DRIVER"
+      ]
+    },
+    "runtime_description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "input_variables",
+          "outcome"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "input_variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "string",
+                "boolean",
+                "integer"
+              ]
+            }
+          },
+          "outcome": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "task_result",
+              "variables",
+              "exception"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "RETURNED",
+                  "THREW"
+                ]
+              },
+              "task_result": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "variables": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "boolean",
+                    "integer"
+                  ]
+                }
+              },
+              "exception": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "trace_version",
+    "side",
+    "contract_id",
+    "source_sha256",
+    "candidate_sha256",
+    "compilation_report_sha256",
+    "runtime_scope",
+    "runtime_description",
+    "cases"
+  ]
+}

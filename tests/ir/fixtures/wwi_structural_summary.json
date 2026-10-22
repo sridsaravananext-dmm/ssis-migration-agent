@@ -1,0 +1,27 @@
+{
+  "node_kinds": {
+    "TASK": 94,
+    "EXPRESSION": 53,
+    "CONNECTION": 2,
+    "PARAMETER": 4,
+    "DATA_FLOW": 13,
+    "TARGET": 13,
+    "SOURCE": 13
+  },
+  "edge_kinds": {
+    "HAS_EXPRESSION": 53,
+    "CONTAINS": 117,
+    "USES_CONNECTION": 79,
+    "CONTROL_FLOW": 80,
+    "DATA_FLOW": 13,
+    "COLUMN_LINEAGE": 145
+  },
+  "diagnostic_codes": {
+    "UNSUPPORTED_SSIS_EXECUTABLE": 15,
+    "UNSUPPORTED_TASK_SEMANTICS": 15,
+    "DEFAULTED_CONTROL_CONDITION": 80
+  },
+  "unresolved_edges": 0,
+  "semantic_status": "NOT_VERIFIED",
+  "status": "REVIEW_REQUIRED"
+}

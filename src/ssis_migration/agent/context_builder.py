@@ -21,6 +21,9 @@ class AIMigrationContextBuilder:
         databases: list[Any] | None = None,
         procedure_definitions: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        from ssis_migration.migration import prepare_generation_step
+
+        migration_step = prepare_generation_step(migration_step)
         metadata = migration_step.get(
             "metadata",
             {},
@@ -115,7 +118,9 @@ class AIMigrationContextBuilder:
         # Pass ALL procedure definitions through — the caller
         # already filtered to only the procedures relevant to
         # this migration step.
-        procedure_definitions = procedure_definitions or {}
+        contract = metadata.get("migration_contract") or {}
+        supplemental = contract.get("source_behavior", {}).get("supporting_definitions", {})
+        procedure_definitions = {**supplemental, **(procedure_definitions or {})}
 
         source_context["procedure_definitions"] = dict(
             procedure_definitions
@@ -125,7 +130,24 @@ class AIMigrationContextBuilder:
             procedure_definitions
         )
 
+        # Inspect every definition actually supplied to the model, not just
+        # the optional override argument. Keep provenance when definitions
+        # already arrived through migration intent or semantic analysis.
+        temporal_definitions = dict(procedure_definitions)
+        # Retain supplemental evidence for analysis even when a same-named
+        # legacy definition was supplied. The contract records conflicts;
+        # an override must not erase a history prerequisite from either input.
+        temporal_definitions.update({f"supplemental:{name}": body for name, body in supplemental.items()})
+        for role, context in (("source", source_context), ("destination", destination_context)):
+            for collection in ("procedures", "semantics"):
+                for index, item in enumerate(context[collection]):
+                    definition = item.get("definition")
+                    if definition:
+                        name = item.get("procedure") or item.get("name") or str(index)
+                        temporal_definitions[f"{role}.{collection}:{name}"] = definition
+
         return {
+            "migration_contract": metadata.get("migration_contract"),
             "migration": {
                 "step_id": migration_step.get(
                     "step_id"
@@ -136,9 +158,9 @@ class AIMigrationContextBuilder:
                 "source_platform": self._source_platform(
                     migration_step,
                     source_context,
-                ),
+                ) if not contract else contract["source_platform"],
                 "target_platform": (
-                    migration_step.get("target_platform")
+                    contract.get("target_platform") or migration_step.get("target_platform")
                     or "Databricks"
                 ),
                 "target_language": (
@@ -181,7 +203,7 @@ class AIMigrationContextBuilder:
             ),
 
             "temporal_context": self._build_temporal_context(
-                procedure_definitions,
+                temporal_definitions,
             ),
         }
 
@@ -259,58 +281,36 @@ class AIMigrationContextBuilder:
         destination_roots: list[str],
     ) -> dict[str, Any]:
 
-        if not databases:
-            return {
-                "source": [],
-                "destination": [],
-            }
-
         result = {
             "source": [],
             "destination": [],
+            "combined": [],
+            "unassigned": [],
         }
 
-        for database in databases:
+        for database in databases or []:
 
             database_dict = self._to_dict(
                 database
             )
 
-            relevant_objects = database_dict.get(
-                "relevant_objects",
-                [],
-            )
+            # Relevant-object lists can be incomplete or empty while the
+            # supplied DatabaseIR still contains columns, types and keys.
+            # Preserve that structure and its evidence instead of silently
+            # reducing it to an inferred subset.
+            context = dict(database_dict)
+            context.setdefault("connection_reference", None)
+            context.setdefault("database_name", None)
+            context.setdefault("role", None)
+            context.setdefault("relevant_objects", [])
+            context.setdefault("dependency_edges", [])
 
-            dependency_edges = database_dict.get(
-                "dependency_edges",
-                [],
-            )
-
-            role = database_dict.get(
-                "role"
-            )
-
-            context = {
-                "connection_reference": database_dict.get(
-                    "connection_reference"
-                ),
-                "database_name": database_dict.get(
-                    "database_name"
-                ),
-                "role": role,
-                "relevant_objects": relevant_objects,
-                "dependency_edges": dependency_edges,
-            }
-
-            if role == "source":
-                result["source"].append(
-                    context
-                )
-
-            elif role == "destination":
-                result["destination"].append(
-                    context
-                )
+            # DTSX-derived metadata has the explicit role "combined". Unknown
+            # roles remain unassigned with their original value, rather than
+            # being guessed from object names or silently discarded.
+            role = context["role"]
+            bucket = role if isinstance(role, str) and role in result else "unassigned"
+            result[bucket].append(context)
 
         return result
 
@@ -322,83 +322,74 @@ class AIMigrationContextBuilder:
     def _build_temporal_context(
         procedure_definitions: dict[str, str],
     ) -> dict[str, Any]:
+        """Record temporal syntax without inventing its historical data model.
+
+        A temporal query proves that historical state is needed. It does not
+        identify period columns, a history table or a target representation.
+        Token offsets retain the procedure evidence and avoid matching SQL
+        comments or string literals as temporal queries.
         """
-        Detect FOR SYSTEM_TIME AS OF in source procedures and
-        provide Delta Lake translation guidance.
+        import sqlglot
+        from sqlglot.errors import TokenError
+        from sqlglot.tokens import TokenType
 
-        SQL Server system-versioned temporal tables maintain a
-        current table and a history table (with _Archive suffix
-        in WideWorldImporters). Each row has ValidFrom and
-        ValidTo columns defining its validity period.
+        temporal_tables: set[str] = set()
+        evidence: list[dict[str, Any]] = []
+        unresolved: list[str] = []
+        for name, sql in procedure_definitions.items():
+            try:
+                tokens = sqlglot.tokenize(sql, read="tsql")
+            except TokenError as exc:
+                unresolved.append(
+                    f"Cannot inspect temporal syntax in procedure {name}: {exc}"
+                )
+                continue
+            for index in range(len(tokens) - 3):
+                clause = tokens[index:index + 4]
+                if [token.text.upper() for token in clause] != [
+                    "FOR", "SYSTEM_TIME", "AS", "OF",
+                ] or any(token.token_type in {
+                    TokenType.STRING, TokenType.IDENTIFIER,
+                } for token in clause):
+                    continue
+                evidence.append({
+                    "procedure": name,
+                    "start_offset": clause[0].start,
+                    "end_offset": clause[-1].end + 1,
+                    "source_text": sql[clause[0].start:clause[-1].end + 1],
+                })
+                # Only report a directly preceding FROM/JOIN table identifier.
+                # More complex references remain unknown rather than guessed.
+                cursor = index - 1
+                names: list[str] = []
+                while cursor >= 0 and tokens[cursor].token_type in {
+                    TokenType.VAR, TokenType.IDENTIFIER, TokenType.DOT,
+                }:
+                    names.append(tokens[cursor].text)
+                    cursor -= 1
+                if cursor >= 0 and tokens[cursor].text.upper() in {"FROM", "JOIN"}:
+                    temporal_tables.add("".join(reversed(names)))
 
-        FOR SYSTEM_TIME AS OF @timestamp reconstructs the table
-        state at a point in time by UNIONing current and history
-        rows and filtering on the validity window.
-
-        In Databricks, if source tables have been ingested as
-        Delta tables with ValidFrom/ValidTo columns and archive
-        tables, the equivalent is:
-
-            SELECT * FROM (
-                SELECT * FROM schema.table
-                UNION ALL
-                SELECT * FROM schema.table_Archive
-            ) combined
-            WHERE @timestamp >= ValidFrom
-              AND @timestamp < ValidTo
-        """
-        import re
-
-        all_sql = " \n".join(
-            procedure_definitions.values()
-        )
-
-        temporal_pattern = re.compile(
-            r"FOR\s+SYSTEM_TIME\s+AS\s+OF",
-            re.IGNORECASE,
-        )
-
-        if not temporal_pattern.search(all_sql):
-            return {
-                "has_temporal_queries": False,
-            }
-
-        # Extract table names referenced in
-        # FOR SYSTEM_TIME AS OF clauses.
-        table_pattern = re.compile(
-            r"(?:FROM|JOIN)\s+"
-            r"(\w+\.\w+)"
-            r"\s+FOR\s+SYSTEM_TIME\s+AS\s+OF",
-            re.IGNORECASE,
-        )
-
-        temporal_tables = sorted(
-            set(table_pattern.findall(all_sql))
-        )
+        if evidence:
+            unresolved.append(
+                "Temporal queries require a supplied, verified historical-data "
+                "mapping with row keys, period columns, history sources and "
+                "target representations. Temporal syntax alone does not supply it."
+            )
 
         return {
-            "has_temporal_queries": True,
-            "source_tables_with_temporal": temporal_tables,
-            "validity_columns": {
-                "valid_from": "ValidFrom",
-                "valid_to": "ValidTo",
-            },
-            "archive_table_pattern": (
-                "{schema}.{table}_Archive"
-            ),
+            "has_temporal_queries": True if evidence else (None if unresolved else False),
+            "source_tables_with_temporal": sorted(temporal_tables),
+            "validity_columns": {},
+            "archive_table_pattern": None,
+            "historical_data_status": "UNVERIFIED" if evidence or unresolved else "NOT_REQUIRED",
+            "evidence": evidence,
+            "unresolved_items": unresolved,
             "translation_guidance": (
-                "FOR SYSTEM_TIME AS OF @timestamp "
-                "is equivalent to querying the UNION ALL "
-                "of the current table and its _Archive "
-                "table, filtered by: "
-                "@timestamp >= ValidFrom AND "
-                "@timestamp < ValidTo. "
-                "Both current and archive tables contain "
-                "ValidFrom and ValidTo columns. "
-                "Do NOT use Delta Lake time travel "
-                "(TIMESTAMP AS OF) as a substitute — "
-                "use the row-level ValidFrom/ValidTo "
-                "validity window instead."
+                "Use only explicitly supplied historical-data mappings. Do not "
+                "infer history-table names or validity columns from temporal "
+                "syntax, and do not substitute current-state data or Delta "
+                "time travel without evidence of equivalent behavior."
             ),
         }
 

@@ -1,0 +1,859 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "analysis_version",
+    "analysis_id",
+    "language",
+    "dialect",
+    "status",
+    "scope",
+    "semantic_status",
+    "migration_strategy",
+    "source",
+    "source_file",
+    "query",
+    "references",
+    "dependencies",
+    "features",
+    "diagnostics",
+    "assumptions",
+    "migration_accepted",
+    "validation_requirements"
+  ],
+  "properties": {
+    "analysis_version": {
+      "const": "1.0"
+    },
+    "analysis_id": {
+      "type": "string",
+      "pattern": "^mdx-[a-f0-9]{64}$"
+    },
+    "language": {
+      "const": "mdx"
+    },
+    "dialect": {
+      "const": "tm1"
+    },
+    "status": {
+      "enum": [
+        "STRUCTURED",
+        "UNSUPPORTED",
+        "INVALID",
+        "LIMIT_EXCEEDED"
+      ]
+    },
+    "scope": {
+      "const": "BOUNDED_MDX_SELECT_STRUCTURE"
+    },
+    "semantic_status": {
+      "const": "NOT_VERIFIED"
+    },
+    "migration_strategy": {
+      "enum": [
+        "REVIEW_REQUIRED",
+        "UNSUPPORTED"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_id",
+        "locator",
+        "text",
+        "sha256",
+        "size_bytes",
+        "digest_scope",
+        "offset_unit"
+      ],
+      "properties": {
+        "file_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "digest_scope": {
+          "const": "DECODED_UTF8_TEXT"
+        },
+        "offset_unit": {
+          "const": "UNICODE_CODE_POINTS"
+        }
+      }
+    },
+    "source_file": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256",
+            "size_bytes"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "query": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/query"
+        }
+      ]
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reference_id",
+          "kind",
+          "value",
+          "segments",
+          "resolution",
+          "span",
+          "evidence"
+        ],
+        "properties": {
+          "reference_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "CUBE",
+              "MEMBER_PATH"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "value"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "NAME",
+                    "KEY"
+                  ]
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "resolution": {
+            "const": "UNRESOLVED"
+          },
+          "span": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "start",
+              "end"
+            ],
+            "properties": {
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "evidence": {
+            "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dependency_id",
+          "kind",
+          "declared_value",
+          "status",
+          "details",
+          "span",
+          "evidence"
+        ],
+        "properties": {
+          "dependency_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "CUBE_METADATA",
+              "CELL_RULES_AND_AGGREGATION",
+              "SECURITY_AND_DEFAULT_CONTEXT",
+              "MEMBER_AND_HIERARCHY_BINDING",
+              "SUBSET_DEFINITION"
+            ]
+          },
+          "declared_value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "const": "NOT_SUPPLIED"
+          },
+          "details": {
+            "type": "object"
+          },
+          "span": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "start",
+              "end"
+            ],
+            "properties": {
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "evidence": {
+            "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "span",
+          "evidence"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "enum": [
+              "WARNING",
+              "ERROR"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "span": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "start",
+              "end"
+            ],
+            "properties": {
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "evidence": {
+            "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "const": []
+    },
+    "migration_accepted": {
+      "const": false
+    },
+    "validation_requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:mdx_analysis:1.0",
+  "$defs": {
+    "expression": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "span",
+            "category",
+            "segments",
+            "property"
+          ],
+          "properties": {
+            "kind": {
+              "const": "member_path"
+            },
+            "span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "category": {
+              "enum": [
+                "SET",
+                "MEMBER",
+                "TUPLE",
+                "STRING",
+                "INTEGER",
+                "NUMBER",
+                "UNKNOWN"
+              ]
+            },
+            "segments": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "NAME",
+                      "KEY"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "property": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "span",
+            "category",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "literal"
+            },
+            "span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "category": {
+              "enum": [
+                "SET",
+                "MEMBER",
+                "TUPLE",
+                "STRING",
+                "INTEGER",
+                "NUMBER",
+                "UNKNOWN"
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "span",
+            "category",
+            "name",
+            "arguments"
+          ],
+          "properties": {
+            "kind": {
+              "const": "function"
+            },
+            "span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "category": {
+              "enum": [
+                "SET",
+                "MEMBER",
+                "TUPLE",
+                "STRING",
+                "INTEGER",
+                "NUMBER",
+                "UNKNOWN"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "arguments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "span",
+            "category",
+            "expression"
+          ],
+          "properties": {
+            "kind": {
+              "const": "group"
+            },
+            "span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "category": {
+              "enum": [
+                "SET",
+                "MEMBER",
+                "TUPLE",
+                "STRING",
+                "INTEGER",
+                "NUMBER",
+                "UNKNOWN"
+              ]
+            },
+            "expression": {
+              "$ref": "#/$defs/expression"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "span",
+            "category",
+            "items"
+          ],
+          "properties": {
+            "kind": {
+              "const": "set"
+            },
+            "span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "category": {
+              "enum": [
+                "SET",
+                "MEMBER",
+                "TUPLE",
+                "STRING",
+                "INTEGER",
+                "NUMBER",
+                "UNKNOWN"
+              ]
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "span",
+            "category",
+            "items"
+          ],
+          "properties": {
+            "kind": {
+              "const": "tuple"
+            },
+            "span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "category": {
+              "enum": [
+                "SET",
+                "MEMBER",
+                "TUPLE",
+                "STRING",
+                "INTEGER",
+                "NUMBER",
+                "UNKNOWN"
+              ]
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "span",
+            "category",
+            "operator",
+            "left",
+            "right"
+          ],
+          "properties": {
+            "kind": {
+              "const": "set_operator"
+            },
+            "span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "category": {
+              "enum": [
+                "SET",
+                "MEMBER",
+                "TUPLE",
+                "STRING",
+                "INTEGER",
+                "NUMBER",
+                "UNKNOWN"
+              ]
+            },
+            "operator": {
+              "enum": [
+                "+",
+                "-",
+                "*",
+                ":"
+              ]
+            },
+            "left": {
+              "$ref": "#/$defs/expression"
+            },
+            "right": {
+              "$ref": "#/$defs/expression"
+            }
+          }
+        }
+      ]
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "span",
+        "axes",
+        "cube",
+        "slicer"
+      ],
+      "properties": {
+        "kind": {
+          "const": "select"
+        },
+        "span": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end"
+          ],
+          "properties": {
+            "start": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "end": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "axes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ordinal",
+              "source_label",
+              "non_empty",
+              "expression"
+            ],
+            "properties": {
+              "ordinal": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4
+              },
+              "source_label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "non_empty": {
+                "type": "boolean"
+              },
+              "expression": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        "cube": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "span",
+            "name"
+          ],
+          "properties": {
+            "kind": {
+              "const": "cube"
+            },
+            "span": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "slicer": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/expression"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

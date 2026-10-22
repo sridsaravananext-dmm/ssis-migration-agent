@@ -40,6 +40,12 @@ class DatabricksOperationGenerator:
         operation: dict[str, Any],
     ) -> str:
 
+        contract = operation.get("metadata", {}).get("migration_contract")
+        if contract is not None:
+            from ssis_migration.migration import validate_contract
+
+            validate_contract(contract)
+
         operation_type = operation["operation_type"]
 
         handlers = {

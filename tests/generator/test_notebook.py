@@ -239,21 +239,21 @@ def test_assemble_includes_operations_code_cells(
         c for c in nb["cells"] if c["cell_type"] == "code"
     ]
 
-    # 1 parameter cell + 2 step code cells = 3 code cells
-    assert len(code_cells) == 3
-
-    # First code cell is the parameter cell
-    param_code = "".join(code_cells[0]["source"])
+    step_cells = {
+        c["metadata"]["step_id"]: c for c in code_cells
+        if c["metadata"].get("migration_role") == "step"
+    }
+    assert set(step_cells) == {"load_dim", "load_fact"}
+    parameter_cell = next(c for c in code_cells if c["metadata"].get("migration_role") == "parameters")
+    param_code = "".join(parameter_cell["source"])
     assert "dbutils.widgets" in param_code
 
-    # Second code cell (load_dim) should contain set_table_name
-    first_code = "".join(code_cells[1]["source"])
+    first_code = "".join(step_cells["load_dim"]["source"])
     assert "set_table_name" in first_code
     assert "CONTROL" in first_code
     assert "if _step_id" in first_code
 
-    # Third code cell (load_fact) should contain extract_to_staging
-    second_code = "".join(code_cells[2]["source"])
+    second_code = "".join(step_cells["load_fact"]["source"])
     assert "extract_to_staging" in second_code
     assert "if _step_id" in second_code
 
@@ -269,8 +269,10 @@ def test_assemble_falls_back_to_artifact_code_without_operations(
         c for c in nb["cells"] if c["cell_type"] == "code"
     ]
 
-    # 1 parameter cell + 2 step code cells = 3 code cells
-    assert len(code_cells) == 3
+    assert {
+        c["metadata"]["step_id"] for c in code_cells
+        if c["metadata"].get("migration_role") == "step"
+    } == {"load_dim", "load_fact"}
 
     # The deterministic artifact is spark_sql -> wrapped in
     # spark.sql() inside the step guard
@@ -332,9 +334,10 @@ def test_assemble_handles_error_operations(
         c for c in nb["cells"] if c["cell_type"] == "code"
     ]
 
-    # code_cells[0] is the parameter cell;
-    # code_cells[1] is load_dim (error op)
-    dim_cell = "".join(code_cells[1]["source"])
+    dim_cell = "".join(next(
+        c["source"] for c in code_cells
+        if c["metadata"].get("step_id") == "load_dim"
+    ))
     assert "ERROR" in dim_cell
     assert "Could not generate code" in dim_cell
 
@@ -381,15 +384,10 @@ def test_assemble_handles_step_with_no_artifact(
 def test_order_steps_handles_circular_dependency(
     assembler,
 ):
-    """Circular dependencies should not block notebook generation."""
+    """A cycle cannot be represented as an executable task order."""
     steps = [
         {"step_id": "a", "name": "A", "dependencies": ["b"]},
         {"step_id": "b", "name": "B", "dependencies": ["a"]},
     ]
-    ordered = assembler._order_steps(steps)
-
-    # Both steps should be present despite circular dependency
-    assert len(ordered) == 2
-    step_ids = [s["step_id"] for s in ordered]
-    assert "a" in step_ids
-    assert "b" in step_ids
+    with pytest.raises(ValueError, match="Circular dependency"):
+        assembler._order_steps(steps)

@@ -1,0 +1,61 @@
+{
+  "repository": "sridsaravananext-dmm/ssis-migration-agent",
+  "branch": "GenericAITool-version01",
+  "commit": "6d5c939e9a5d22a8c71f3a0104bf628f01f2daa6",
+  "archive_path": "tsql_plsql 1.zip",
+  "archive_git_blob": "b00eb355539dc142abad01c833369a0582d36e8e",
+  "archive_sha256": "da39023361d595d6191af3a572ea549724f3a07386c01c356fc6bdccc4f6b210",
+  "reuse": "SQL samples copied byte-for-byte as offline regression fixtures; prototype implementation, API and virtual environment are not imported.",
+  "reviewed_entries": [
+    {
+      "entry": "sql_migration_parser_backend/app/ir.py",
+      "sha256": "3b0839f5662c72023f53708e33423c87cdf40f35aefade23ed311a41dadcbf30",
+      "size_bytes": 2965
+    },
+    {
+      "entry": "sql_migration_parser_backend/app/ir_validation.py",
+      "sha256": "48a34dfde0458f28d6424ea226c78a83c0c1270102ef15b077bea083df47f909",
+      "size_bytes": 9527
+    },
+    {
+      "entry": "sql_migration_parser_backend/app/main.py",
+      "sha256": "3f7a59e1fa1ac9323dba1519fe6b3d40509c18771b3f343096e50b9257ab2219",
+      "size_bytes": 5861
+    },
+    {
+      "entry": "sql_migration_parser_backend/app/sql_parser.py",
+      "sha256": "069994ef7e36bfe4e848ca8dfabd7864286ced21cafd6d17e935d24716c1b438",
+      "size_bytes": 17686
+    },
+    {
+      "entry": "sql_migration_parser_backend/app/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "entry": "sql_migration_parser_backend/requirements.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "entry": "sql_migration_parser_backend/sample_plsql.sql",
+      "sha256": "ba55c8820d3cac56f5a501be1a30dc93e5115625c656681dd3bf37227cdbd07e",
+      "size_bytes": 240
+    },
+    {
+      "entry": "sql_migration_parser_backend/sample_tsql.sql",
+      "sha256": "7ff1ca348217142c0cd80f8dfc1f9d3b852a740d02bb14e793e65865c37a1548",
+      "size_bytes": 5962
+    },
+    {
+      "entry": "sql_migration_parser_backend/tests/test_ir_validator.py",
+      "sha256": "e985f432bc1ce328c804adbf948950a181b054b3034b92915fbdeccbdcb0c34a",
+      "size_bytes": 1716
+    },
+    {
+      "entry": "sql_migration_parser_backend/tests/test_parser.py",
+      "sha256": "d8421ba345332a972234cac01631d188ca2edcb7f81de6bd53aa29fa510e7d1d",
+      "size_bytes": 10697
+    }
+  ]
+}

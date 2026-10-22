@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import subprocess
@@ -54,6 +55,17 @@ with st.sidebar:
     st.header("⚙️ Configuration")
     catalog = st.text_input("Target catalog", value="dev_catalog")
     ai_enabled = st.checkbox("Enable AI-assisted generation", value=False)
+    platform_labels = {
+        "Detect from supplied files": None,
+        "SSIS": "ssis",
+        "TM1 / Planning Analytics": "tm1",
+        "Informatica PowerCenter": "informatica",
+        "SAP Data Services (BODS)": "bods",
+        "Oracle Data Integrator (ODI)": "odi",
+    }
+    platform_choice = st.selectbox("Confirm source platform", options=list(platform_labels))
+    source_platform = platform_labels[platform_choice]
+    st.caption("Only SSIS currently generates Databricks artifacts. Other source files are inventoried and their unsupported migration is reported explicitly.")
     st.divider()
     st.markdown("#### About")
     st.caption("SSIS -> Databricks Migration Accelerator.")
@@ -85,39 +97,48 @@ def _artifact_tree(base):
             items.append({"path": rel, "is_dir": False, "size": path.stat().st_size})
     return items
 
-def _run_migration(source_path, output_dir, mapping_path, procedures_path=None, ddl_path=None):
+def _run_migration(source_path, output_dir, mapping_path, procedures_path=None, ddl_path=None,
+                   *, dependency_files=(), file_roles=None, source_platform=None,
+                   dependency_base=None):
     from ssis_migration.migrate import run_migration
     return run_migration(
         source=str(source_path), output=str(output_dir),
         catalog=catalog.strip() or None,
         connection_mapping=str(mapping_path) if mapping_path else None,
-        base_path=str(ROOT), execute=False, ai=ai_enabled,
+        base_path=str(dependency_base or ROOT), execute=False, ai=ai_enabled,
         ai_provider="databricks",
         ddl_path=str(ddl_path) if ddl_path else None,
         procedures_path=str(procedures_path) if procedures_path else None,
+        dependency_files=[str(path) for path in dependency_files],
+        file_roles=file_roles or {},
+        source_platform=source_platform,
     )
 
-def _classify_dependency(filename, content_bytes):
-    """Auto-classify an uploaded dependency file by its content."""
-    name = filename.lower()
-    try:
-        text = content_bytes.decode("utf-8", errors="replace")
-    except Exception:
-        return "unknown"
-    upper = text.upper()
-    if name.endswith(".json"):
-        return "connection_mapping"
-    if name.endswith(".sql") or name.endswith(".txt"):
-        has_proc = bool(re.search(r"CREATE\s+(OR\s+ALTER\s+)?PROC", upper))
-        has_table = bool(re.search(r"CREATE\s+TABLE", upper))
-        if has_proc and has_table:
-            return "mixed_sql"
-        if has_proc:
-            return "procedures"
-        if has_table:
-            return "ddl"
-        return "sql_other"
-    return "unknown"
+def _save_dependencies(uploaded_files):
+    """Preserve every uploaded file, including duplicate basenames."""
+    files = [(Path(item.name).name or "uploaded_file", item.getvalue()) for item in uploaded_files]
+    digest = hashlib.sha256()
+    for name, content in files:
+        digest.update(name.encode("utf-8"))
+        digest.update(hashlib.sha256(content).digest())
+    signature = digest.hexdigest()
+    if st.session_state.get("dependency_upload_signature") != signature:
+        uploads_root = RUN_ROOT / "uploads"
+        uploads_root.mkdir(parents=True, exist_ok=True)
+        st.session_state.dependency_upload_directory = tempfile.mkdtemp(prefix="dependencies-", dir=str(uploads_root))
+        st.session_state.dependency_upload_signature = signature
+    directory = Path(st.session_state.dependency_upload_directory)
+    counts = {name: sum(other_name == name for other_name, _ in files) for name, _ in files}
+    saved = []
+    for index, (name, content) in enumerate(files):
+        # Duplicate names have no arbitrary winner for mapping resolution.
+        parent = directory / f"duplicate-{index}" if counts[name] > 1 else directory
+        parent.mkdir(parents=True, exist_ok=True)
+        path = parent / name
+        if not path.exists():
+            path.write_bytes(content)
+        saved.append((name, path))
+    return directory, saved
 
 # ---------------------------------------------------------------------------
 # Tabs
@@ -127,11 +148,12 @@ tab_upload, tab_run, tab_artifacts, tab_ddl = st.tabs([
 
 # === TAB 1: Upload & Configure ===
 with tab_upload:
-    st.header("1. Select SSIS Package")
-    package_mode = st.radio("Package source", ["Upload a .dtsx package", "Use WWI sample package"], horizontal=True)
+    st.header("1. Select Exported Source")
+    package_mode = st.radio("Package source", ["Upload a source package or script", "Use WWI sample package"], horizontal=True)
     uploaded_package = None
-    if package_mode == "Upload a .dtsx package":
-        uploaded_package = st.file_uploader("Upload SSIS package (.dtsx)", type=["dtsx"])
+    if package_mode == "Upload a source package or script":
+        uploaded_package = st.file_uploader("Upload exported source package or script")
+        st.caption("Files are identified by content. A filename or platform choice does not establish parser support.")
     else:
         if SAMPLE_PACKAGE.is_file():
             st.success(f"WWI sample found: `{SAMPLE_PACKAGE.name}`")
@@ -140,13 +162,9 @@ with tab_upload:
 
     st.divider()
     st.header("2. Upload Dependencies (optional)")
-    st.caption("Upload any dependency files — they are auto-classified by content. "
-               "SQL files with `CREATE PROCEDURE` become procedure definitions; "
-               "SQL files with `CREATE TABLE` become DDL; JSON files become connection mappings. "
-               "Connection setup (catalogs/schemas) can also be done manually in Databricks.")
+    st.caption("Supply schema metadata, procedure definitions, connection mappings, parameters and other dependencies as files. Review detected roles or confirm them below. Every supplied file remains in the inventory.")
     uploaded_deps = st.file_uploader(
-        "Upload dependency files (.sql, .json, .txt)",
-        type=["sql", "json", "txt"],
+        "Upload dependency files",
         accept_multiple_files=True,
         key="deps_upload",
     )
@@ -154,42 +172,64 @@ with tab_upload:
     mapping_path = None
     procedures_path = None
     ddl_path = None
+    dependency_files = []
+    file_roles = {}
+    dependency_base = None
 
     if uploaded_deps:
-        upload_dir = RUN_ROOT / "uploads" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        from ssis_migration.intake import describe_file
+
+        upload_dir, saved_dependencies = _save_dependencies(uploaded_deps)
+        dependency_files = [path for _, path in saved_dependencies]
+        role_choices = {
+            "Detect automatically": None,
+            "Connection mapping": "connection_mapping",
+            "Database metadata": "database_metadata",
+            "Procedure definitions": "procedures",
+            "DDL schema": "ddl",
+            "Parameters": "parameters",
+            "Configuration": "configuration",
+            "Script": "script",
+            "Source package": "package",
+        }
+        selected_paths = {role: [] for role in ("connection_mapping", "procedures", "ddl")}
+        duplicate_names = {name for name, _ in saved_dependencies if sum(other == name for other, _ in saved_dependencies) > 1}
+        for name in sorted(duplicate_names):
+            st.warning(f"Multiple files are named `{name}`. All are retained separately; references to that basename need disambiguation.")
 
         st.write("**Detected dependencies:**")
-        for f in uploaded_deps:
-            ftype = _classify_dependency(f.name, f.getvalue())
-            saved = upload_dir / f.name
-            saved.write_bytes(f.getvalue())
+        for name, saved in saved_dependencies:
+            record = describe_file(saved, source_root=upload_dir)
+            detected_roles = record.get("detected_roles", [])
+            st.write(f"- `{name}` → {', '.join(detected_roles) or 'unknown'}")
+            chosen = st.selectbox(
+                f"Confirm role for {saved.relative_to(upload_dir)}",
+                options=list(role_choices),
+                key=f"dependency_role_{record['file_id']}",
+            )
+            confirmed_role = role_choices[chosen]
+            if confirmed_role is not None:
+                file_roles[str(saved)] = confirmed_role
+            effective_role = confirmed_role or record.get("role", "unknown")
+            if effective_role in selected_paths:
+                selected_paths[effective_role].append(saved)
+            elif effective_role in {"ambiguous", "unknown"}:
+                st.warning(f"`{name}` needs a role decision and remains in the inventory.")
 
-            label = {
-                "procedures": "📋 Procedures",
-                "ddl": "🏗 DDL",
-                "connection_mapping": "🔗 Connection Mapping",
-                "mixed_sql": "📋+🏗 Mixed (Procedures + DDL)",
-                "sql_other": "📄 SQL (unclassified)",
-                "unknown": "❓ Unknown",
-            }.get(ftype, "❓ Unknown")
-
-            st.write(f"- `{f.name}` → {label}")
-
-            if ftype in ("procedures", "mixed_sql") and procedures_path is None:
-                procedures_path = saved
-            elif ftype in ("ddl", "mixed_sql") and ddl_path is None:
-                ddl_path = saved
-                st.session_state.ddl_text = saved.read_text(encoding="utf-8")
-            elif ftype == "connection_mapping" and mapping_path is None:
-                mapping_path = saved
-            elif ftype == "sql_other":
-                # Unclassified SQL: check if it has CREATE TABLE at least
-                st.warning(f"`{f.name}` has SQL content but no CREATE PROCEDURE or CREATE TABLE detected.")
+        for role, paths in selected_paths.items():
+            if len(paths) > 1:
+                st.warning(f"Multiple files have role `{role}`. None is selected arbitrarily; resolve the intake findings before generation.")
+        mapping_path = selected_paths["connection_mapping"][0] if len(selected_paths["connection_mapping"]) == 1 else None
+        procedures_path = selected_paths["procedures"][0] if len(selected_paths["procedures"]) == 1 else None
+        ddl_path = selected_paths["ddl"][0] if len(selected_paths["ddl"]) == 1 else None
+        if mapping_path is not None:
+            dependency_base = upload_dir
+        if ddl_path is not None:
+            st.session_state.ddl_text = ddl_path.read_text(encoding="utf-8", errors="replace")
 
     st.divider()
     st.header("3. Summary")
-    has_package = (package_mode == "Use WWI sample" and SAMPLE_PACKAGE.is_file()) or (uploaded_package is not None)
+    has_package = (package_mode == "Use WWI sample package" and SAMPLE_PACKAGE.is_file()) or (uploaded_package is not None)
     can_run = has_package
     c1, c2, c3 = st.columns(3)
     c1.metric("Package", "✅" if has_package else "❌")
@@ -208,19 +248,26 @@ with tab_run:
             run_dir = RUN_ROOT / run_id
             run_dir.mkdir(parents=True, exist_ok=True)
             try:
-                source_path = SAMPLE_PACKAGE if package_mode == "Use WWI sample" else run_dir / uploaded_package.name
+                source_path = SAMPLE_PACKAGE if package_mode == "Use WWI sample package" else run_dir / Path(uploaded_package.name).name
                 if uploaded_package:
                     source_path.write_bytes(uploaded_package.getvalue())
                 output_dir = run_dir / "artifacts"
                 progress = st.progress(0, text="Starting...")
                 with st.spinner("Running migration pipeline..."):
                     progress.progress(20, text="Parsing & analyzing...")
-                    report = _run_migration(source_path, output_dir, mapping_path, procedures_path, ddl_path)
+                    report = _run_migration(
+                        source_path, output_dir, mapping_path, procedures_path, ddl_path,
+                        dependency_files=dependency_files, file_roles=file_roles,
+                        source_platform=source_platform, dependency_base=dependency_base,
+                    )
                     progress.progress(80, text="Generating notebook...")
                     st.session_state.migration_result = report
                     st.session_state.migration_output = str(output_dir)
                     progress.progress(100, text="Done!")
-                st.success("✅ Migration pipeline completed!")
+                if report.get("lifecycle_status") == "BLOCKED":
+                    st.warning("Artifacts generated with blocking findings. Review the validation results before running them.")
+                else:
+                    st.success("Artifact generation completed. Execution and data equivalence have not been verified.")
             except Exception as exc:
                 st.error(f"Pipeline failed: {exc}")
                 with st.expander("Traceback"):
@@ -234,11 +281,26 @@ with tab_run:
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Discovered", report.get("package_count", 0))
         c2.metric("Analyzed", report.get("analyzed_package_count", 0))
-        c3.metric("Migrated", report.get("migrated_package_count", 0))
+        c3.metric("Generated", report.get("migrated_package_count", 0))
         c4.metric("Failed", report.get("failed_package_count", 0))
-        st.write(f"**Status:** `{report.get('status', 'UNKNOWN')}`")
+        st.write(f"**Status:** `{report.get('lifecycle_status', 'UNKNOWN')}`")
+        st.caption("Static checks describe the generated files. Execution and data equivalence have not been verified.")
+        intake = report.get("source_intake", {})
+        intake_path = report.get("intake_manifest")
+        if intake_path and Path(intake_path).is_file():
+            intake = json.loads(Path(intake_path).read_text(encoding="utf-8"))
+        if intake:
+            st.subheader("Source Intake")
+            st.write(f"**Detected platform:** `{intake.get('detected_platform', 'unknown')}` · **Confirmed platform:** `{intake.get('confirmed_platform') or 'auto'}` · **Intake status:** `{intake.get('status', 'UNKNOWN')}`")
+            if intake_path:
+                st.caption(f"Inventory: {Path(intake_path).name}")
+            diagnostics = intake.get("diagnostics", [])
+            if diagnostics:
+                with st.expander(f"Intake findings ({len(diagnostics)})"):
+                    for diagnostic in diagnostics:
+                        st.write(f"`{diagnostic.get('severity', 'INFO')}` `{diagnostic.get('code', 'INTAKE')}`: {diagnostic.get('message', '')}")
         for package in report.get("packages", []):
-            with st.expander(f"📦 {package.get('name', '?')} — {package.get('status', '?')}", expanded=True):
+            with st.expander(f"📦 {package.get('name', '?')} — {package.get('lifecycle_status', 'UNKNOWN')}", expanded=True):
                 if package.get("error"):
                     st.error(package["error"])
                 stages = package.get("stages", {})
@@ -249,7 +311,10 @@ with tab_run:
                 if artifacts:
                     st.write("**Artifacts:**")
                     for name, path_str in artifacts.items():
-                        st.write(f"{'✅' if Path(path_str).exists() else '❌'} `{name}`")
+                        if isinstance(path_str, str):
+                            st.write(f"{'✅' if Path(path_str).exists() else '❌'} `{name}`")
+                        else:
+                            st.write(f"`{name}`: {path_str}")
                 # Show the review report inline (not nested in expander)
                 review_fp = artifacts.get("review")
                 if review_fp and Path(review_fp).is_file():

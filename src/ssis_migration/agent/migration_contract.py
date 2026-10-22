@@ -62,27 +62,17 @@ class MigrationContract:
     # Lifecycle
     status: str = "DRAFT"
 
+    # Additive bridge fields. Legacy positional/keyword construction remains
+    # available; executable consumers validate contracts built by the bridge.
+    contract_version: str = "1.0"
+    contract_id: str = ""
+    binding_digest: str = ""
+    inputs: list[dict[str, Any]] = field(default_factory=list)
+    outputs: list[dict[str, Any]] = field(default_factory=list)
+    dependencies: list[dict[str, Any]] = field(default_factory=list)
+    implementation_strategy: dict[str, Any] = field(default_factory=dict)
+    evidence_files: list[dict[str, Any]] = field(default_factory=list)
+    provenance: dict[str, Any] = field(default_factory=dict)
+
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "step_id": self.step_id,
-            "source_platform": self.source_platform,
-            "target_platform": self.target_platform,
-            "source_behavior": self.source_behavior,
-            "required_behavior": self.required_behavior,
-            "target_capabilities": self.target_capabilities,
-            "target_design": self.target_design,
-            "assumptions": list(self.assumptions),
-            "unresolved_items": list(
-                self.unresolved_items
-            ),
-            "semantic_risks": [
-                asdict(risk)
-                if isinstance(risk, SemanticRisk)
-                else risk
-                for risk in self.semantic_risks
-            ],
-            "validation_requirements": list(
-                self.validation_requirements
-            ),
-            "status": self.status,
-        }
+        return asdict(self)

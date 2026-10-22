@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:source_envelope:1.0",
+  "title": "SSIS compatibility source envelope, version 1.0",
+  "description": "Validates source/evidence metadata and a compatibility IR object; it does not validate all legacy IR semantics.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "envelope_version",
+    "source",
+    "evidence_files",
+    "diagnostics",
+    "status",
+    "legacy_ir"
+  ],
+  "properties": {
+    "envelope_version": {
+      "const": "1.0"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "format",
+        "export_version",
+        "file_id"
+      ],
+      "properties": {
+        "platform": {
+          "const": "ssis"
+        },
+        "format": {
+          "const": "ssis_dtsx_xml"
+        },
+        "export_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidence_files": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/file"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/diagnostic"
+      }
+    },
+    "status": {
+      "enum": [
+        "READY",
+        "REVIEW_REQUIRED",
+        "BLOCKED"
+      ]
+    },
+    "legacy_ir": {
+      "type": "object"
+    }
+  }
+}

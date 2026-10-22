@@ -8,7 +8,10 @@ version = "0.1.0"
 description = "AI-assisted SSIS to Databricks migration accelerator"
 requires-python = ">=3.10"
 dependencies = [
+    "jsonschema>=4.23,<5",
     "sqlglot>=26.0.0",
+    "tree-sitter>=0.25,<0.26",
+    "tree-sitter-c-sharp>=0.23.1,<0.24",
     "streamlit>=1.38,<2",
 ]
 
@@ -26,6 +29,9 @@ testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"ssis_migration.schemas" = ["*.json"]
 
 [tool.databricks.environment]
 environment_version = '6'

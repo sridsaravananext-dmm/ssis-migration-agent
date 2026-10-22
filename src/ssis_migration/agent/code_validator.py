@@ -32,14 +32,31 @@ def _call_name(node: ast.AST) -> str:
 def validate_generated_code(
     code: str,
     step_name: str = "",
+    *,
+    language: str = "pyspark",
 ) -> dict[str, Any]:
     """
-    Static checks for generated SSIS-to-Databricks Python.
+    Static checks for generated Databricks SQL or Python/PySpark.
 
     This function never executes generated code.
     A PASS means only that these static checks passed.
     """
     issues: list[ValidationIssue] = []
+
+    normalized_language = (
+        language.strip().lower().replace("-", "_").replace(" ", "_")
+        if isinstance(language, str) else ""
+    )
+    if normalized_language in {"sql", "spark_sql", "databricks_sql", "databricks"}:
+        return _validate_sql(code)
+    if normalized_language not in {"python", "py", "pyspark"}:
+        return {
+            "status": "REJECTED",
+            "issues": [asdict(ValidationIssue(
+                "UNSUPPORTED_LANGUAGE", "ERROR",
+                f"No static validator is available for language {language!r}.",
+            ))],
+        }
 
     def add(
         code: str,
@@ -78,6 +95,9 @@ def validate_generated_code(
             "status": "REJECTED",
             "issues": [asdict(issue) for issue in issues],
         }
+
+    if not tree.body:
+        add("EMPTY_IMPLEMENTATION", "ERROR", "Generated Python contains no executable statements.")
 
     imported_modules: set[str] = set()
     imported_names: set[str] = set()
@@ -235,52 +255,14 @@ def validate_generated_code(
                 call.lineno,
             )
 
-    # 4. City SCD/temporal checks. These are intentionally conservative:
-    # they flag patterns to review, rather than claiming semantic proof.
-    if "city" in step_name.lower():
-        code_lower = code.lower()
-
-        if "valid to" in code_lower and "lead(" not in code_lower:
-            add(
-                "TEMPORAL_NEXT_VERSION",
-                "ERROR",
-                "City temporal logic references Valid To but does not visibly "
-                "use lead() to calculate the next Valid From. Review the "
-                "end-of-time fallback and per-city ordering.",
-            )
-
-        if "for system_time as of" in code_lower:
-            add(
-                "SQL_SERVER_TEMPORAL_SYNTAX",
-                "ERROR",
-                "SQL Server FOR SYSTEM_TIME AS OF syntax appears in generated "
-                "code. Translate it to an explicitly verified historical-data "
-                "representation in Spark.",
-            )
-
-        history_markers = (
-            "validfrom",
-            "valid_from",
-            "validto",
-            "valid_to",
+    # Temporal obligations come from source evidence, never a task's name.
+    if any(re.search(r"\bFOR\s+SYSTEM_TIME\s+AS\s+OF\b", value, re.I)
+           for value, _ in string_literals):
+        add(
+            "SQL_SERVER_TEMPORAL_SYNTAX", "ERROR",
+            "SQL Server temporal syntax remains in generated code; supply a "
+            "verified historical-data representation before translating it.",
         )
-        if not any(marker in code_lower for marker in history_markers):
-            # AI_ASSISTED artifacts are migration contracts,
-            # not final implementations. Downgrade to WARNING
-            # so the contract is not REJECTED for missing column
-            # names that are expected to be added during
-            # AI-assisted completion.
-            is_ai_contract = code.lstrip().startswith(
-                "# AI_REQUIRED"
-            )
-            add(
-                "TEMPORAL_HISTORY_NOT_EVIDENT",
-                "WARNING" if is_ai_contract else "ERROR",
-                "No recognizable ValidFrom/ValidTo history "
-                "fields were found. Confirm that the required "
-                "source history is available before claiming "
-                "temporal equivalence.",
-            )
 
     # 5. Lightweight import check for the known failures in the generated
     # City code. This is deliberately targeted, not a general name resolver.
@@ -315,4 +297,69 @@ def validate_generated_code(
             "REVIEW_REQUIRED" if unique else "PASS"
         ),
         "issues": [asdict(issue) for issue in unique],
+    }
+
+
+def _validate_sql(code: str) -> dict[str, Any]:
+    """Parse the declared target dialect, without executing any SQL.
+
+    SQLGlot's generic Command fallback and bare expressions do not prove that
+    a target statement is understood. Reject them rather than granting credit.
+    This is syntax/structure evidence only, not execution or equivalence.
+    """
+    import sqlglot
+    from sqlglot import exp
+    from sqlglot.errors import ErrorLevel, SqlglotError
+    from sqlglot.tokens import TokenType
+
+    issues: list[ValidationIssue] = []
+    try:
+        statements = [statement for statement in sqlglot.parse(
+            code, read="databricks", error_level=ErrorLevel.RAISE,
+        ) if statement is not None]
+    except (SqlglotError, TypeError, ValueError) as exc:
+        return {
+            "status": "REJECTED",
+            "issues": [asdict(ValidationIssue("SQL_SYNTAX", "ERROR", str(exc)))],
+        }
+    if not statements:
+        issues.append(ValidationIssue("EMPTY_CODE", "ERROR", "Generated SQL contains no statements."))
+    for statement in statements:
+        if statement.find(exp.Command) is not None or not isinstance(
+            statement, (exp.Query, exp.DML, exp.DDL),
+        ):
+            issues.append(ValidationIssue(
+                "UNSUPPORTED_SQL", "ERROR",
+                f"Target SQL statement is not structurally understood: {type(statement).__name__}.",
+            ))
+        if any(
+            isinstance(node, (exp.Delete, exp.Update, exp.Merge, exp.Drop, exp.TruncateTable))
+            or (isinstance(node, exp.Create) and node.args.get("replace"))
+            or (isinstance(node, exp.Insert) and node.args.get("overwrite"))
+            for node in statement.walk()
+        ):
+            issues.append(ValidationIssue(
+                "SQL_WRITE_REVIEW", "WARNING",
+                "SQL can replace, update or remove target data; verify the source behavior and execution scope.",
+            ))
+    if re.search(r"\b(?:AI_REQUIRED|REVIEW_REQUIRED|TODO|placeholder)\b", code, re.I):
+        issues.append(ValidationIssue(
+            "INCOMPLETE_SQL", "ERROR", "Generated SQL contains an unresolved implementation marker.",
+        ))
+    tokens = sqlglot.tokenize(code, read="databricks")
+    if any(
+        [token.text.upper() for token in tokens[index:index + 4]]
+        == ["FOR", "SYSTEM_TIME", "AS", "OF"]
+        and all(token.token_type not in {TokenType.STRING, TokenType.IDENTIFIER}
+                for token in tokens[index:index + 4])
+        for index in range(len(tokens) - 3)
+    ):
+        issues.append(ValidationIssue(
+            "SQL_SERVER_TEMPORAL_SYNTAX", "ERROR",
+            "Source temporal syntax requires an explicitly verified target historical-data mapping.",
+        ))
+    return {
+        "status": "REJECTED" if any(issue.severity == "ERROR" for issue in issues)
+        else ("REVIEW_REQUIRED" if issues else "PASS"),
+        "issues": [asdict(issue) for issue in issues],
     }

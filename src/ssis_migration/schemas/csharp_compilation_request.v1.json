@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:csharp_compilation_request:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "request_version": {
+      "const": "1.0"
+    },
+    "scope": {
+      "enum": [
+        "SUPPLIED_REFERENCES",
+        "FIXTURE_STUB_RUNTIME"
+      ]
+    },
+    "sdk_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "language_version": {
+      "type": "string",
+      "pattern": "^[0-9]{1,2}\\.[0-9]$"
+    },
+    "check_overflow": {
+      "type": "boolean"
+    },
+    "output_kind": {
+      "enum": [
+        "LIBRARY",
+        "CONSOLE"
+      ]
+    },
+    "main_type": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z_0-9.]*$"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "request_version",
+    "scope",
+    "sdk_version",
+    "language_version",
+    "check_overflow",
+    "output_kind",
+    "sources",
+    "references"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "output_kind": {
+            "const": "CONSOLE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "main_type"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "main_type"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -220,10 +220,11 @@ class TestTemporalContext:
         )
         assert ctx["has_temporal_queries"] is True
         assert "Application.Cities" in ctx["source_tables_with_temporal"]
-        assert ctx["validity_columns"]["valid_from"] == "ValidFrom"
-        assert ctx["validity_columns"]["valid_to"] == "ValidTo"
-        assert "_Archive" in ctx["archive_table_pattern"]
-        assert "ValidFrom" in ctx["translation_guidance"]
+        assert ctx["validity_columns"] == {}
+        assert ctx["archive_table_pattern"] is None
+        assert ctx["historical_data_status"] == "UNVERIFIED"
+        assert ctx["unresolved_items"]
+        assert ctx["evidence"]
 
     def test_no_temporal_query_returns_false(self):
         from ssis_migration.agent.context_builder import (
@@ -328,9 +329,10 @@ class TestNotebookWithAIGeneratedArtifacts:
             if c["cell_type"] == "code"
         ]
 
-        # code_cells[0] is the parameter cell;
-        # code_cells[1] is the generated step
-        generated_cell = code_cells[1]
+        generated_cell = next(
+            c for c in code_cells
+            if c["metadata"].get("step_id") == "step_ai_generated"
+        )
         source = "".join(generated_cell["source"])
         assert "from pyspark.sql" in source
         assert "AI_REQUIRED" not in source
@@ -382,9 +384,9 @@ class TestNotebookWithAIGeneratedArtifacts:
             c for c in notebook["cells"]
             if c["cell_type"] == "code"
         ]
-        # code_cells[0] is the parameter cell,
-        # code_cells[1] is the generated step,
-        # code_cells[2] is the unresolved step
-        unresolved_cell = code_cells[2]
+        unresolved_cell = next(
+            c for c in code_cells
+            if c["metadata"].get("step_id") == "step_ai_unresolved"
+        )
         source = "".join(unresolved_cell["source"])
         assert "AI_REQUIRED" in source

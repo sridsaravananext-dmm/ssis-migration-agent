@@ -63,7 +63,7 @@ def test_package_status_is_migrated(migration_result: dict):
 
 
 def test_all_stages_succeeded(migration_result: dict):
-    """All connected stages should report SUCCEEDED."""
+    """Generation/static check stages complete; no data checks are claimed."""
     pkg = migration_result["packages"][0]
     stages = pkg["stages"]
     assert stages["package_discovery"] == "SUCCEEDED"
@@ -72,7 +72,9 @@ def test_all_stages_succeeded(migration_result: dict):
     assert stages["analysis"] == "SUCCEEDED"
     assert stages["target_metadata_discovery"] == "SUCCEEDED"
     assert stages["transformation_generation"] == "SUCCEEDED"
-    assert stages["data_validation"] == "SUCCEEDED"
+    assert stages["static_validation"] == "SUCCEEDED"
+    assert stages["data_validation"] == "NOT_RUN"
+    assert stages["execution_validation"] == "NOT_RUN"
 
 
 def test_all_expected_files_exist(package_output: Path):

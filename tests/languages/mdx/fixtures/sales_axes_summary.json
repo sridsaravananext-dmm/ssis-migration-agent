@@ -1,0 +1,13 @@
+{
+  "status": "STRUCTURED",
+  "cube": "Sales",
+  "axes": [
+    {"ordinal": 0, "non_empty": true, "expression_kind": "set"},
+    {"ordinal": 1, "non_empty": false, "expression_kind": "function"}
+  ],
+  "member_paths": ["[Calendar].[2024]", "[Measures].[Revenue]", "[Product].[Product]", "[Version].[Actual]"],
+  "features": ["FUNCTION:TM1SUBSETTOSET", "NON_EMPTY", "SLICER_CONTEXT", "TUPLE_COORDINATES"],
+  "dependency_count": 8,
+  "semantic_status": "NOT_VERIFIED",
+  "migration_accepted": false
+}

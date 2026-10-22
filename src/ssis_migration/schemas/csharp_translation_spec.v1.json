@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:csharp_translation_spec:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "source_node_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_locator": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "entry_point": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "overflow_context",
+        "success_value",
+        "evidence"
+      ],
+      "properties": {
+        "kind": {
+          "const": "SSIS_SCRIPT_TASK"
+        },
+        "overflow_context": {
+          "const": "UNCHECKED"
+        },
+        "success_value": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "access",
+          "evidence"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "int32",
+              "bool",
+              "string"
+            ]
+          },
+          "access": {
+            "enum": [
+              "READ",
+              "WRITE",
+              "READ_WRITE"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "source_node_id",
+    "source_locator",
+    "source_sha256",
+    "entry_point",
+    "runtime",
+    "variables"
+  ]
+}

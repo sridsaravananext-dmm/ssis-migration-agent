@@ -10,29 +10,16 @@ dependencies into:
 
 The job runs the generated migration notebook with a
 `step_id` parameter so each task executes only its portion
-of the migration. Dimensions run before facts when no
-explicit dependencies exist.
+of the migration. Dependencies come only from the supplied
+plan; task names and types do not imply execution order.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
-
-
-_STEP_TYPE_ORDER = {
-    "DIMENSION_LOAD": 0,
-    "FACT_LOAD": 1,
-}
-
-
-def _step_sort_key(step: dict[str, Any]) -> tuple[int, str]:
-    stype = step.get("step_type", "")
-    return (
-        _STEP_TYPE_ORDER.get(stype, 99),
-        step.get("step_id", step.get("name", "")),
-    )
 
 
 @dataclass
@@ -86,10 +73,8 @@ class JobGenerator:
         )
         job_name = f"{package_name} Migration"
 
-        steps = sorted(
-            plan.get("steps", []),
-            key=_step_sort_key,
-        )
+        steps = plan.get("steps", [])
+        step_keys = self._validate_steps(steps)
 
         if cluster_spec is None:
             cluster_spec = self._default_cluster(catalog)
@@ -102,29 +87,14 @@ class JobGenerator:
         ]
 
         tasks: list[dict[str, Any]] = []
-        step_keys: dict[str, str] = {}
-
         for step in steps:
-            step_id = step.get(
-                "step_id", step.get("name", "")
-            )
-            task_key = self._safe_key(step_id)
-            step_keys[step_id] = task_key
+            step_id = step["step_id"]
+            task_key = step_keys[step_id]
 
             deps = step.get("dependencies", [])
             dep_keys = [
-                step_keys.get(d, d)
-                for d in deps
-                if d in step_keys
+                step_keys[d] for d in dict.fromkeys(deps)
             ]
-
-            if not dep_keys and step.get("step_type") == "FACT_LOAD":
-                dep_keys = [
-                    step_keys[s["step_id"]]
-                    for s in steps
-                    if s.get("step_type") == "DIMENSION_LOAD"
-                    and s.get("step_id") in step_keys
-                ]
 
             task: dict[str, Any] = {
                 "task_key": task_key,
@@ -134,6 +104,7 @@ class JobGenerator:
                     "base_parameters": {
                         "step_id": step_id,
                         "catalog": catalog,
+                        "schema": schema,
                     },
                     "source": "WORKSPACE",
                 },
@@ -153,6 +124,7 @@ class JobGenerator:
 
         parameters = [
             {"name": "catalog", "default": catalog},
+            {"name": "schema", "default": schema},
         ]
 
         return JobDefinition(
@@ -174,7 +146,11 @@ class JobGenerator:
         catalog: str = "main",
         schema: str = "default",
     ) -> str:
-        """Generate a Declarative Automation Bundle YAML."""
+        """Generate bundle YAML using its JSON-compatible representation.
+
+        JSON is valid YAML and preserves arbitrary quoted names and paths
+        without requiring an optional YAML serializer dependency.
+        """
         job = self.generate(
             plan,
             notebook_path,
@@ -185,52 +161,88 @@ class JobGenerator:
             "package_name", "ssis_migration"
         )
 
-        lines: list[str] = []
-        lines.append("bundle:")
-        lines.append(f"  name: {package_name}_migration")
-        lines.append("")
-        lines.append("variables:")
-        lines.append("  catalog:")
-        lines.append(f'    default: "{catalog}"')
-        lines.append("  schema:")
-        lines.append(f'    default: "{schema}"')
-        lines.append("")
-        lines.append("resources:")
-        lines.append("  jobs:")
-        lines.append(f"    {package_name}_migration_job:")
-        lines.append(f"      name: {job.name}")
-        lines.append("      tags:")
-        for k, v in job.tags.items():
-            lines.append(f'        {k}: "{v}"')
-        lines.append("      tasks:")
-        for task in job.tasks:
-            lines.append(f"        - task_key: {task['task_key']}")
-            lines.append(f"          job_cluster_key: {task.get('job_cluster_key', '')}")
-            desc = task.get('description', '')
-            lines.append(f'          description: "{desc}"')
-            if "depends_on" in task:
-                lines.append("          depends_on:")
-                for dep in task["depends_on"]:
-                    lines.append(f"            - task_key: {dep['task_key']}")
-            nb = task.get("notebook_task", {})
-            lines.append("          notebook_task:")
-            lines.append(f"            notebook_path: \"{nb.get('notebook_path', '')}\"")
-            lines.append("            base_parameters:")
-            for pk, pv in nb.get("base_parameters", {}).items():
-                lines.append(f"              {pk}: \"{pv}\"")
-            lines.append(f"            source: {nb.get('source', 'WORKSPACE')}")
+        job_settings = job.to_dict()
+        for parameter in job_settings["parameters"]:
+            parameter["default"] = "${var." + parameter["name"] + "}"
+        for task in job_settings["tasks"]:
+            parameters = task["notebook_task"]["base_parameters"]
+            parameters["catalog"] = "${var.catalog}"
+            parameters["schema"] = "${var.schema}"
+        resource_name = re.sub(r"[^A-Za-z0-9_]", "_", package_name)
+        resource_name = resource_name.strip("_") or "ssis_migration"
+        bundle = {
+            "bundle": {"name": f"{resource_name}_migration"},
+            "variables": {
+                "catalog": {"default": catalog},
+                "schema": {"default": schema},
+            },
+            "resources": {
+                "jobs": {f"{resource_name}_migration_job": job_settings}
+            },
+        }
+        return json.dumps(bundle, indent=2, ensure_ascii=False) + "\n"
 
-        return "\n".join(lines)
+    def _validate_steps(
+        self, steps: list[dict[str, Any]],
+    ) -> dict[str, str]:
+        """Validate the complete graph before translating any dependencies."""
+        if not isinstance(steps, list):
+            raise ValueError("Migration steps must be a list.")
+        keys: dict[str, str] = {}
+        key_owners: dict[str, str] = {}
+        for step in steps:
+            if not isinstance(step, dict):
+                raise ValueError("Each migration step must be an object.")
+            step_id = step.get("step_id")
+            if not isinstance(step_id, str) or not step_id.strip():
+                raise ValueError("Each migration step needs a nonempty step_id.")
+            if step_id in keys:
+                raise ValueError(f"Duplicate migration step_id: {step_id}")
+            key = self._safe_key(step_id)
+            if not key or len(key) > 100:
+                raise ValueError(f"Invalid Databricks task key for step: {step_id}")
+            if key in key_owners:
+                raise ValueError(
+                    f"Databricks task-key collision: {key_owners[key]} and {step_id}"
+                )
+            keys[step_id] = key
+            key_owners[key] = step_id
+
+        dependencies: dict[str, list[str]] = {}
+        for step in steps:
+            step_id = step["step_id"]
+            deps = step.get("dependencies", [])
+            if not isinstance(deps, list) or any(
+                not isinstance(dep, str) for dep in deps
+            ):
+                raise ValueError(f"Dependencies must be a list of step IDs: {step_id}")
+            missing = [dep for dep in deps if dep not in keys]
+            if missing:
+                raise ValueError(f"Unknown dependencies for {step_id}: {missing}")
+            dependencies[step_id] = deps
+
+        active: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(step_id: str) -> None:
+            if step_id in active:
+                raise ValueError(f"Circular migration dependency involving: {step_id}")
+            if step_id in visited:
+                return
+            active.add(step_id)
+            for dep in dependencies[step_id]:
+                visit(dep)
+            active.remove(step_id)
+            visited.add(step_id)
+
+        for step_id in keys:
+            visit(step_id)
+        return keys
 
     @staticmethod
     def _safe_key(key: str) -> str:
         """Convert a step_id to a valid task_key."""
-        return (
-            key.replace("-", "_")
-            .replace(" ", "_")
-            .replace(".", "_")
-            .lower()
-        )
+        return re.sub(r"[^A-Za-z0-9_]", "_", key).strip("_").lower()
 
     @staticmethod
     def _default_cluster(catalog: str) -> dict[str, Any]:

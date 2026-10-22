@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:intake_manifest:1.0",
+  "title": "Offline source intake manifest, version 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "source_root",
+    "requested_platform",
+    "detected_platform",
+    "confirmed_platform",
+    "files",
+    "dependencies",
+    "diagnostics",
+    "status",
+    "excluded_paths"
+  ],
+  "properties": {
+    "manifest_version": {
+      "const": "1.0"
+    },
+    "source_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_platform": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "detected_platform": {
+      "enum": [
+        "ssis",
+        "tm1",
+        "informatica",
+        "bods",
+        "odi",
+        "datastage",
+        "ab_initio",
+        "unknown",
+        "mixed"
+      ]
+    },
+    "confirmed_platform": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/file"
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/dependency"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/diagnostic"
+      }
+    },
+    "status": {
+      "enum": [
+        "READY",
+        "REVIEW_REQUIRED",
+        "BLOCKED"
+      ]
+    },
+    "excluded_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    }
+  }
+}

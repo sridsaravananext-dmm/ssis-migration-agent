@@ -14,6 +14,13 @@ class PySparkGenerator(MigrationGenerator):
         target_language: str,
     ) -> GeneratedArtifact:
 
+        from ssis_migration.migration import prepare_generation_step
+
+        migration_step = prepare_generation_step(migration_step)
+        contract = migration_step.get("metadata", {}).get("migration_contract")
+        if contract and contract["implementation_strategy"]["decision"] == "UNSUPPORTED":
+            raise ValueError("Unsupported contract cannot generate target code.")
+
         step_id = migration_step["step_id"]
         step_name = migration_step["name"]
 

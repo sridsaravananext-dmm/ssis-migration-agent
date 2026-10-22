@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:acceptance_policy:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "policy_version",
+    "minimum_semantic_percent",
+    "additional_gates",
+    "behaviors"
+  ],
+  "properties": {
+    "policy_version": {
+      "const": "1.0"
+    },
+    "minimum_semantic_percent": {
+      "type": "number",
+      "minimum": 80,
+      "maximum": 100
+    },
+    "additional_gates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "uniqueItems": true
+    },
+    "behaviors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contract_id",
+          "behavior_id",
+          "weight",
+          "critical"
+        ],
+        "properties": {
+          "contract_id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "behavior_id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "weight": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0
+          },
+          "critical": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
+      "minItems": 1
+    }
+  }
+}

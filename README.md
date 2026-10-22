@@ -1,4 +1,14 @@
 # ssis-migration-agent
+
+**Last updated date - 10/22/2026**
+
+Updated MDX analysis: added bounded offline TM1 MDX parsing, source evidence,
+missing-dependency reporting and a CLI. Structural parsing does not establish
+migration acceptance. See [Phase 8 MDX analysis](docs/phase8-mdx-foundation.md).
+
+Latest validation: **715 tests passed, 4 live integration tests skipped**.
+Working branch: `GenericAITool-version01`.
+
 # ============================================================
 # README.md
 # ============================================================

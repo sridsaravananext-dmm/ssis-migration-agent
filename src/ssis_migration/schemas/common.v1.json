@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:common:1.0",
+  "title": "Source evidence definitions, version 1.0",
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_id",
+        "locator",
+        "rule"
+      ],
+      "properties": {
+        "file_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_id",
+        "path",
+        "relative_path",
+        "sha256",
+        "size_bytes",
+        "role",
+        "detected_roles",
+        "confirmed_role",
+        "platform",
+        "format",
+        "export_version",
+        "status",
+        "evidence"
+      ],
+      "properties": {
+        "file_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relative_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "role": {
+          "enum": [
+            "package",
+            "procedures",
+            "ddl",
+            "connection_mapping",
+            "database_metadata",
+            "parameters",
+            "configuration",
+            "script",
+            "unknown",
+            "ambiguous"
+          ]
+        },
+        "detected_roles": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "package",
+              "procedures",
+              "ddl",
+              "connection_mapping",
+              "database_metadata",
+              "parameters",
+              "configuration",
+              "script",
+              "unknown",
+              "ambiguous"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "confirmed_role": {
+          "enum": [
+            "package",
+            "procedures",
+            "ddl",
+            "connection_mapping",
+            "database_metadata",
+            "parameters",
+            "configuration",
+            "script",
+            "unknown",
+            "ambiguous",
+            null
+          ]
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "export_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "AVAILABLE",
+            "MISSING",
+            "UNREADABLE"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "AVAILABLE"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sha256": {
+                "type": "string"
+              },
+              "size_bytes": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "message",
+        "file_ids",
+        "evidence"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "enum": [
+            "INFO",
+            "WARNING",
+            "ERROR"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "file_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_file_id",
+        "target_file_id",
+        "reference",
+        "role",
+        "status",
+        "evidence"
+      ],
+      "properties": {
+        "source_file_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_file_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "RESOLVED",
+            "MISSING",
+            "AMBIGUOUS",
+            "CONFLICTING"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "RESOLVED"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "target_file_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -35,6 +35,13 @@ class MigrationOperationBuilder:
         migration_step: dict[str, Any],
     ) -> list[MigrationOperation]:
 
+        from ssis_migration.migration import prepare_generation_step
+
+        migration_step = prepare_generation_step(migration_step)
+        contract = migration_step.get("metadata", {}).get("migration_contract")
+        if contract and contract["implementation_strategy"]["decision"] == "UNSUPPORTED":
+            return []
+
         operations: list[MigrationOperation] = []
         order = 1
 
@@ -386,6 +393,9 @@ class MigrationOperationBuilder:
                     previous_operation = operation_id
                     order += 1
 
+        if "migration_contract" in metadata:
+            for operation in operations:
+                operation.metadata["migration_contract"] = metadata["migration_contract"]
         return operations
 
 

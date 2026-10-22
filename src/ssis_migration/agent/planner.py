@@ -57,6 +57,7 @@ class AIMigrationPlanner:
         )
 
         return {
+            "migration_contract": context.get("migration_contract"),
             "agent": {
                 "name": "data_migration_agent",
                 "version": "1.0",
@@ -96,6 +97,8 @@ class AIMigrationPlanner:
 
             "temporal_context": temporal_context,
 
+            "database_context": context.get("database_context", {}),
+
             "instructions": [
                 "Analyze the supplied migration context.",
                 "Preserve the behavior represented by the source semantics.",
@@ -106,7 +109,7 @@ class AIMigrationPlanner:
                 "Preserve lineage behavior where represented in the supplied context.",
                 "Preserve cutoff or watermark behavior where represented in the supplied context.",
                 "Do not invent unsupported business logic.",
-                "If temporal_context indicates temporal queries are present, use the provided ValidFrom/ValidTo columns and archive table pattern to translate FOR SYSTEM_TIME AS OF into equivalent Databricks SQL with row-level validity window filtering.",
+                "Temporal-query detection is not evidence of historical tables or period columns. Use only supplied historical-data mappings; report missing mappings as unresolved.",
                 "Explicitly report assumptions.",
                 "Explicitly report unresolved items.",
                 "Return structured migration output.",

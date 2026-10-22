@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:csharp_assessment:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assessment_version",
+    "language",
+    "method",
+    "classification",
+    "semantic_status",
+    "source",
+    "findings",
+    "unresolved_items",
+    "validation_requirements"
+  ],
+  "properties": {
+    "assessment_version": {
+      "const": "1.0"
+    },
+    "language": {
+      "const": "csharp"
+    },
+    "method": {
+      "const": "CONSERVATIVE_LEXICAL_TRIAGE"
+    },
+    "classification": {
+      "enum": [
+        "REVIEW_REQUIRED",
+        "PARTIALLY_TRANSLATABLE",
+        "REQUIRES_REDESIGN"
+      ]
+    },
+    "semantic_status": {
+      "const": "NOT_VERIFIED"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "sha256",
+        "digest_scope",
+        "file_id",
+        "locator"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "digest_scope": {
+          "const": "DECODED_UTF8_TEXT"
+        },
+        "file_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "concern",
+          "start_offset",
+          "end_offset",
+          "line",
+          "evidence"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "concern": {
+            "enum": [
+              "REVIEW",
+              "REDESIGN"
+            ]
+          },
+          "start_offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_offset": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "evidence": {
+            "$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "unresolved_items": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "string"
+      }
+    },
+    "validation_requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "syntax_analysis": {
+      "$ref": "urn:ssis-migration:schema:csharp_syntax:1.0"
+    }
+  }
+}

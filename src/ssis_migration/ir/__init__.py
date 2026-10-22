@@ -10,6 +10,7 @@ from .models import (
 )
 
 from .builder import IRBuilder
+from .normalized import validate_normalized_ir
 
 __all__ = [
     "PackageIR",
@@ -21,4 +22,5 @@ __all__ = [
     "PrecedenceConstraintIR",
     "VariableIR",
     "IRBuilder",
+    "validate_normalized_ir",
 ]

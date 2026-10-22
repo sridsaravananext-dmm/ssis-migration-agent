@@ -6,310 +6,135 @@ from typing import Any
 import sqlglot
 from sqlglot import exp
 
+from ssis_migration.languages.sql import parse_sql, parameter_name, range_candidates
+
 
 @dataclass
 class SQLSemanticValidation:
     status: str
     checks: dict[str, bool] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
+    source_analysis: dict[str, Any] = field(default_factory=dict)
+    target_analysis: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "status": self.status,
-            "checks": dict(self.checks),
-            "failures": list(self.failures),
+            'status': self.status, 'checks': dict(self.checks), 'failures': list(self.failures),
+            'scope': 'SQL_AST_STRUCTURE', 'semantic_equivalence': 'NOT_VERIFIED',
+            'source_analysis': self.source_analysis, 'target_analysis': self.target_analysis,
         }
 
 
+def _signature(value: Any) -> Any:
+    """Compare normalized AST arguments, excluding locations and comments."""
+    if isinstance(value, exp.Expression):
+        name = parameter_name(value)
+        if name is not None:
+            # Named binding syntax differs across dialects (@x, :x, ${x}).
+            return ('named_parameter', name)
+        return (value.key, tuple((k, _signature(v)) for k, v in sorted(value.args.items()) if v is not None))
+    if isinstance(value, list):
+        return tuple(_signature(v) for v in value)
+    return value
+
+
 class SQLSemanticValidator:
+    """Conservative structural comparison of every supplied SQL statement.
+
+    PASS describes these checks only. Different but equivalent ASTs can require
+    review; matching ASTs cannot prove collation, types, bindings or data parity.
     """
-    Deterministic structural validator for translated SQL.
 
-    This validates migration-relevant SQL structure. It does not
-    execute the SQL and does not claim runtime equivalence.
-    """
-
-    @staticmethod
-    def _normalized_predicates(expression: exp.Expression) -> list[str]:
-        where = expression.find(exp.Where)
-
-        if where is None:
-            return []
-
-        predicates = []
-
-        for predicate in where.this.flatten():
-            if isinstance(predicate, exp.Predicate):
-                predicates.append(
-                    predicate.sql()
-                )
-
-        return predicates
-    
-    def validate(
-        self,
-        source_sql: str,
-        target_sql: str,
-        *,
-        source_dialect: str,
-        target_dialect: str,
-        required_features: set[str] | None = None,
-    ) -> SQLSemanticValidation:
-
+    def validate(self, source_sql: str, target_sql: str, *, source_dialect: str,
+                 target_dialect: str, required_features: set[str] | None = None) -> SQLSemanticValidation:
         required_features = required_features or set()
+        source_doc = parse_sql(source_sql, dialect=source_dialect)
+        target_doc = parse_sql(target_sql, dialect=target_dialect)
+        result = SQLSemanticValidation('UNRESOLVED', source_analysis=source_doc.report,
+                                       target_analysis=target_doc.report)
+        if not source_doc.supported or not target_doc.supported:
+            result.status = 'REVIEW_REQUIRED' if 'UNSUPPORTED' in {source_doc.report['status'], target_doc.report['status']} else 'UNRESOLVED'
+            result.failures = [f'{label}: {d["message"]}' for label, doc in (('source', source_doc), ('target', target_doc))
+                               for d in doc.report['diagnostics']]
+            return result
 
-        checks: dict[str, bool] = {}
-        failures: list[str] = []
+        def check(name: str, condition: bool, message: str):
+            result.checks[name] = bool(condition)
+            if not condition:
+                result.failures.append(message)
 
+        known = {'UNION_ALL', 'LEFT_JOIN', 'COALESCE', 'INCREMENTAL_CUTOFF', 'TEMPORAL_TABLE_AS_OF'}
+        check('required_features_known', not required_features - known,
+              f'Unsupported required SQL features: {sorted(required_features - known)}')
+        check('statement_count', len(source_doc.expressions) == len(target_doc.expressions),
+              'SQL statement count changed; every nonempty statement must be preserved.')
+        source_features = {f for s in source_doc.report['statements'] for f in s['features']}
+        # SQL Server temporal/Oracle flashback reads cannot be replaced by Delta
+        # table-version reads without historical source data and a strategy.
+        if 'TEMPORAL_TABLE_AS_OF' in source_features and source_doc.report['dialect'] not in {'spark', 'databricks'}:
+            result.status = 'REVIEW_REQUIRED'
+            result.failures.append('Source temporal/flashback semantics require an explicit historical-data strategy; Delta time travel is not an equivalent rewrite.')
+            return result
         try:
-            source = sqlglot.parse_one(
-                source_sql,
-                read=source_dialect,
-            )
+            target_read = target_doc.report['dialect']
+            expected_sql = ';\n'.join(x.sql(dialect=target_read, unsupported_level=sqlglot.ErrorLevel.RAISE)
+                                     for x in source_doc.expressions)
+            expected_doc = parse_sql(expected_sql, dialect=target_read)
+            if not expected_doc.supported:
+                result.status = 'REVIEW_REQUIRED'
+                result.failures.append('Source AST could not be rendered as fully supported target SQL.')
+                return result
+        except (sqlglot.errors.SqlglotError, ValueError) as exc:
+            result.status = 'REVIEW_REQUIRED'
+            result.failures.append(f'Target SQL structural normalization failed: {exc}')
+            return result
 
-            target = sqlglot.parse_one(
-                target_sql,
-                read=target_dialect,
-            )
+        expected, actual = expected_doc.expressions, target_doc.expressions
 
-        except Exception as exc:
-            return SQLSemanticValidation(
-                status="UNRESOLVED",
-                checks={},
-                failures=[
-                    f"SQL parsing failed: {type(exc).__name__}: {exc}"
-                ],
-            )
+        def all_nodes(roots, kind):
+            return [node for root in roots for node in root.find_all(kind)]
 
-        # ----------------------------------------------------------
-        # SELECT projection structure
-        # ----------------------------------------------------------
+        def signatures(roots, kind):
+            return [_signature(n) for n in all_nodes(roots, kind)]
 
-        source_selects = list(source.find_all(exp.Select))
-        target_selects = list(target.find_all(exp.Select))
-
-        source_projection_counts = [
-            len(select.expressions)
-            for select in source_selects
-        ]
-
-        target_projection_counts = [
-            len(select.expressions)
-            for select in target_selects
-        ]
-
-        checks["projection_structure"] = (
-            source_projection_counts == target_projection_counts
-        )
-
-        if not checks["projection_structure"]:
-            failures.append(
-                "SELECT projection counts changed: "
-                f"source={source_projection_counts}, "
-                f"target={target_projection_counts}"
-            )
-
-        # ----------------------------------------------------------
-        # UNION structure
-        # ----------------------------------------------------------
-
-        source_unions = list(source.find_all(exp.Union))
-        target_unions = list(target.find_all(exp.Union))
-
-        checks["union_count"] = (
-            len(source_unions) == len(target_unions)
-        )
-
-        if not checks["union_count"]:
-            failures.append(
-                "UNION count changed: "
-                f"source={len(source_unions)}, "
-                f"target={len(target_unions)}"
-            )
-
-        source_union_all = [
-            union.args.get("distinct") is False
-            for union in source_unions
-        ]
-
-        target_union_all = [
-            union.args.get("distinct") is False
-            for union in target_unions
-        ]
-
-        checks["union_all_semantics"] = (
-            source_union_all == target_union_all
-        )
-
-        if not checks["union_all_semantics"]:
-            failures.append(
-                "UNION ALL semantics changed."
-            )
-
-        # ----------------------------------------------------------
-        # Tables
-        # ----------------------------------------------------------
-
-        source_tables = sorted(
-            {
-                (
-                    table.catalog or "",
-                    table.db or "",
-                    table.name,
-                )
-                for table in source.find_all(exp.Table)
-            }
-        )
-
-        target_tables = sorted(
-            {
-                (
-                    table.catalog or "",
-                    table.db or "",
-                    table.name,
-                )
-                for table in target.find_all(exp.Table)
-            }
-        )
-
-        checks["source_tables"] = (
-            source_tables == target_tables
-        )
-
-        if not checks["source_tables"]:
-            failures.append(
-                "Source tables changed: "
-                f"source={source_tables}, "
-                f"target={target_tables}"
-            )
-
-        # ----------------------------------------------------------
-        # Required relational features
-        # ----------------------------------------------------------
-
-        if "UNION_ALL" in required_features:
-            checks["required_union_all"] = (
-                bool(source_unions)
-                and bool(target_unions)
-                and source_union_all == target_union_all
-                and all(source_union_all)
-                and all(target_union_all)
-            )
-
-            if not checks["required_union_all"]:
-                failures.append(
-                    "Required UNION ALL semantics were not preserved."
-                )
-
-        if "LEFT_JOIN" in required_features:
-            source_left_joins = [
-                join
-                for join in source.find_all(exp.Join)
-                if join.args.get("side") == "LEFT"
-            ]
-
-            target_left_joins = [
-                join
-                for join in target.find_all(exp.Join)
-                if join.args.get("side") == "LEFT"
-            ]
-
-            checks["required_left_join"] = (
-                len(source_left_joins)
-                == len(target_left_joins)
-            )
-
-            if not checks["required_left_join"]:
-                failures.append(
-                    "Required LEFT JOIN semantics were not preserved."
-                )
-
-        if "COALESCE" in required_features:
-            source_coalesce = list(
-                source.find_all(exp.Coalesce)
-            )
-
-            target_coalesce = list(
-                target.find_all(exp.Coalesce)
-            )
-
-            checks["required_coalesce"] = (
-                len(source_coalesce)
-                == len(target_coalesce)
-            )
-
-            if not checks["required_coalesce"]:
-                failures.append(
-                    "Required COALESCE expressions were not preserved."
-                )
-
-        if "INCREMENTAL_CUTOFF" in required_features:
-            def extract_cutoff_predicates(expression: exp.Expression):
-                predicates = []
-
-                for node in expression.find_all(
-                    (exp.GT, exp.GTE, exp.LT, exp.LTE)
-                ):
-                    left = node.this
-                    right = node.expression
-
-                    if not isinstance(left, exp.Column):
-                        continue
-
-                    if not isinstance(right, exp.Parameter):
-                        continue
-
-                    variable = right.find(exp.Var)
-
-                    if variable is None:
-                        continue
-
-                    predicates.append(
-                        (
-                            left.sql(),
-                            type(node).__name__,
-                            variable.this,
-                        )
-                    )
-
-                return predicates
-
-            required_cutoff = {
-                ("ct.LastEditedWhen", "GT", "LastCutoff"),
-                ("ct.LastEditedWhen", "LTE", "NewCutoff"),
-            }
-
-            source_predicates = extract_cutoff_predicates(source)
-            target_predicates = extract_cutoff_predicates(target)
-
-            source_cutoff_ok = required_cutoff.issubset(
-                set(source_predicates)
-            )
-
-            target_cutoff_ok = required_cutoff.issubset(
-                set(target_predicates)
-            )
-
-            checks["incremental_cutoff"] = (
-                source_cutoff_ok
-                and target_cutoff_ok
-            )
-
-            if not checks["incremental_cutoff"]:
-                failures.append(
-                    "Incremental cutoff semantics were not preserved."
-                )
-        # ----------------------------------------------------------
-        # Final result
-        # ----------------------------------------------------------
-
-        if failures:
-            status = "FAIL"
-        else:
-            status = "PASS"
-
-        return SQLSemanticValidation(
-            status=status,
-            checks=checks,
-            failures=failures,
-        )
+        check('projection_structure', [len(s.expressions) for s in all_nodes(expected, exp.Select)] ==
+              [len(s.expressions) for s in all_nodes(actual, exp.Select)], 'SELECT projection counts changed.')
+        check('projection_expressions', [_signature(s.expressions) for s in all_nodes(expected, exp.Select)] ==
+              [_signature(s.expressions) for s in all_nodes(actual, exp.Select)], 'SELECT expressions, aliases or output ordering changed.')
+        expected_unions, actual_unions = all_nodes(expected, exp.Union), all_nodes(actual, exp.Union)
+        flags = lambda unions: [u.args.get('distinct') is False for u in unions]
+        check('union_count', len(expected_unions) == len(actual_unions), 'UNION count changed.')
+        check('union_all_semantics', flags(expected_unions) == flags(actual_unions), 'UNION ALL structure changed.')
+        check('source_tables', signatures(expected, exp.Table) == signatures(actual, exp.Table),
+              'Table references, aliases, versions or occurrence counts changed.')
+        check('filter_predicates', signatures(expected, (exp.Where, exp.Having, exp.Qualify)) ==
+              signatures(actual, (exp.Where, exp.Having, exp.Qualify)), 'Filter expressions or predicate scopes changed.')
+        check('join_semantics', signatures(expected, exp.Join) == signatures(actual, exp.Join),
+              'Join sides, conditions or ordering changed.')
+        check('grouping_and_windows', signatures(expected, (exp.Group, exp.Window)) ==
+              signatures(actual, (exp.Group, exp.Window)), 'Grouping or window structure changed.')
+        check('relational_structure', [_signature(x) for x in expected] == [_signature(x) for x in actual],
+              'Complete SQL AST structure differs from the supported dialect rendering.')
+        if 'UNION_ALL' in required_features:
+            check('required_union_all', any(flags(expected_unions)) and flags(expected_unions) == flags(actual_unions),
+                  'Required UNION ALL structure was not preserved.')
+        if 'LEFT_JOIN' in required_features:
+            left = lambda roots: [_signature(j) for j in all_nodes(roots, exp.Join) if j.args.get('side') == 'LEFT']
+            check('required_left_join', bool(left(expected)) and left(expected) == left(actual),
+                  'Required LEFT JOIN conditions were not preserved.')
+        if 'COALESCE' in required_features:
+            check('required_coalesce', bool(all_nodes(expected, exp.Coalesce)) and
+                  signatures(expected, exp.Coalesce) == signatures(actual, exp.Coalesce),
+                  'Required COALESCE expressions were not preserved.')
+        if 'INCREMENTAL_CUTOFF' in required_features:
+            # Preserve every range in every statement/query scope; there are no
+            # customer-specific columns, aliases or parameter names here.
+            ranges = lambda roots: [range_candidates(x) for x in roots]
+            check('incremental_cutoff', any(ranges(expected)) and ranges(expected) == ranges(actual),
+                  'Parameterized range predicates were absent or changed; incremental behavior remains unverified.')
+        if 'TEMPORAL_TABLE_AS_OF' in required_features:
+            check('required_temporal_table_as_of', 'TEMPORAL_TABLE_AS_OF' in source_features and
+                  signatures(expected, exp.Version) == signatures(actual, exp.Version),
+                  'Required temporal read structure was not preserved.')
+        result.status = 'FAIL' if result.failures else 'PASS'
+        return result

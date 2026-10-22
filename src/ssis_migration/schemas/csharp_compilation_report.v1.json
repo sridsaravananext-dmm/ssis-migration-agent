@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:csharp_compilation_report:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "compilation_version": {
+      "const": "1.0"
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "BLOCKED",
+        "TIMEOUT"
+      ]
+    },
+    "scope": {
+      "enum": [
+        "SUPPLIED_REFERENCES",
+        "FIXTURE_STUB_RUNTIME"
+      ]
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "toolchain": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sdk_version",
+            "dotnet",
+            "compiler_sha256"
+          ],
+          "properties": {
+            "sdk_version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dotnet": {
+              "type": "string",
+              "minLength": 1
+            },
+            "compiler_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256",
+          "snapshot_path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "snapshot_path": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256",
+          "snapshot_path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "snapshot_path": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exit_code": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "source_execution": {
+      "const": "NOT_RUN"
+    },
+    "semantic_status": {
+      "const": "NOT_VERIFIED"
+    },
+    "runtime_binding_status": {
+      "const": "NOT_VERIFIED"
+    },
+    "migration_accepted": {
+      "const": false
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "language_version",
+        "check_overflow",
+        "output_kind"
+      ],
+      "properties": {
+        "language_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "check_overflow": {
+          "type": "boolean"
+        },
+        "output_kind": {
+          "enum": [
+            "LIBRARY",
+            "CONSOLE"
+          ]
+        }
+      }
+    }
+  },
+  "required": [
+    "compilation_version",
+    "status",
+    "scope",
+    "request_sha256",
+    "toolchain",
+    "sources",
+    "references",
+    "diagnostics",
+    "exit_code",
+    "artifacts",
+    "source_execution",
+    "semantic_status",
+    "runtime_binding_status",
+    "migration_accepted",
+    "limitations",
+    "options"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "PASS"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 0
+          },
+          "toolchain": {
+            "type": "object"
+          },
+          "sources": {
+            "minItems": 1
+          },
+          "references": {
+            "minItems": 1
+          },
+          "artifacts": {
+            "required": [
+              "assembly",
+              "compiler_log"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

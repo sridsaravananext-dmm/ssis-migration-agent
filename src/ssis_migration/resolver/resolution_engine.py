@@ -70,7 +70,12 @@ class SQLResolutionEngine:
                 target_sql=None,
                 source_dialect=source_dialect,
                 target_dialect=target_dialect,
-                validation={},
+                validation={
+                    "status": resolution.status, "scope": "SQL_AST_STRUCTURE",
+                    "semantic_equivalence": "NOT_VERIFIED",
+                    "source_analysis": getattr(resolution, "source_analysis", {}),
+                    "target_analysis": getattr(resolution, "target_analysis", {}),
+                },
                 error=resolution.error,
             )
 

@@ -1,0 +1,5 @@
+-- Synthetic example only; the cube and subset metadata are deliberately absent.
+SELECT NON EMPTY {[Measures].[Revenue]} ON COLUMNS,
+       TM1SubsetToSet([Product].[Product], "Active", "public") ON ROWS
+FROM [Sales]
+WHERE ([Version].[Actual], [Calendar].[2024]);

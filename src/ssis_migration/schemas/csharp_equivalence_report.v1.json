@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:csharp_equivalence_report:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "equivalence_version": {
+      "const": "1.0"
+    },
+    "status": {
+      "enum": [
+        "MATCH",
+        "MISMATCH",
+        "BLOCKED"
+      ]
+    },
+    "scope": {
+      "const": "OBSERVED_CASES_ONLY"
+    },
+    "runtime_scope": {
+      "enum": [
+        "SUPPLIED_REFERENCES",
+        "FIXTURE_STUB_RUNTIME"
+      ]
+    },
+    "contract_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "compilation_report_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source_trace_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "target_trace_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "matched_case_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "case_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "case_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "status",
+          "issues"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "MATCH",
+              "MISMATCH"
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "migration_accepted": {
+      "const": false
+    },
+    "weighted_semantic_coverage": {
+      "type": "null"
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "compilation_artifacts_verified": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "equivalence_version",
+    "status",
+    "scope",
+    "runtime_scope",
+    "contract_id",
+    "candidate_sha256",
+    "compilation_report_sha256",
+    "source_trace_sha256",
+    "target_trace_sha256",
+    "matched_case_count",
+    "case_count",
+    "case_results",
+    "diagnostics",
+    "migration_accepted",
+    "weighted_semantic_coverage",
+    "limitations",
+    "compilation_artifacts_verified"
+  ]
+}

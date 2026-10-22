@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:sql_analysis:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "analysis_version",
+    "dialect",
+    "source_sha256",
+    "status",
+    "scope",
+    "semantic_status",
+    "statements",
+    "diagnostics",
+    "source_file"
+  ],
+  "properties": {
+    "analysis_version": {
+      "const": "1.0"
+    },
+    "dialect": {
+      "enum": [
+        "tsql",
+        "oracle",
+        "spark",
+        "databricks",
+        null
+      ]
+    },
+    "source_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "status": {
+      "enum": [
+        "ANALYZED",
+        "UNSUPPORTED",
+        "UNRESOLVED"
+      ]
+    },
+    "scope": {
+      "const": "SQL_AST_STRUCTURE"
+    },
+    "semantic_status": {
+      "const": "NOT_VERIFIED"
+    },
+    "statements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "statement_index",
+          "node_type",
+          "status",
+          "features",
+          "parameters",
+          "tables",
+          "range_candidates",
+          "locator"
+        ],
+        "properties": {
+          "statement_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "node_type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "AST_PARSED",
+              "UNSUPPORTED"
+            ]
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "locator"
+              ],
+              "properties": {
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "locator": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "tables": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reference",
+                "role",
+                "resolution",
+                "locator"
+              ],
+              "properties": {
+                "reference": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "role": {
+                  "enum": [
+                    "READ",
+                    "WRITE",
+                    "CTE_REFERENCE"
+                  ]
+                },
+                "resolution": {
+                  "const": "DECLARED_ONLY"
+                },
+                "locator": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "range_candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "scope_index",
+                "column",
+                "bounds",
+                "classification"
+              ],
+              "properties": {
+                "scope_index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "column": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "bounds": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "operator",
+                      "parameter"
+                    ],
+                    "properties": {
+                      "operator": {
+                        "enum": [
+                          "GT",
+                          "GTE",
+                          "LT",
+                          "LTE"
+                        ]
+                      },
+                      "parameter": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "classification": {
+                  "const": "PARAMETERIZED_RANGE_CANDIDATE"
+                }
+              }
+            }
+          },
+          "locator": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "statement_index",
+          "locator"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "enum": [
+              "WARNING",
+              "ERROR"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statement_index": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "locator": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "source_file": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
