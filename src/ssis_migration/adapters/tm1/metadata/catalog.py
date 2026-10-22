@@ -2,39 +2,13 @@
 from __future__ import annotations
 
 import hashlib
-import json
-import math
 from pathlib import Path
 
 from ssis_migration.intake.inventory import describe_file
 from ssis_migration.schemas import SchemaValidationError, validate_document
+from ssis_migration.metadata.json_io import read_json  # Compatibility re-export.
 
 MAX_METADATA_BYTES = 8 * 1_048_576
-
-
-def read_json(raw: bytes):
-    """Reject duplicate keys and non-finite values rather than choosing a value."""
-    def unique(pairs):
-        result = {}
-        for key, value in pairs:
-            if key in result:
-                raise ValueError('Duplicate metadata/report JSON key: ' + key)
-            result[key] = value
-        return result
-
-    def nonfinite(value):
-        raise ValueError('Non-finite metadata/report JSON value: ' + value)
-
-    def finite_float(value):
-        result = float(value)
-        if not math.isfinite(result):
-            raise ValueError('Non-finite metadata/report JSON number: ' + value)
-        return result
-
-    try:
-        return json.loads(raw.decode('utf-8-sig'), object_pairs_hook=unique, parse_constant=nonfinite, parse_float=finite_float)
-    except RecursionError as exc:
-        raise ValueError('Metadata/report JSON nesting exceeds the supported structure.') from exc
 
 
 def metadata_snapshot(raw: bytes, *, file_id: str, locator: str = 'json:/', path: str | None = None) -> dict:

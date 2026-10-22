@@ -1,8 +1,10 @@
 # TM1 semantic capability checks and Databricks candidate generation
 
-The current checkpoint ends at generation and stops for the user's Databricks
-review. Other adapters, broader TM1 translation and production acceptance remain
-pending. Existing SSIS generation and native TM1 review contracts are preserved.
+Databricks human review is deferred at the user's request; offline implementation
+continues without that checkpoint. Execution and production equivalence remain
+unverified. Existing SSIS generation and native TM1 review contracts are preserved.
+See [offline evidence validation](offline-evidence.md) and the
+[XML adapter profiles](xml-source-adapters.md) for subsequent implementation.
 
 ## Files and interface changes
 
@@ -38,7 +40,7 @@ under the current capability checks. Tracked/new-file whitespace checks passed.
 Databricks/PySpark execution, independent TM1 observations, business criticality,
 weighted semantic coverage and data equivalence remain pending. This checkpoint
 does not claim general TM1 migration or acceptance. The working branch is
-`GenericAITool-version01`; Databricks review is the next checkpoint.
+`GenericAITool-version01`; Databricks review is optional for continuing coding.
 
 ## Run
 
@@ -126,14 +128,24 @@ Databricks execution and source/data equivalence. All synthetic fixtures are
 labeled accordingly. Semantic weights/criticality remain unknown, execution is
 NOT_RUN and acceptance is false even when candidate generation succeeds.
 
-## Review gate
+## Evidence and continued implementation
 
 Import and run the generated validation notebook in your Databricks environment,
 inspect preview outputs and save runtime/input/output evidence. Actual source
 observations and business criticality/weights are still required. At least 80%
 weighted verified semantic coverage and every critical gate must pass before
-acceptance. Existing native acceptance loaders continue to refuse acceptance.
+acceptance. Native review-only outputs remain ineligible for acceptance. A
+separate replayable candidate loader now prepares unassessed acceptance drafts;
+synthetic fixtures earn no source-equivalence credit.
 
-After the user's Databricks review, prioritize corrections and wider TM1 semantics
-before authorizing other adapter work. Full C# compilation and migration
-equivalence also remain unverified where the .NET SDK/source observations are absent.
+Further adapter implementation does not depend on a human Databricks review.
+Bounded static CrossJoin, Head and Tail over explicit literal MDX leaf sets are
+now supported. CrossJoin preserves operand order and requires disjoint dimensions;
+Head/Tail require positive bounded literal counts. Every input set is validated
+before selection, so pruning cannot hide missing members or duplicate tuples.
+Consolidations, empty/sparse cells, general MDX/rules/TI semantics and production
+acceptance remain outside this bounded candidate.
+
+The later offline continuation installed .NET 8.0.426 and passed all eight real
+C# fixture compilation/comparison tests. Actual SSIS runtime binding and general
+source-to-target migration equivalence remain unverified.

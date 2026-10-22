@@ -206,7 +206,8 @@ def test_supplied_expected_output_is_not_computed_or_overwritten(candidate):
 def test_generation_produces_a_verifiable_download_bundle_and_stops(tmp_path):
     result=run_migration(str(DEMO/'manifest.json'),str(tmp_path),target_mapping=str(DEMO/'target_mapping.json'))
     assert result['status']=='GENERATED' and result['execution_status']=='NOT_RUN'
-    assert not result['migration_accepted'] and result['next_phase_gate']=='STOP_FOR_USER_DATABRICKS_REVIEW'
+    assert not result['migration_accepted'] and result['next_phase_gate']=='CONTINUE_OFFLINE_IMPLEMENTATION'
+    assert result['databricks_human_review'] == 'DEFERRED_BY_USER'
     assert result['coverage']['semantic']['weighted_verified_percent'] is None
     with zipfile.ZipFile(result['artifacts']['bundle']) as archive:
         inventory=json.loads(archive.read('artifact_inventory.json'))
@@ -261,6 +262,35 @@ def test_mapping_hash_and_duplicate_json_keys_are_never_ignored(supplied):
     with pytest.raises(ValueError,match='different source bundle'):build(supplied)
     path.write_text('{"mapping_version":"1.0","mapping_version":"1.0"}')
     with pytest.raises(ValueError,match='Duplicate'):load_mapping(path)
+
+
+@pytest.mark.parametrize('expression,products',[
+    ('CrossJoin({[Product].[Product].[B],[Product].[Product].[A]},{[Measures].[Measures].[Quantity]})',['B','A']),
+    ('CrossJoin(Head({[Product].[Product].[B],[Product].[Product].[A]},1),{[Measures].[Measures].[Quantity]})',['B']),
+    ('CrossJoin(Tail({[Product].[Product].[B],[Product].[Product].[A]}),{[Measures].[Measures].[Quantity]})',['A']),
+    ('Head(CrossJoin({[Product].[Product].[B],[Product].[Product].[A]},{[Measures].[Measures].[Quantity]}),2)',['B','A']),
+])
+def test_bounded_mdx_set_functions_preserve_order_and_coordinates(supplied,expression,products):
+    (supplied/'query.mdx').write_text('SELECT '+expression+' ON 0 FROM [QueryCube]')
+    refresh(supplied);contract=build(supplied)
+    assert contract['status']=='CANDIDATE_READY'
+    cells=[{'product':'A','measure':'Quantity','value':3},{'product':'B','measure':'Quantity','value':7}]
+    result=execute_program(program(contract,'query'),cells,[],{})
+    assert result==[{'axis_0':i,'product':name,'measure':'Quantity','value':3 if name=='A' else 7} for i,name in enumerate(products)]
+
+
+@pytest.mark.parametrize('expression',[
+    'Head({[Product].[Product].[A]},0)',
+    'Tail({[Product].[Product].[A]},100001)',
+    'CrossJoin({[Product].[Product].[A]},{[Product].[Product].[B]})',
+    'Head({[Product].[Product].[A],[Product].[Product].[A]},1)',
+    'Head({[Product].[Product].[A],[Measures].[Measures].[Quantity]},1)',
+    'Head({[Product].[Product].[A],[Product].[Product].[Missing]},1)',
+])
+def test_mdx_selection_cannot_hide_unsupported_or_ambiguous_inputs(supplied,expression):
+    (supplied/'query.mdx').write_text('SELECT '+expression+' ON 0 FROM [QueryCube] WHERE ([Measures].[Measures].[Quantity])')
+    refresh(supplied)
+    assert build(supplied)['status']=='BLOCKED'
 
 
 def test_constant_expression_unary_and_no_rule_input_defaults(supplied):

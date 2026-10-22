@@ -1,0 +1,52 @@
+{
+  "observation_version": "1.0",
+  "observation_id": "synthetic-source",
+  "side": "SOURCE",
+  "source_platform": "tm1",
+  "case_id": "synthetic-case",
+  "unit_id": "synthetic-unit",
+  "comparison_mode": "MULTISET",
+  "binding": {
+    "generation_contract_id": "SYNTHETIC_DEMO_NOT_A_MIGRATION_CONTRACT",
+    "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "artifact_hashes": {
+      "synthetic_fixture": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "input_snapshot_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "parameters_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "columns": [
+    {
+      "name": "id",
+      "type": "INT64",
+      "nullable": false
+    },
+    {
+      "name": "amount",
+      "type": "DECIMAL",
+      "nullable": true
+    }
+  ],
+  "rows": [
+    [
+      1,
+      "10.00"
+    ],
+    [
+      2,
+      null
+    ],
+    [
+      1,
+      "10.00"
+    ]
+  ],
+  "provenance": {
+    "kind": "SYNTHETIC",
+    "engine": "manually supplied expectations",
+    "engine_version": "synthetic-v1",
+    "capture_method": "documentation example, no vendor runtime",
+    "captured_at": "2026-10-22T00:00:00Z",
+    "snapshot_id": "synthetic-snapshot"
+  }
+}

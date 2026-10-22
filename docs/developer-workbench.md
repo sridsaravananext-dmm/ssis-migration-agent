@@ -1,9 +1,11 @@
 # Developer workbench
 
-The Streamlit frontend now runs both existing SSIS migrations and bounded TM1
-Databricks generation. It remains at the generation/review checkpoint. Other
-adapters, deployment, persistent data publication and migration acceptance are
-not enabled by choosing a platform or layer.
+The Streamlit frontend runs existing SSIS migrations, bounded TM1 Databricks
+generation, and PowerCenter/BODS/ODI XML structural analysis. Native XML runs
+produce IR, declared dependency links, review contracts and reports; they do not
+generate vendor migration notebooks. Deployment, persistent data publication and
+migration acceptance are not enabled by choosing a platform or layer. Human
+Databricks review is deferred while offline implementation continues.
 
 ## Start or update the app
 
@@ -121,6 +123,17 @@ rewrite business logic or move all tables into a single schema. The existing
 SSIS missing-evidence, static validation and acceptance gates are preserved.
 
 ## Interface and implementation
+
+The validation tab now accepts source and target observation JSON files. It
+performs exact typed reconciliation and downloads the comparison plus original
+captures in a portable ZIP. Synthetic MATCH results remain NOT_VERIFIED for
+source equivalence. See [offline evidence](offline-evidence.md) for the schema,
+binding requirements, supported types and native acceptance gates.
+
+The previous verification baseline below predates these additions. The current
+continuation also passed the eight real .NET 8 compiler integration tests using
+official SDK 8.0.426; fixture-stub equivalence does not certify real SSIS runtime
+binding or arbitrary scripts.
 
 Verification: **1,080 passed, 12 skipped**, including **48 workbench tests**.
 The skips cover eight unavailable .NET checks and four live Databricks provider

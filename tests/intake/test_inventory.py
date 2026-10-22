@@ -144,9 +144,6 @@ def test_malformed_or_misnamed_dtsx_is_not_registered_as_supported_ssis(tmp_path
 
 
 @pytest.mark.parametrize("contents,platform", [
-    ("<POWERMART/>", "informatica"),
-    ("<SunopsisExport/>", "odi"),
-    ("<DataServices/>", "bods"),
     ("CellPutN(1, 'Cube', 'Element');", "tm1"),
 ])
 def test_other_export_signatures_are_detected_but_not_claimed_as_supported(tmp_path, contents, platform):
@@ -156,6 +153,15 @@ def test_other_export_signatures_are_detected_but_not_claimed_as_supported(tmp_p
     assert manifest["detected_platform"] == platform
     assert manifest["status"] == "BLOCKED"
     assert "UNSUPPORTED_PLATFORM" in codes(manifest)
+
+
+@pytest.mark.parametrize('contents,platform', [('<POWERMART/>','informatica'),('<SunopsisExport/>','odi'),('<DataServices/>','bods')])
+def test_native_xml_intake_registration_does_not_establish_semantic_support(tmp_path,contents,platform):
+    source = tmp_path/'export.xml';source.write_text(contents)
+    manifest = build_intake_manifest(source,platform=platform)
+    assert manifest['detected_platform'] == platform
+    assert 'UNSUPPORTED_PLATFORM' not in codes(manifest)
+    assert manifest['status'] != 'ACCEPTED'
 
 
 @pytest.mark.parametrize("platform,contents", [

@@ -20,6 +20,32 @@ ROOT=Path(__file__).resolve().parents[1]
 DEMO=ROOT/'examples/tm1/databricks_demo'
 
 
+@pytest.mark.parametrize('relative,platform',[
+    ('informatica/simple_mapping.xml','informatica'),('bods/structural_job.xml','bods'),('odi/structural_export.xml','odi'),
+])
+def test_workbench_discovers_and_routes_native_xml_without_ssis_options(tmp_path,relative,platform):
+    source=ROOT/'examples'/relative
+    assert source in bundle_candidates(source.parent)
+    report=run_frontend_migration(source,tmp_path,catalog='unused_ui_catalog',base_path=ROOT)
+    assert report['source_platform']==platform and report['scope']=='REVIEW_ONLY'
+    assert report['preservation']['node_count']==report['preservation']['assigned_node_count']
+    assert report['generated_artifact_count']==0 and not report['migration_accepted']
+
+
+def test_workbench_comparison_archive_is_portable_and_cannot_promote_synthetic_results():
+    from ssis_migration.ui import reconciliation_bundle
+    source=(ROOT/'examples/validation/source_observation.json').read_bytes()
+    target=(ROOT/'examples/validation/target_observation.json').read_bytes()
+    report,raw=reconciliation_bundle(source,target)
+    assert report['status']=='MATCH' and report['source_equivalence']=='NOT_VERIFIED'
+    with zipfile.ZipFile(io.BytesIO(raw)) as bundle:
+        assert set(bundle.namelist())=={'source_observation.json','target_observation.json','reconciliation.json'}
+        assert bundle.read('source_observation.json')==source
+        assert json.loads(bundle.read('reconciliation.json'))==report
+        for record in report['observation_files'].values():
+            assert hashlib.sha256(bundle.read(record['path'])).hexdigest()==record['sha256']
+
+
 @pytest.fixture
 def settings(tmp_path):
     return {'config_version':'1.0','catalog':'analytics','schemas':{'bronze':'raw','silver':'curated','gold':'serving'},

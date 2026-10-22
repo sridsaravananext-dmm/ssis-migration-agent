@@ -35,6 +35,18 @@ def get_adapter(platform: str) -> SourceAdapter:
         from .tm1.adapter import TM1Adapter
 
         return TM1Adapter()
+    if normalized == "informatica":
+        from .informatica import PowerCenterAdapter
+
+        return PowerCenterAdapter()
+    if normalized == "bods":
+        from .bods import BODSAdapter
+
+        return BODSAdapter()
+    if normalized == "odi":
+        from .odi import ODIAdapter
+
+        return ODIAdapter()
     if normalized in SOURCE_PLATFORMS:
         raise UnsupportedSourceError(
             f"Source platform {normalized!r} is on the roadmap, but its adapter is not implemented."

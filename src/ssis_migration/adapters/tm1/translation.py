@@ -198,6 +198,43 @@ def member_tuple(expression, model):
     return result
 
 
+def axis_set(expression, model, limit):
+    """Lower bounded literal sets and static CrossJoin/Head/Tail expressions.
+
+    All function inputs are checked before selection: a Head/Tail cannot hide
+    unsupported expressions, duplicate tuples or inconsistent dimensionality.
+    """
+    kind = expression['kind']
+    if kind == 'group': return axis_set(expression['expression'],model,limit)
+    if kind == 'set':
+        tuples = [member_tuple(item,model) for item in expression['items']]
+    elif kind == 'function' and expression['name'].upper() in {'CROSSJOIN','HEAD','TAIL'}:
+        name = expression['name'].upper();args = expression['arguments']
+        if name == 'CROSSJOIN':
+            require(len(args)==2,'CrossJoin requires exactly two explicit sets.')
+            left = axis_set(args[0],model,limit);right = axis_set(args[1],model,limit)
+            require(not set(left[0]) & set(right[0]),'CrossJoin operands cannot overlap dimensions.')
+            require(len(left)*len(right)<=limit,'CrossJoin exceeds the bounded preview limit.')
+            tuples = [{**l,**r} for l in left for r in right]
+        else:
+            require(len(args) in {1,2},name+' requires a set and optional literal positive count.')
+            tuples = axis_set(args[0],model,limit);count = 1
+            if len(args)==2:
+                count_node = args[1]
+                require(count_node['kind']=='literal' and count_node['category']=='INTEGER' and count_node['value'].isascii()
+                        and count_node['value'].isdecimal() and len(count_node['value'])<=6,
+                        name+' requires a bounded positive integer literal count.')
+                count = int(count_node['value'])
+            require(0<count<=limit,name+' requires a positive count within the preview bound; empty axes are unsupported.')
+            tuples = tuples[:count] if name=='HEAD' else tuples[-count:]
+    else:
+        raise CapabilityError('MDX axis requires a literal set or bounded static CrossJoin/Head/Tail.')
+    require(tuples and len(tuples)<=limit,'MDX axis must be nonempty and fit the preview bound.')
+    require(all(set(t)==set(tuples[0]) for t in tuples),'MDX set dimensionality is inconsistent.')
+    require(len({tuple(sorted(t.items())) for t in tuples})==len(tuples),'Duplicate axis tuples require explicit cellset semantics review.')
+    return tuples
+
+
 def lower_mdx(analysis, config, model, limit):
     require(model['value_semantics'] == 'EVALUATED_WITHOUT_RULES', 'MDX requires evaluated cells without hidden rules/feeders.')
     require(config['datasource_table'] is None and config['order_column'] is None and not config['parameters'],
@@ -205,14 +242,14 @@ def lower_mdx(analysis, config, model, limit):
     query = analysis['query']
     require(query is not None and query['kind'] == 'select' and query['cube']['name'] == model['cube'], 'MDX cube does not match its model.')
     axes = sorted(query['axes'], key=lambda a:a['ordinal'])
-    require(1 <= len(axes) <= 2 and [a['ordinal'] for a in axes] == list(range(len(axes))), 'Only literal axis 0 and optional axis 1 are supported.')
+    require(1 <= len(axes) <= 2 and [a['ordinal'] for a in axes] == list(range(len(axes))), 'Only axis 0 and optional axis 1 are supported.')
     slicer = {} if query['slicer'] is None else member_tuple(query['slicer'],model)
     choices = []; used = set(slicer)
     count = 1
     for axis in axes:
         expression = axis['expression']
-        require(not axis['non_empty'] and expression['kind'] == 'set' and expression['items'], 'Only nonempty literal axis sets without NON EMPTY are supported.')
-        tuples = [member_tuple(item,model) for item in expression['items']]
+        require(not axis['non_empty'],'NON EMPTY requires source empty-cell semantics and is unsupported.')
+        tuples = axis_set(expression,model,limit)
         require(all(set(t) == set(tuples[0]) for t in tuples) and not (used & set(tuples[0])), 'MDX axis dimensionality is inconsistent or overlaps another axis/slicer.')
         require(len({tuple(sorted(t.items())) for t in tuples}) == len(tuples), 'Duplicate axis tuples require explicit cellset semantics review.')
         used.update(tuples[0]); choices.append(tuples); count *= len(tuples)

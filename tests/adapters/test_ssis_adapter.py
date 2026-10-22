@@ -57,9 +57,8 @@ def test_registry_exposes_shared_protocol_and_only_implemented_adapter():
 
 
 @pytest.mark.parametrize("platform", ["informatica", "powercenter", "bods", "odi"])
-def test_roadmap_platforms_are_explicitly_unimplemented(platform):
-    with pytest.raises(UnsupportedSourceError, match="not implemented"):
-        get_adapter(platform)
+def test_native_structural_adapters_do_not_claim_legacy_ssis_ir(platform):
+    assert get_adapter(platform).platform != 'ssis'
 
 
 @pytest.mark.parametrize("platform", ["datastage", "IBM InfoSphere DataStage", "ab_initio", "Ab Initio"])

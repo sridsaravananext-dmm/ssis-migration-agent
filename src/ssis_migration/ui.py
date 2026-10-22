@@ -10,7 +10,7 @@ import stat
 import tempfile
 import zipfile
 
-from ssis_migration.adapters.tm1.metadata.catalog import read_json
+from ssis_migration.metadata.json_io import read_json
 from ssis_migration.schemas import validate_document
 
 MAX_FILES = 256
@@ -104,6 +104,9 @@ def bundle_candidates(root):
     for path in sorted(root.rglob('*')):
         if not path.is_file():continue
         if path.suffix.lower() == '.dtsx':candidates.append(path)
+        elif path.suffix.lower() == '.xml' and path.stat().st_size <= 16*1048576:
+            from ssis_migration.intake import describe_file
+            if describe_file(path)['format'] in {'powercenter_xml','bods_xml','odi_xml'}:candidates.append(path)
         elif path.suffix.lower() == '.json' and path.stat().st_size <= 1048576:
             try:document = read_json(path.read_bytes())
             except (ValueError,UnicodeError):continue
@@ -184,6 +187,14 @@ def run_frontend_migration(source, output, *, platform=None, target_mapping=None
         if ai:raise ValueError('AI generation is unavailable for the native TM1 candidate path.')
         return run_migration(source=str(source),output=str(output),source_platform=platform,target_mapping=str(target_mapping) if target_mapping else None,
                              workspace_config=workspace_config,execute=False)
+    confirmed = str(platform or '').lower().replace(' ','_').replace('-','_')
+    xml_native = confirmed in {'informatica','powercenter','informatica_powercenter','bods','sap_bods','odi','oracle_data_integrator'} or (
+        platform is None and describe_file(source)['format'] in {'powercenter_xml','bods_xml','odi_xml'})
+    if xml_native:
+        if ai or target_mapping or mapping or procedures or ddl or dependencies or file_roles:
+            raise ValueError('Native XML structural analysis requires a self-contained export; SSIS dependency bindings and AI are not consumed.')
+        return run_migration(source=str(source),output=str(output),source_platform=platform,
+                             workspace_config=workspace_config,execute=False)
     return run_migration(source=str(source),output=str(output),catalog=catalog,ai=ai,ai_provider='databricks',
                          connection_mapping=str(mapping) if mapping else None,procedures_path=str(procedures) if procedures else None,
                          ddl_path=str(ddl) if ddl else None,dependency_files=[str(p) for p in dependencies],
@@ -198,6 +209,23 @@ def report_summary(report):
             'generated':report.get('generated_artifact_count',report.get('migrated_package_count',0)),
             'failed':report.get('failed_package_count',0),'accepted':accepted,
             'execution':report.get('execution_status',report.get('execution',{}).get('status','NOT_RUN'))}
+
+
+def reconciliation_bundle(source_bytes, target_bytes):
+    """Produce a portable comparison and original capture ZIP without execution."""
+    from ssis_migration.validator.reconciliation import reconcile
+    if len(source_bytes)>8*1048576 or len(target_bytes)>8*1048576:
+        raise ValueError('Each observation upload must fit the 8 MiB evidence limit.')
+    source=read_json(source_bytes);target=read_json(target_bytes)
+    report=reconcile(source,target)
+    captures={'source_observation.json':source_bytes,'target_observation.json':target_bytes}
+    report['observation_files']={side:{'path':name,'sha256':hashlib.sha256(captures[name]).hexdigest(),'size_bytes':len(captures[name])}
+                                 for side,name in [('source','source_observation.json'),('target','target_observation.json')]}
+    buffer=io.BytesIO()
+    with zipfile.ZipFile(buffer,'w',zipfile.ZIP_DEFLATED) as archive:
+        for name,raw in captures.items():archive.writestr(name,raw)
+        archive.writestr('reconciliation.json',json.dumps(report,indent=2,allow_nan=False))
+    return report,buffer.getvalue()
 
 
 def artifact_files(root):

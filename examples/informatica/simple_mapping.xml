@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE POWERMART SYSTEM "powrmart.dtd">
+<!-- Synthetic structural example, not an export from a verified vendor runtime. -->
+<POWERMART REPOSITORY_VERSION="188.95">
+  <REPOSITORY NAME="ExampleRepository" VERSION="188" DATABASETYPE="Oracle">
+    <FOLDER NAME="ExampleFolder">
+      <SOURCE NAME="SRC_CUSTOMER" DATABASETYPE="Microsoft SQL Server">
+        <SOURCEFIELD NAME="CUSTOMER_ID" DATATYPE="integer"/>
+      </SOURCE>
+      <TARGET NAME="TGT_CUSTOMER" DATABASETYPE="Oracle">
+        <TARGETFIELD NAME="CUSTOMER_ID" DATATYPE="number"/>
+      </TARGET>
+      <MAPPING NAME="m_customer">
+        <INSTANCE NAME="src" TYPE="SOURCE" TRANSFORMATION_NAME="SRC_CUSTOMER"/>
+        <INSTANCE NAME="tgt" TYPE="TARGET" TRANSFORMATION_NAME="TGT_CUSTOMER"/>
+        <CONNECTOR FROMINSTANCE="src" FROMFIELD="CUSTOMER_ID" TOINSTANCE="tgt" TOFIELD="CUSTOMER_ID"/>
+      </MAPPING>
+      <SESSION NAME="s_customer" MAPPINGNAME="m_customer"/>
+      <WORKFLOW NAME="wf_customer">
+        <TASKINSTANCE NAME="Start" TASKTYPE="Start"/>
+        <TASKINSTANCE NAME="LoadCustomer" TASKTYPE="Session" TASKNAME="s_customer"/>
+        <WORKFLOWLINK FROMTASK="Start" TOTASK="LoadCustomer" CONDITION="TRUE"/>
+      </WORKFLOW>
+    </FOLDER>
+  </REPOSITORY>
+</POWERMART>

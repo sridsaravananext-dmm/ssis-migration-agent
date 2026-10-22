@@ -49,7 +49,18 @@ def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+def has_unsafe_xml_declarations(data: bytes) -> bool:
+    # Declaration-like strings in comments/CDATA are ordinary source text,
+    # including embedded SSIS C# scripts; they must not change detection.
+    markup = re.sub(br'<!--.*?-->|<!\[CDATA\[.*?\]\]>',b'',data.replace(b'\x00',b''),flags=re.S)
+    return re.search(br'<!ENTITY\b|<!DOCTYPE[^>]*\[',markup,re.I) is not None
+
+
 def _xml_detection(data: bytes) -> tuple[dict, list[tuple[str, str, str]]]:
+    # Inventory runs before adapter dispatch. Reject entity declarations here
+    # as well, so detection cannot expand content the adapter would reject.
+    if has_unsafe_xml_declarations(data):
+        raise ET.ParseError('XML entities and internal DTD subsets are unsupported.')
     root = ET.fromstring(data)
     local = _local(root.tag)
     version = None
@@ -75,7 +86,7 @@ def _xml_detection(data: bytes) -> tuple[dict, list[tuple[str, str, str]]]:
         return {"roles": ["package"], "platform": "datastage", "format": "datastage_export", "version": None, "locator": f"xml:/{local}", "rule": "datastage_export_root"}, []
     if local.lower() in {"abinitio", "ab_initio"}:
         return {"roles": ["package"], "platform": "ab_initio", "format": "ab_initio_export", "version": None, "locator": f"xml:/{local}", "rule": "ab_initio_export_root"}, []
-    if local.lower() in {"dataservices", "dijob"}:
+    if local.lower() in {"dataservices", "diexport", "dijob"}:
         return {"roles": ["package"], "platform": "bods", "format": "bods_xml", "version": root.attrib.get("version"), "locator": f"xml:/{local}", "rule": "sap_data_services_root"}, []
     if local == "DTSConfiguration":
         return {"roles": ["configuration"], "platform": "ssis", "format": "ssis_configuration_xml", "version": None, "locator": "xml:/DTSConfiguration", "rule": "ssis_configuration_root"}, []
@@ -234,8 +245,8 @@ def _inspect(path: Path, root: Path) -> tuple[dict, list[dict]]:
     diagnostics = [_diagnostic(code, severity, message, record) for code, severity, message in messages]
     if record["platform"] in _EXCLUDED or path.suffix.lower() in {".dsx", ".mp"}:
         diagnostics.append(_diagnostic("EXCLUDED_PLATFORM", "ERROR", "DataStage and Ab Initio exports are explicitly excluded from this framework.", record))
-    elif record["platform"] not in {"ssis", "unknown"} and record['format'] != 'tm1_source_bundle_v1':
-        diagnostics.append(_diagnostic("UNSUPPORTED_PLATFORM", "ERROR", f"Detected {record['platform']} export; its adapter is not implemented.", record))
+    elif record["platform"] not in {"ssis", "unknown"} and record['format'] not in {'tm1_source_bundle_v1', 'powercenter_xml', 'bods_xml', 'odi_xml'}:
+        diagnostics.append(_diagnostic("UNSUPPORTED_PLATFORM", "ERROR", f"Detected {record['platform']} export format; this format is not implemented by its adapter.", record))
     if path.suffix.lower() == ".dtsx" and record["format"] != "ssis_dtsx_xml":
         diagnostics.append(_diagnostic("UNCONFIRMED_PACKAGE_FORMAT", "ERROR", "A .dtsx name alone does not establish a supported SSIS export; the SSIS XML signature was not found.", record))
     return record, diagnostics
@@ -251,7 +262,7 @@ def _platform(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
-    normalized = {"planning_analytics": "tm1", "ibm_tm1": "tm1", "powercenter": "informatica", "sap_bods": "bods", "abinitio": "ab_initio"}.get(normalized, normalized)
+    normalized = {"planning_analytics": "tm1", "ibm_tm1": "tm1", "powercenter": "informatica", "informatica_powercenter": "informatica", "sap_bods": "bods", "oracle_data_integrator": "odi", "abinitio": "ab_initio"}.get(normalized, normalized)
     if normalized not in PLATFORMS:
         raise ValueError(f"Unknown source platform: {value!r}")
     return normalized
@@ -390,7 +401,7 @@ def build_intake_manifest(
         diagnostics.append(_diagnostic("MIXED_SOURCE_PLATFORMS", "ERROR", f"Supplied files identify multiple source platforms: {', '.join(observed)}."))
     if requested in _EXCLUDED:
         diagnostics.append(_diagnostic("EXCLUDED_PLATFORM", "ERROR", f"Explicit source platform {requested!r} is excluded."))
-    elif requested not in {None, "ssis"} and not (requested == 'tm1' and any(
+    elif requested not in {None, "ssis", "informatica", "bods", "odi"} and not (requested == 'tm1' and any(
         f['platform'] == 'tm1' and f['format'] == 'tm1_source_bundle_v1' for f in files.values())):
         diagnostics.append(_diagnostic("UNSUPPORTED_PLATFORM", "ERROR", f"Source platform {requested!r} has no implemented adapter."))
     if requested and any(value != requested for value in observed):

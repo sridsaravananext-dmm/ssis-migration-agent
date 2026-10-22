@@ -52,6 +52,9 @@ def load_package(package_dir: Path) -> dict[str, Any]:
     """Read the current generation and bind every contract back to its plan step."""
     root = package_dir.resolve(strict=True)
     if (root / 'source_envelope.json').is_file() and _read(root / 'source_envelope.json').get('envelope_version') == '2.0':
+        if (root / 'generation_contract.json').is_file():
+            from ssis_migration.validator.native_acceptance import load_tm1_candidate
+            return load_tm1_candidate(root)
         raise ValueError('Native source review outputs have no target implementation and cannot be accepted as a migration.')
     bundle = _read(root / "migration_contracts.json")
     if bundle.get("contract_bundle_version") != "1.0":
@@ -155,12 +158,13 @@ def draft_documents(package: dict[str, Any]) -> tuple[dict, dict]:
     behaviors = [{"contract_id": c["contract_id"], "behavior_id": b["behavior_id"],
                   "weight": None, "critical": None}
                  for c in package["contracts"] for b in c["required_behavior"]["obligations"]]
+    gates = list(dict.fromkeys((*MANDATORY_GATES, *package.get('mandatory_gates', []))))
     policy = {"policy_version": "1.0", "minimum_semantic_percent": 80,
-              "additional_gates": [], "behaviors": behaviors}
+              "additional_gates": list(package.get('mandatory_gates', [])), "behaviors": behaviors}
     evidence = {"evidence_version": "1.0", "artifact_hashes": dict(package["artifact_hashes"]),
                 "policy_digest": document_digest(policy), "checks": [],
                 "gates": [{"gate_id": name, "status": "NOT_RUN", "reports": []}
-                          for name in MANDATORY_GATES]}
+                          for name in gates]}
     return policy, evidence
 
 
@@ -233,7 +237,15 @@ def evaluate_acceptance(package: dict[str, Any], policy: dict, evidence: dict,
         if gate["gate_id"] in gates:
             raise ValueError("Duplicate acceptance gate.")
         gates[gate["gate_id"]] = verified(gate)
-    required_gates = list(dict.fromkeys((*MANDATORY_GATES, *policy["additional_gates"])))
+    required_gates = list(dict.fromkeys((*MANDATORY_GATES, *package.get('mandatory_gates', []), *policy["additional_gates"])))
+    if package.get('observation_binding') is not None and gates.get('independent_source_observations', False):
+        from ssis_migration.validator.reconciliation import validate_engine_reports
+        record = next(g for g in evidence['gates'] if g['gate_id'] == 'independent_source_observations')
+        try:
+            validate_engine_reports(record['reports'], report_root=report_root, package=package)
+        except (ValueError,OSError,TypeError,KeyError) as exc:
+            gates['independent_source_observations'] = False
+            blockers.append('Native source observation gate failed: '+str(exc))
     for gate in required_gates:
         if not gates.get(gate, False):
             blockers.append(f"Mandatory acceptance gate did not pass: {gate}")
@@ -284,7 +296,7 @@ def evaluate_acceptance(package: dict[str, Any], policy: dict, evidence: dict,
                           "weight": assessment.get("weight"), "critical": assessment.get("critical"),
                           "strategy": strategy, "dimensions": statuses})
     blockers = list(dict.fromkeys(blockers))
-    return {"result_version": "1.0", "lifecycle_status": "BLOCKED" if blockers else "ACCEPTED",
+    result = {"result_version": "1.0", "lifecycle_status": "BLOCKED" if blockers else "ACCEPTED",
             "validation_scope": "OFFLINE_EVIDENCE_REVIEW", "blocking_issues": blockers,
             "acceptance": {"accepted": not blockers, "status": "BLOCKED" if blockers else "ACCEPTED",
                            "required_semantic_coverage_percent": policy["minimum_semantic_percent"],
@@ -293,6 +305,10 @@ def evaluate_acceptance(package: dict[str, Any], policy: dict, evidence: dict,
             "artifact_hashes": package["artifact_hashes"],
             "policy_digest": document_digest(policy), "evidence_digest": document_digest(evidence),
             "mandatory_gates": {name: gates.get(name, False) for name in required_gates}}
+    if package.get('validation_scope'):
+        result['migration_scope'] = package['validation_scope']
+        result['limitations'] = list(package.get('limitations', []))
+    return result
 
 
 def main() -> None:
@@ -308,6 +324,8 @@ def main() -> None:
         if args.prepare:
             if args.policy or args.evidence or args.output:
                 parser.error("--prepare cannot be combined with evaluation arguments")
+            if package.get('observation_binding') is not None and args.prepare.resolve().is_relative_to(args.package_dir.resolve()):
+                raise ValueError('Native acceptance drafts must be outside the immutable candidate artifact directory.')
             args.prepare.mkdir(parents=True, exist_ok=False)
             for name, doc in zip(("policy.json", "evidence.json"), draft_documents(package)):
                 (args.prepare / name).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
@@ -316,6 +334,8 @@ def main() -> None:
             parser.error("evaluation requires --policy, --evidence and --output")
         # Refuse to overwrite the evidence, policy, or current generation.
         target = args.output.resolve()
+        if package.get('observation_binding') is not None and target.is_relative_to(args.package_dir.resolve()):
+            raise ValueError('Native acceptance reports must be outside the immutable candidate artifact directory.')
         protected = [args.policy.resolve(), args.evidence.resolve(),
                      *(args.package_dir.resolve() / p for p in package["artifact_hashes"])]
         if target in protected or target.exists():

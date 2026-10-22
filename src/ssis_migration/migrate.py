@@ -1149,6 +1149,16 @@ def run_migration(
     selected = str(source_platform or '').strip().lower().replace('-', '_').replace(' ', '_')
     explicit_tm1 = selected in {'tm1', 'ibm_tm1', 'planning_analytics'}
     detected_tm1 = source_platform is None and Path(source).expanduser().is_file() and describe_file(source)['format'] == 'tm1_source_bundle_v1'
+    native_platform = {'powercenter': 'informatica', 'informatica_powercenter': 'informatica', 'sap_bods': 'bods', 'oracle_data_integrator': 'odi'}.get(selected, selected)
+    if source_platform is None and Path(source).expanduser().is_file():
+        detected = describe_file(source)
+        if detected['format'] in {'powercenter_xml', 'bods_xml', 'odi_xml'}:
+            native_platform = detected['platform']
+    if native_platform in {'informatica', 'bods', 'odi'}:
+        if ai or target_mapping is not None or any((catalog, connection_mapping, ddl_path, procedures_path, dependency_files, file_roles, base_path)):
+            raise ValueError('Native XML structural review does not consume SSIS options, AI or target mappings; supply a self-contained export.')
+        from ssis_migration.adapters.export_pipeline import run_export_review
+        return run_export_review(source, output, native_platform, workspace_config=workspace_config)
     if explicit_tm1 or detected_tm1:
         if ai or any((catalog, connection_mapping, ddl_path, procedures_path, dependency_files, file_roles, base_path)):
             raise ValueError('TM1 uses explicit bundle roles and target mappings; declare dependencies inside its manifest. AI generation is unavailable.')
@@ -1545,12 +1555,12 @@ def run_migration(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Inventory offline exports, migrate SSIS packages, or generate bounded TM1 Databricks candidates with an explicit target mapping."
+        description="Inventory offline exports, analyze PowerCenter/BODS/ODI XML, migrate SSIS packages, or generate bounded TM1 Databricks candidates."
     )
     parser.add_argument(
         "--source",
         required=True,
-        help="Path to an SSIS export, input directory, or explicit TM1 bundle manifest; TM1 candidate generation requires --target-mapping.",
+        help="Path to an SSIS export/input directory, self-contained PowerCenter/BODS/ODI XML, or TM1 bundle manifest; TM1 generation requires --target-mapping.",
     )
     parser.add_argument(
         "--output",
@@ -1589,7 +1599,7 @@ def main() -> None:
             "adapters are not yet implemented."
         ),
     )
-    parser.add_argument("--source-platform", choices=["ssis", "tm1", "informatica", "bods", "odi", "datastage", "ab_initio"], help="Confirm the source platform; unimplemented and excluded platforms are explicitly blocked.")
+    parser.add_argument("--source-platform", choices=["ssis", "tm1", "informatica", "bods", "odi", "datastage", "ab_initio"], help="Confirm the source platform; unsupported formats and excluded platforms remain blocked.")
     parser.add_argument("--dependency", action="append", default=[], help="Additional supplied dependency file (repeatable); no source-system connection is used.")
     parser.add_argument("--file-role", action="append", default=[], metavar="PATH=ROLE", help="Confirm a supplied file's role; contradictory content remains a blocker.")
     parser.add_argument("--ddl", help="Explicitly selected DDL export file.")

@@ -21,6 +21,7 @@ class SchemaValidationError(ValueError):
 
 
 _SCHEMA_FILES = {
+    "data_observation": "data_observation.v1.json",
     "databricks_workspace": "databricks_workspace.v1.json",
     "intake_manifest": "intake_manifest.v1.json",
     "source_envelope": "source_envelope.v1.json",

@@ -1,109 +1,51 @@
-# ssis-migration-agent
+# Legacy ETL Migration Agent
 
 **Last updated date - 10/22/2026**
 
-The [developer workbench](docs/developer-workbench.md) now connects TM1 bundle
-uploads and source paths to Databricks candidate generation. Configure catalog,
-bronze/silver/gold schemas, runtime table bindings and parameters, notebook
-destination, cluster and artifact paths in the browser; download notebooks and
-validation artifacts for your Databricks review. Existing SSIS upload and
-dependency-role controls remain available.
+Incremental, file-based legacy ETL migration framework. **Databricks is the only
+current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
+connections are not required; source exports and dependencies are supplied as files.
 
-TM1 language analysis now includes bounded offline [MDX](docs/phase8-mdx-foundation.md),
-[rules/feeders](docs/phase8-tm1-rules-feeders.md) and
-[TurboIntegrator sections/control flow](docs/phase8-turbointegrator-analysis.md).
-Reports preserve source evidence and unresolved dependencies. Structural parsing
-does not establish migration acceptance. Databricks is the current migration target.
+| Source | Implemented capability | Explicit limits |
+| --- | --- | --- |
+| SSIS | Existing DTSX → IR → analysis → contracts → deterministic/AI generation → notebooks/jobs/DAB/report | Missing metadata, unsupported tasks and unverified behavior remain blockers |
+| TM1 / Planning Analytics | MDX, rules/feeders, TurboIntegrator and dimensional/process metadata analysis; native IR and bounded Databricks candidates | Dense numeric leaf snapshots and exact integer arithmetic; broader runtime semantics remain unsupported |
+| Informatica PowerCenter | XML declarations, scoped instances, port lineage, workflow links, native IR/contracts/report | Structural analysis only; target translation remains unimplemented |
+| SAP Data Services / BODS | Bounded DI XML declarations and explicit object-ID references, native IR/contracts/report | ATL and undocumented XML/link encodings unsupported; no target translation |
+| Oracle ODI | Sunopsis object/field declarations and class-scoped key references, native IR/contracts/report | Unknown classes, knowledge-module execution and target translation remain unsupported |
 
-Supplied [dimensional metadata and process binding](docs/phase8-tm1-metadata-binding.md)
-now supports evidence-backed cube/member, parameter and datasource declarations.
-Dynamic values and missing/ambiguous definitions remain unresolved; metadata
-matching does not establish runtime equivalence.
+The [developer workbench](docs/developer-workbench.md) supports source upload or
+paths, catalog, bronze/silver/gold schemas, runtime bindings, notebook destination,
+cluster and artifact paths. Native XML runs download structural review artifacts;
+SSIS and supported TM1 candidates also generate Databricks artifacts. App-local
+artifacts should use `/tmp/...`; `/Workspace/...` is a notebook destination.
 
-The [TM1 bundle adapter](docs/phase8-tm1-native-integration.md) now builds native
-IR v2 and review-only migration contracts through the shared API/CLI. The SSIS
-v1 pipeline remains supported. An explicit target mapping now enables
-[bounded TM1 Databricks candidates](docs/tm1-databricks-candidate.md): numeric TI
-row snapshots, literal MDX leaf queries and constant leaf rules. Unsupported
-behavior blocks executable output. Native `.pro` decoding is not implemented.
+```bash
+python -m pip install -r requirements-app.txt
+python -m streamlit run app.py --server.port 8000
+```
 
-Generation produces self-contained preview/reconciliation notebooks, job/DAB
-templates, source-bound contracts, reports and a review ZIP. It stops for your
-Databricks review: no deployment, persistent writes or acceptance. Semantic
-coverage and source equivalence remain unverified. This checkpoint stops at
-generation pending your Databricks review.
+Human Databricks validation is deferred at the user's request; offline
+implementation can continue. Deployment, live execution and source equivalence
+are not implied by generation or by this decision. No workloads are deployed or
+executed automatically.
+
+[Offline evidence validation](docs/offline-evidence.md) now supports exact typed
+observation comparison and replayable TM1 acceptance drafts. Nulls, duplicates,
+decimal precision and declared row ordering are retained. Matching synthetic
+fixtures earn no source-equivalence credit. Acceptance still requires assessed
+weights/criticality, at least 80% weighted verified semantic coverage, every
+critical behavior and all mandatory evidence gates.
+
 Working branch: `GenericAITool-version01`.
 
-Validation: **1,080 regression tests passed, 12 skipped**, including **48 workbench
-tests** and **72 candidate tests**. Installed-wheel generation, source/contract
-replay, ZIP integrity, SSIS compatibility and local frontend HTTP checks passed.
-Databricks execution and source equivalence await your review.
+Implementation details and remaining scope:
 
-# ============================================================
-# README.md
-# ============================================================
+- [XML source adapter profiles](docs/xml-source-adapters.md).
+- [TM1 Databricks candidates](docs/tm1-databricks-candidate.md).
+- [Offline continuation and remaining capabilities](docs/remaining-phases.md).
+- [C# compilation and observed-case comparison](docs/phase7-csharp-compilation-equivalence.md).
 
-readme = """
-# SSIS Migration Agent
-
-Reusable AI-driven platform for analyzing and migrating SSIS
-packages to modern data platforms.
-
-## Architecture
-
-SSIS DTSX
-    |
-    v
-Universal SSIS Parser
-    |
-    v
-Generic Parsed Model
-    |
-    v
-Universal Intermediate Representation
-    |
-    v
-Deterministic Analyzer
-    |
-    v
-AI Migration Agent
-    |
-    v
-Migration Blueprint
-    |
-    v
-Target Code Generator
-    |
-    +--> Databricks
-    +--> Microsoft Fabric
-    +--> Snowflake
-    +--> Future targets
-    |
-    v
-Validator
-
-## Repository Structure
-
-- `src/` - reusable Python implementation
-- `schemas/` - canonical JSON schemas
-- `notebooks/` - Databricks orchestration
-- `tests/` - automated tests
-- `examples/` - example migration projects
-
-## Design Principle
-
-The parser must remain generic and must not contain
-customer-specific or project-specific migration logic.
-
-WWI is used only as an example/test fixture.
-"""
-
-
-path = REPO_ROOT / "README.md"
-
-path.write_text(
-    readme.strip() + "\n",
-    encoding="utf-8"
-)
-
-print(f"✓ Created {path}")
+Run regression tests with `python -m pytest -q`. Optional real C# fixture tests
+require a .NET 8 SDK and `SSIS_TEST_DOTNET=/absolute/path/to/dotnet`.
+Source runtime equivalence remains scoped to the observations actually supplied.

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic example of the bounded DI XML profile; vendor runtime unverified. -->
+<DataServices version="14.2">
+  <DIDatastore id="warehouse" name="Warehouse" databaseType="Oracle"/>
+  <DIJob id="job" name="CustomerJob">
+    <DIDataflow id="flow" name="CustomerFlow">
+      <DISource id="src" name="CustomerSource" datastoreId="warehouse">
+        <DIColumn name="CUSTOMER_ID" datatype="integer"/>
+      </DISource>
+      <DIQuery id="query" name="ProjectCustomer" language="SQL">SELECT CUSTOMER_ID FROM CUSTOMER</DIQuery>
+      <DITarget id="tgt" name="CustomerTarget" datastoreId="warehouse"/>
+      <DILink sourceId="src" targetId="query" type="DATA" sourcePort="CUSTOMER_ID" targetPort="CUSTOMER_ID"/>
+      <DILink sourceId="query" targetId="tgt" type="DATA"/>
+    </DIDataflow>
+  </DIJob>
+</DataServices>

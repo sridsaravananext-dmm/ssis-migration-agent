@@ -51,9 +51,7 @@ def test_default_ssis_workflow_adds_schema_valid_file_and_ir_evidence(tmp_path):
 
 
 @pytest.mark.parametrize("content,platform", [
-    ("<POWERMART/>", "informatica"),
     ("<DSExport/>", "datastage"),
-    ("<SunopsisExport/>", "odi"),
     ("CellPutN(1, 'Cube', 'Member');", "tm1"),
 ])
 def test_unsupported_or_excluded_exports_never_reach_ssis_parser(tmp_path, monkeypatch, content, platform):

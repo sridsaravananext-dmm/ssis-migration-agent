@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic Sunopsis object/field example; vendor runtime unverified. -->
+<SunopsisExport>
+  <Admin RepositoryVersion="05.02.02.08"/>
+  <Object class="com.sunopsis.dwg.dbobj.SnpProject">
+    <Field name="IProject" type="java.lang.Number">1</Field>
+    <Field name="ProjectName" type="java.lang.String">Example</Field>
+  </Object>
+  <Object class="com.sunopsis.dwg.dbobj.SnpFolder">
+    <Field name="IFolder" type="java.lang.Number">10</Field>
+    <Field name="IProject" type="java.lang.Number">1</Field>
+    <Field name="FolderName" type="java.lang.String">Customer</Field>
+  </Object>
+  <Object class="com.sunopsis.dwg.dbobj.SnpPop">
+    <Field name="IPop" type="java.lang.Number">100</Field>
+    <Field name="IFolder" type="java.lang.Number">10</Field>
+    <Field name="PopName" type="java.lang.String">CustomerInterface</Field>
+  </Object>
+  <Object class="com.sunopsis.dwg.dbobj.SnpTxt">
+    <Field name="ITxt" type="java.lang.Number">200</Field>
+    <Field name="Txt" type="java.lang.String"><![CDATA[SELECT CUSTOMER_ID FROM CUSTOMER]]></Field>
+  </Object>
+</SunopsisExport>

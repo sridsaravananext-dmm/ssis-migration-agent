@@ -44,11 +44,11 @@ with st.sidebar:
                      'Informatica PowerCenter':'informatica','SAP Data Services (BODS)':'bods','Oracle Data Integrator (ODI)':'odi'}
     platform_choice=st.selectbox('Confirm source platform',list(platform_labels),key='platform_choice')
     source_platform=platform_labels[platform_choice]
-    st.caption('SSIS generation and bounded TM1 candidates are available. Other adapters remain pending.')
+    st.caption('SSIS generation, bounded TM1 candidates, and PowerCenter/BODS/ODI XML structural analysis are available.')
 
 st.title('Legacy ETL Migration Workbench')
 st.write('Configure exported sources, target namespaces and Databricks notebook parameters in one place.')
-st.caption('Generation checkpoint · Review notebooks in your Databricks environment before the next phase.')
+st.caption('Offline implementation continues · Execution and source equivalence remain unverified until evidence is supplied.')
 
 def save_upload(upload, folder):
     raw=upload.getvalue();name=Path(upload.name.replace('\\','/')).name
@@ -62,7 +62,7 @@ def save_upload(upload, folder):
 def source_from_folder(folder):
     candidates=bundle_candidates(folder)
     if not candidates:
-        st.error('No SSIS package or explicit TM1 source manifest was found in this folder.')
+        st.error('No SSIS package, TM1 source manifest or supported PowerCenter/BODS/ODI XML export was found in this folder.')
         return None
     labels={str(p.relative_to(folder)):p for p in candidates}
     choice=st.selectbox('Source package / manifest',list(labels),key='bundle_manifest')
@@ -144,20 +144,22 @@ with tab_upload:
 
     detected=describe_file(source_path)['format'] if source_path and source_path.is_file() else None
     native=source_platform=='tm1' or detected=='tm1_source_bundle_v1' or package_mode=='Use TM1 sample bundle'
+    xml_native=source_platform in {'informatica','bods','odi'} or detected in {'powercenter_xml','bods_xml','odi_xml'}
     with st.sidebar:
-        if native and st.session_state.get('ai_enabled'):st.session_state.ai_enabled=False
-        ai_enabled=st.checkbox('Enable AI-assisted generation',value=False,key='ai_enabled',disabled=native)
+        if (native or xml_native) and st.session_state.get('ai_enabled'):st.session_state.ai_enabled=False
+        ai_enabled=st.checkbox('Enable AI-assisted generation',value=False,key='ai_enabled',disabled=native or xml_native)
         if native:st.caption('TM1 candidates use deterministic capability checks; unsupported source behavior blocks generation.')
+        if xml_native:st.caption('Native XML adapters generate structural IR, dependencies and review contracts. Vendor target translation remains blocked.')
     if native and source_platform not in {None,'tm1'}:
         source_error='The confirmed platform conflicts with the supplied TM1 source. Select TM1 or automatic detection.'
         st.error(source_error)
-    if source_platform not in {None,'ssis','tm1'}:
-        source_error='This source adapter is not available for generation yet.';st.info(source_error)
+    if xml_native and source_path and source_platform is not None and describe_file(source_path)['platform'] != source_platform:
+        source_error='The confirmed platform conflicts with the supplied export content.';st.error(source_error)
 
     mapping_path=procedures_path=ddl_path=dependency_base=None
     dependency_files=[];file_roles={};selected_mapping_path=None;mapping_doc=None
     metadata_paths=[];connection_choices={};connection_bindings=[];effective_connection_doc=None;connection_error=None
-    if not native:
+    if not native and not xml_native:
         st.header("2. Upload Dependencies (optional)")
         st.caption("Supply schema metadata, procedure definitions, connection mappings, parameters and other dependencies as files. Review detected roles or confirm them below. Every supplied file remains in the inventory.")
         uploaded_deps = st.file_uploader(
@@ -255,7 +257,7 @@ with tab_upload:
             except (ValueError,OSError,UnicodeError) as exc:
                 connection_error=str(exc);st.error(connection_error)
 
-    else:
+    elif native:
         st.subheader('TM1 source bundle and target mapping')
         if source_path:
             try:
@@ -281,6 +283,15 @@ with tab_upload:
             except (ValueError,OSError,UnicodeError) as exc:
                 source_error=str(exc);st.error(source_error)
         else:st.info('Upload a complete TM1 bundle ZIP, select a source path, or use the TM1 sample bundle.')
+    else:
+        st.subheader('Native XML structural analysis')
+        st.info('This phase inventories the export, builds typed IR and declared dependency links, and downloads review contracts. It does not generate vendor migration notebooks. Unknown constructs and missing definitions remain blockers.')
+        st.caption('Supply a self-contained UTF-8 export. BODS ATL, undocumented XML encodings, ODI knowledge-module execution and source runtime semantics remain unsupported.')
+        if source_path:st.dataframe(input_inventory([source_path]),hide_index=True)
+        if source_path and source_root:
+            extras=[p for p in artifact_files(source_root) if p.resolve()!=source_path.resolve()]
+            if extras:
+                st.warning('The structural XML adapter does not consume these other supplied files: '+', '.join(str(p.relative_to(source_root)) for p in extras)+'. Dependencies on them remain unresolved.')
 
     st.divider()
     st.subheader('Databricks target')
@@ -354,6 +365,7 @@ with tab_upload:
 with tab_run:
     st.subheader('Generate migration artifacts')
     st.write('Source intake → native IR → migration contract → capability checks → generation → local validation')
+    if xml_native:st.caption('For native XML exports this run stops at structural analysis and review contracts; target generation remains blocked.')
     if not can_run:st.info('Complete the source and target configuration in Upload & Configure before generating artifacts.')
     if st.button('🚀 Run Migration',type='primary',disabled=not can_run):
         try:
@@ -456,7 +468,19 @@ with tab_artifacts:
         else:st.info('No artifact files found.')
 
 with tab_validation:
-    st.subheader('Databricks validation handoff')
+    st.subheader('Offline evidence comparison')
+    st.caption('Compare supplied observations without connecting to a source server or Databricks. Synthetic captures do not verify source equivalence.')
+    source_observation=st.file_uploader('Source observation JSON',type=['json'],key='source_observation')
+    target_observation=st.file_uploader('Target observation JSON',type=['json'],key='target_observation')
+    if source_observation and target_observation:
+        from ssis_migration.ui import reconciliation_bundle
+        try:
+            comparison,comparison_zip=reconciliation_bundle(source_observation.getvalue(),target_observation.getvalue())
+            st.write('**Observed case:** `'+comparison['status']+'` · **Evidence:** `'+comparison['evidence_scope']+'`')
+            st.json(comparison)
+            st.download_button('Download comparison and original captures',comparison_zip,'observation_comparison.zip')
+        except (ValueError,OSError,UnicodeError) as exc:st.error('Observation comparison failed: '+str(exc))
+    st.subheader('Optional Databricks validation handoff')
     st.write('1. Download the generated notebooks and import them into your destination workspace folder.')
     st.write('2. Attach Python/PySpark compute. For TM1, run Validation.ipynb first; every supplied fixture must pass.')
     st.write('3. Run the migration notebook with fixture inputs, inspect results, then review explicit table bindings for your test data.')

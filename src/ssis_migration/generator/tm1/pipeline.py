@@ -13,7 +13,8 @@ from .emitter import render, validate_rendered, verify_fixtures
 HANDOFF = '''# Databricks candidate review
 
 This bundle stops at generation. It does not deploy, open source-system connections,
-write persistent tables or claim migration acceptance. No later adapter phase has started.
+write persistent tables or claim migration acceptance. Offline implementation may continue
+without a manual Databricks review; execution and source equivalence remain unverified.
 
 ## First run: synthetic fixtures
 
@@ -72,10 +73,11 @@ snapshot identifiers and independent TM1 observations in your review. Compare ev
 business rule and edge case. Criticality and weights remain unassigned; the minimum 80%
 weighted verified semantic gate and all mandatory gates still apply.
 
-Stop here for your Databricks review. Consolidations, feeders, sparse/empty-cell semantics,
+Databricks human review is optional for continuing implementation. Consolidations, feeders, sparse/empty-cell semantics,
 MDX functions/aggregations, nonconstant rules, TI lifecycle logic, general floating arithmetic,
 source transaction/error semantics, full C# compilation/equivalence and other adapters remain
-outside this candidate. Continue to the next phase only after your review.
+outside this candidate. Continuing implementation does not waive execution, data-equivalence,
+critical-behavior or weighted semantic acceptance gates.
 '''
 
 
@@ -143,7 +145,8 @@ def run_tm1_generation(source, output, target_mapping, *, workspace_config=None)
                           'execution':{'databricks':'NOT_RUN'},'data_equivalence':{'source_comparison':'NOT_VERIFIED'}},
               'assumptions':{'source':mapping['record'],'declarations':mapping['document']['semantic_profile'],'verification':'NOT_VERIFIED'},
               'required_human_actions':contract['validation_requirements'],
-              'next_phase_gate':'STOP_FOR_USER_DATABRICKS_REVIEW',
+              'next_phase_gate':'CONTINUE_OFFLINE_IMPLEMENTATION',
+              'databricks_human_review':'DEFERRED_BY_USER',
               'artifacts':{name:str(directory/name) for name in [*artifacts,'generation_contract.json','capability_report.json',
                             'fixture_results.json','generation_validation.json','validation_results.json','DATABRICKS_REVIEW.md','target_mapping.json',
                             'source_envelope.json','normalized_ir.json','migration_plan.json','migration_contracts.json',

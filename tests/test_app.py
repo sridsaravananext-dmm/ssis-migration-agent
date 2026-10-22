@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import streamlit as st
+import pytest
 from streamlit.testing.v1 import AppTest
 
 
@@ -27,6 +28,37 @@ class UploadedFile:
 
     def getvalue(self):
         return self.content
+
+
+@pytest.mark.parametrize('relative,platform',[
+    ('informatica/simple_mapping.xml','informatica'),('bods/structural_job.xml','bods'),('odi/structural_export.xml','odi'),
+])
+def test_native_xml_upload_produces_downloadable_review_without_notebooks(monkeypatch,relative,platform):
+    root=Path(__file__).resolve().parents[1]
+    source=root/'examples'/relative
+    upload=UploadedFile(source.name,source.read_bytes())
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**k:upload if k.get('key')=='package_upload' else None)
+    app=AppTest.from_file(str(root/'app.py')).run()
+    assert not app.exception
+    assert next(w for w in app.checkbox if w.label=='Enable AI-assisted generation').disabled
+    button=next(w for w in app.button if w.label=='🚀 Run Migration')
+    assert not button.disabled
+    button.click().run(timeout=30)
+    assert not app.exception
+    report=app.session_state['migration_result']
+    assert report['source_platform']==platform and report['scope']=='REVIEW_ONLY'
+    assert report['generated_artifact_count']==0 and report['migration_accepted'] is False
+    assert Path(report['artifacts']['normalized_ir']).is_file()
+
+
+def test_workbench_compares_supplied_observations_without_databricks(monkeypatch):
+    root=Path(__file__).resolve().parents[1]
+    uploads={key:UploadedFile(key+'.json',(root/'examples/validation'/(key+'.json')).read_bytes())
+             for key in ('source_observation','target_observation')}
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**k:uploads.get(k.get('key')))
+    app=AppTest.from_file(str(root/'app.py')).run()
+    assert not app.exception
+    assert any('SYNTHETIC_FIXTURES_ONLY' in item.value for item in app.markdown)
 
 
 def test_upload_roles_and_platform_are_explicit_and_every_dependency_is_preserved(monkeypatch):
