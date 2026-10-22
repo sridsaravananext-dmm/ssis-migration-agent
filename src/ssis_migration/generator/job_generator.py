@@ -10,8 +10,12 @@ dependencies into:
 
 The job runs the generated migration notebook with a
 `step_id` parameter so each task executes only its portion
-of the migration. Dimensions run before facts when no
-explicit dependencies exist.
+of the migration. Tasks are chained sequentially in plan
+order (dimensions before facts); explicit dependencies are
+preserved. Sequential execution matches sequential SSIS
+control flow and serializes writes to control tables that
+do not support concurrent writers (e.g. Delta tables with
+identity columns such as Integration.Lineage).
 """
 
 from __future__ import annotations
@@ -103,6 +107,7 @@ class JobGenerator:
 
         tasks: list[dict[str, Any]] = []
         step_keys: dict[str, str] = {}
+        prev_task_key: str | None = None
 
         for step in steps:
             step_id = step.get(
@@ -125,6 +130,13 @@ class JobGenerator:
                     if s.get("step_type") == "DIMENSION_LOAD"
                     and s.get("step_id") in step_keys
                 ]
+
+            # Chain each task to its predecessor so the job executes
+            # sequentially, matching sequential SSIS control flow and
+            # serializing writes to control tables (Delta identity
+            # columns do not support concurrent writers).
+            if prev_task_key and prev_task_key not in dep_keys:
+                dep_keys.append(prev_task_key)
 
             task: dict[str, Any] = {
                 "task_key": task_key,
@@ -150,6 +162,7 @@ class JobGenerator:
                 ]
 
             tasks.append(task)
+            prev_task_key = task_key
 
         parameters = [
             {"name": "catalog", "default": catalog},

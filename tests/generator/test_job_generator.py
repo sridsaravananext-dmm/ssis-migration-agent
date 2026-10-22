@@ -127,6 +127,35 @@ def test_generate_implicit_dim_before_fact_deps(
     assert "load_customer_dimension" in dep_keys
 
 
+def test_generate_chains_tasks_sequentially(
+    job_generator, simple_plan,
+):
+    """Tasks form one sequential chain in sorted order,
+    matching sequential SSIS control flow and serializing
+    writes to control tables (Delta identity columns reject
+    concurrent writers)."""
+    job = job_generator.generate(
+        simple_plan,
+        notebook_path="/Workspace/Test/nb.ipynb",
+    )
+
+    tasks = {t["task_key"]: t for t in job.tasks}
+    assert "depends_on" not in tasks["load_city_dimension"]
+    assert tasks["load_customer_dimension"]["depends_on"] == [
+        {"task_key": "load_city_dimension"},
+    ]
+    # Fact keeps its implicit dimension deps and additionally
+    # chains to its immediate predecessor.
+    fact_deps = [
+        d["task_key"]
+        for d in tasks["load_movement_fact"]["depends_on"]
+    ]
+    assert fact_deps == [
+        "load_city_dimension",
+        "load_customer_dimension",
+    ]
+
+
 def test_generate_respects_explicit_dependencies(
     job_generator, plan_with_deps,
 ):
