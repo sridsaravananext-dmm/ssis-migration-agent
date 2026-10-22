@@ -44,7 +44,11 @@ literal TM1 DB cell reads with explicit dependency ordering. Cycles and dynamic
 or cross-cube reads block generation; the existing constant-rule profile and
 previous candidate utility bytes remain unchanged.
 
-Latest verification: **1,215 tests passed, 4 live Databricks checks skipped**.
+[Static public MDX subsets](docs/tm1-static-subset-generation.md) now expand from
+supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
+missing scope and ambiguous or invalid members block generation.
+
+Latest verification: **1,244 tests passed, 4 live Databricks checks skipped**.
 Installed-wheel and previous-candidate replay checks passed; execution and source
 equivalence remain unverified.
 

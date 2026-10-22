@@ -257,27 +257,62 @@ def member_tuple(expression, model):
     return result
 
 
-def axis_set(expression, model, limit):
-    """Lower bounded literal sets and static CrossJoin/Head/Tail expressions.
+def static_subset(expression, model, catalog, limit, bindings):
+    """Expand one explicitly public static subset using supplied metadata only."""
+    require(catalog is not None, 'Supplied subset metadata catalog is required.')
+    args = expression['arguments']
+    require(len(args)==3, 'TM1SubsetToSet requires an explicit public scope; scope defaults are not guessed.')
+    path, name, scope = args
+    require(path['kind']=='member_path' and path['property'] is None and len(path['segments'])==2
+            and all(s['kind']=='NAME' for s in path['segments']),
+            'Subset hierarchy must be an explicit canonical [dimension].[hierarchy] path.')
+    require(name['kind']=='literal' and name['category']=='STRING' and name['value'],
+            'Subset name must be a nonempty literal; dynamic names are unsupported.')
+    require(scope['kind']=='literal' and scope['category']=='STRING' and scope['value'].lower()=='public',
+            'Only explicit public subsets are supported; private owners/security principals are not guessed.')
+    dimension, hierarchy = [s['value'] for s in path['segments']]
+    axes = [c for c in model['coordinates'] if c['dimension']==dimension and c['hierarchy']==hierarchy]
+    require(len(axes)==1, 'Subset hierarchy does not match a declared cube coordinate.')
+    candidates = catalog.find('subset',name['value'],dimension=dimension,hierarchy=hierarchy,scope='public',owner=None)
+    require(len(candidates)==1, 'Missing/ambiguous public subset declaration: '+name['value'])
+    entry = candidates[0]; subset = entry['value']; members = subset['members']
+    require(members is not None and subset['expression'] is None,
+            'Dynamic subset expressions are preserved but are not evaluated for generation.')
+    require(members and len(members)<=limit, 'Static subset must be nonempty and fit the preview bound.')
+    require(len(set(members))==len(members), 'Duplicate static subset members require explicit cellset semantics review.')
+    require(all(m in axes[0]['members'] for m in members), 'Static subset contains a missing/non-leaf canonical member.')
+    if bindings is not None:
+        bindings.append({'source_span':copy.deepcopy(expression['span']),
+                         'dimension':dimension,'hierarchy':hierarchy,'name':name['value'],'scope':'public','owner':None,
+                         'ordered_members':list(members),'metadata_evidence':copy.deepcopy(entry['evidence'])})
+    return [{dimension:member} for member in members]
+
+
+def axis_set(expression, model, limit, *, catalog=None, subset_bindings=None):
+    """Lower literal sets, supplied static public subsets and bounded set functions.
 
     All function inputs are checked before selection: a Head/Tail cannot hide
     unsupported expressions, duplicate tuples or inconsistent dimensionality.
     """
     kind = expression['kind']
-    if kind == 'group': return axis_set(expression['expression'],model,limit)
+    def expand(child):
+        return axis_set(child,model,limit,catalog=catalog,subset_bindings=subset_bindings)
+    if kind == 'group': return expand(expression['expression'])
     if kind == 'set':
         tuples = [member_tuple(item,model) for item in expression['items']]
+    elif kind == 'function' and expression['name'].upper()=='TM1SUBSETTOSET':
+        tuples = static_subset(expression,model,catalog,limit,subset_bindings)
     elif kind == 'function' and expression['name'].upper() in {'CROSSJOIN','HEAD','TAIL'}:
         name = expression['name'].upper();args = expression['arguments']
         if name == 'CROSSJOIN':
             require(len(args)==2,'CrossJoin requires exactly two explicit sets.')
-            left = axis_set(args[0],model,limit);right = axis_set(args[1],model,limit)
+            left = expand(args[0]);right = expand(args[1])
             require(not set(left[0]) & set(right[0]),'CrossJoin operands cannot overlap dimensions.')
             require(len(left)*len(right)<=limit,'CrossJoin exceeds the bounded preview limit.')
             tuples = [{**l,**r} for l in left for r in right]
         else:
             require(len(args) in {1,2},name+' requires a set and optional literal positive count.')
-            tuples = axis_set(args[0],model,limit);count = 1
+            tuples = expand(args[0]);count = 1
             if len(args)==2:
                 count_node = args[1]
                 require(count_node['kind']=='literal' and count_node['category']=='INTEGER' and count_node['value'].isascii()
@@ -287,14 +322,14 @@ def axis_set(expression, model, limit):
             require(0<count<=limit,name+' requires a positive count within the preview bound; empty axes are unsupported.')
             tuples = tuples[:count] if name=='HEAD' else tuples[-count:]
     else:
-        raise CapabilityError('MDX axis requires a literal set or bounded static CrossJoin/Head/Tail.')
+        raise CapabilityError('MDX axis requires a literal set, supplied static public subset or bounded static CrossJoin/Head/Tail.')
     require(tuples and len(tuples)<=limit,'MDX axis must be nonempty and fit the preview bound.')
     require(all(set(t)==set(tuples[0]) for t in tuples),'MDX set dimensionality is inconsistent.')
     require(len({tuple(sorted(t.items())) for t in tuples})==len(tuples),'Duplicate axis tuples require explicit cellset semantics review.')
     return tuples
 
 
-def lower_mdx(analysis, config, model, limit):
+def lower_mdx(analysis, config, model, limit, *, catalog=None):
     require(model['value_semantics'] == 'EVALUATED_WITHOUT_RULES', 'MDX requires evaluated cells without hidden rules/feeders.')
     require(config['datasource_table'] is None and config['order_column'] is None and not config['parameters'],
             'MDX mapping contains unused datasource/parameter declarations.')
@@ -303,12 +338,12 @@ def lower_mdx(analysis, config, model, limit):
     axes = sorted(query['axes'], key=lambda a:a['ordinal'])
     require(1 <= len(axes) <= 2 and [a['ordinal'] for a in axes] == list(range(len(axes))), 'Only axis 0 and optional axis 1 are supported.')
     slicer = {} if query['slicer'] is None else member_tuple(query['slicer'],model)
-    choices = []; used = set(slicer)
+    choices = []; used = set(slicer); subset_bindings = []
     count = 1
     for axis in axes:
         expression = axis['expression']
         require(not axis['non_empty'],'NON EMPTY requires source empty-cell semantics and is unsupported.')
-        tuples = axis_set(expression,model,limit)
+        tuples = axis_set(expression,model,limit,catalog=catalog,subset_bindings=subset_bindings)
         require(all(set(t) == set(tuples[0]) for t in tuples) and not (used & set(tuples[0])), 'MDX axis dimensionality is inconsistent or overlaps another axis/slicer.')
         require(len({tuple(sorted(t.items())) for t in tuples}) == len(tuples), 'Duplicate axis tuples require explicit cellset semantics review.')
         used.update(tuples[0]); choices.append(tuples); count *= len(tuples)
@@ -322,7 +357,16 @@ def lower_mdx(analysis, config, model, limit):
         for a,p in enumerate(positions):coordinates.update(choices[a][p])
         requests.append({'coordinates':[coordinates[c['dimension']] for c in model['coordinates']],
                          'axis_positions':{'axis_'+str(a):p for a,p in enumerate(positions)}})
-    return {'kind':'cell_query','model':model,'requests':requests}
+    program = {'kind':'cell_query','model':model,'requests':requests}
+    if subset_bindings:
+        source = analysis['source']
+        for binding in subset_bindings:
+            span = binding['source_span']
+            binding['source_evidence'] = {'file_id':source['file_id'],
+                'locator':source['locator']+'#mdx-chars='+str(span['start'])+':'+str(span['end']),
+                'rule':'supplied_static_public_subset_expansion'}
+        program['subset_bindings'] = subset_bindings
+    return program
 
 
 def analyze_capabilities(bundle, mapping):
@@ -365,7 +409,7 @@ def analyze_capabilities(bundle, mapping):
                 program = lower_rules(analysis,config,model)
             else:
                 require(model['cube'] not in rules_cubes, 'Cross-unit rule evaluation/execution ordering requires review; no dependency was guessed.')
-                program = lower_ti(analysis,config,model,catalog,mapping['max_rows']) if language == 'tm1_turbointegrator' else lower_mdx(analysis,config,model,mapping['max_rows'])
+                program = lower_ti(analysis,config,model,catalog,mapping['max_rows']) if language == 'tm1_turbointegrator' else lower_mdx(analysis,config,model,mapping['max_rows'],catalog=catalog)
             program['max_rows'] = mapping['max_rows']; program['unit_id'] = unit_id
             capability.update(decision='DETERMINISTIC',program=program)
         except CapabilityError as exc:

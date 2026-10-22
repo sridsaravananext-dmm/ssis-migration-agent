@@ -42,6 +42,10 @@ Sequential increments in this continuation:
    and acyclic complete-coordinate N rules. Dependency ordering, source evidence,
    standalone notebooks and acceptance drafts are covered; existing constant-rule
    artifacts retain their utility bytes. See [capability details](tm1-leaf-rule-generation.md).
+9. Static public MDX subsets: **implemented** using explicitly supplied ordered
+   metadata and public scope. Expansions carry source/declaration evidence and
+   compose with bounded Head/Tail/CrossJoin. Private/dynamic/ambiguous subsets
+   remain blocked. See [capability details](tm1-static-subset-generation.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

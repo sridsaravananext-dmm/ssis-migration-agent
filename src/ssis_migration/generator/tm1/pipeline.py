@@ -160,6 +160,8 @@ def run_tm1_generation(source, output, target_mapping, *, workspace_config=None)
                  for r in c['program']['rules']],
         'dependencies':c['program']['rule_dependencies'],
     } for c in contract['capabilities'] if c['program'] is not None and c['program']['kind']=='leaf_rules'}
+    report['subset_expansion'] = {c['unit_id']:c['program']['subset_bindings'] for c in contract['capabilities']
+                                  if c['program'] is not None and c['program'].get('subset_bindings')}
     # Keep the original source-only review report for diagnostics and backward compatibility.
     review['artifacts']['report'] = str(directory/'source_review_report.json')
     review['artifacts']['validation'] = str(directory/'source_review_validation.json')

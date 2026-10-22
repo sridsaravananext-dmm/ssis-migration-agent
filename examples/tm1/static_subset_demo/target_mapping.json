@@ -1,0 +1,123 @@
+{
+  "mapping_version": "1.0",
+  "export_format": "tm1_databricks_mapping_v1",
+  "source_bundle_sha256": "b4c71779e613a735378876aad762ab57f2e02b0b99f9d6d4425eb0167984593b",
+  "semantic_profile": {
+    "name": "dense_numeric_leaf_snapshot_v1",
+    "numeric_domain": "EXACT_INTEGER_53",
+    "complete_coordinate_domains": true,
+    "canonical_identifiers_only": true,
+    "no_hidden_rules_or_feeders": true,
+    "full_cell_visibility": true,
+    "record_order_semantics": "SOURCE_RECORD_ORDINAL"
+  },
+  "max_rows": 100,
+  "models": [
+    {
+      "model_id": "query",
+      "cube": "QueryCube",
+      "coordinates": [
+        {
+          "dimension": "Product",
+          "hierarchy": "Product",
+          "column": "product"
+        },
+        {
+          "dimension": "Measures",
+          "hierarchy": "Measures",
+          "column": "measure"
+        }
+      ],
+      "value_column": "value",
+      "input_table": null,
+      "value_semantics": "EVALUATED_WITHOUT_RULES"
+    }
+  ],
+  "units": [
+    {
+      "unit_id": "query",
+      "model_id": "query",
+      "datasource_table": null,
+      "order_column": null,
+      "parameters": {}
+    }
+  ],
+  "fixture_cases": [
+    {
+      "case_id": "declared_subset_order",
+      "unit_id": "query",
+      "cells": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        }
+      ],
+      "rows": [],
+      "parameters": {},
+      "expected": [
+        {
+          "axis_0": 0,
+          "axis_1": 0,
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        },
+        {
+          "axis_0": 1,
+          "axis_1": 0,
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        }
+      ],
+      "provenance": {
+        "kind": "SYNTHETIC",
+        "description": "Manually specified B,A cellset order from the supplied static public subset; no TM1 engine was executed."
+      }
+    },
+    {
+      "case_id": "changed_cell_snapshot",
+      "unit_id": "query",
+      "cells": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 4
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 9
+        }
+      ],
+      "rows": [],
+      "parameters": {},
+      "expected": [
+        {
+          "axis_0": 0,
+          "axis_1": 0,
+          "product": "B",
+          "measure": "Quantity",
+          "value": 9
+        },
+        {
+          "axis_0": 1,
+          "axis_1": 0,
+          "product": "A",
+          "measure": "Quantity",
+          "value": 4
+        }
+      ],
+      "provenance": {
+        "kind": "SYNTHETIC",
+        "description": "Manually specified changed evaluated-cell snapshot: ordered B,A values are 9,4. No source engine was executed."
+      }
+    }
+  ]
+}

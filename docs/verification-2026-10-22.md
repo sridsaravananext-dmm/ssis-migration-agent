@@ -2,7 +2,15 @@
 
 Working branch: `GenericAITool-version01`.
 
-Latest follow-up: [same-cube leaf-rule generation](tm1-leaf-rule-generation.md)
+Latest follow-up: [static public subset generation](tm1-static-subset-generation.md)
+passed **1,244 tests, with 4 live Databricks checks skipped**, in 428.29 seconds.
+The 29 new cases cover ordered metadata expansion, scope/privacy boundaries,
+set-function composition, invalid metadata, evidence tampering, reports,
+standalone generation, ZIP intake and acceptance drafts. Installed-only wheel
+checks passed eight synthetic cases across three demos. Archived candidates with
+437 and 98 obligations still replayed successfully; target runtimes are unchanged.
+
+Previous follow-up: [same-cube leaf-rule generation](tm1-leaf-rule-generation.md)
 passed **1,215 tests, with 4 live Databricks checks skipped**, in 397.27 seconds.
 The 25 new cases cover rule reads/dependencies, blocked behavior, compatibility,
 standalone and mixed generated kernels, fixture gating and acceptance drafts.

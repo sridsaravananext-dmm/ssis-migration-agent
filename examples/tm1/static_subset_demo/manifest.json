@@ -1,0 +1,23 @@
+{
+  "manifest_version": "1.0",
+  "export_format": "tm1_source_bundle_v1",
+  "platform": "tm1",
+  "name": "SyntheticTM1StaticSubsetPreview",
+  "source_export_version": null,
+  "units": [
+    {
+      "unit_id": "query",
+      "language": "mdx",
+      "path": "query.mdx",
+      "sha256": "764beefbb995f442b28d0b99da4ef8345e4ead2478d93be9cc78efcac8a9dc37",
+      "source_cube": null,
+      "process_name": null
+    }
+  ],
+  "metadata_files": [
+    {
+      "path": "metadata.json",
+      "sha256": "36a51d2db24249128dc17f752ce5c816218dec6c5b0688d6883cabab6eca0186"
+    }
+  ]
+}

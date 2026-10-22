@@ -61,6 +61,142 @@ def supplied(tmp_path):
 def program(contract,unit):return next(c['program'] for c in contract['capabilities'] if c['unit_id']==unit)
 
 
+def set_static_subset(root, *, members=None, expression=None, scope='public', owner=None, query=None):
+    path=root/'metadata.json';metadata=json.loads(path.read_text())
+    metadata['subsets']=[{'name':'Selection','dimension':'Product','hierarchy':'Product','scope':scope,'owner':owner,
+                          'members':['B','A'] if members is None and expression is None else members,'expression':expression}]
+    write(path,metadata)
+    (root/'query.mdx').write_text(query or "SELECT TM1SubsetToSet([Product].[Product], 'Selection', 'public') ON 0, {[Measures].[Measures].[Quantity]} ON 1 FROM [QueryCube]")
+    refresh(root)
+
+
+@pytest.mark.parametrize('axis,expected',[
+    ("TM1SubsetToSet([Product].[Product], 'Selection', 'public')",['B','A']),
+    ("TM1SubsetToSet([Product].[Product], 'Selection', 'PUBLIC')",['B','A']),
+    ("Head(TM1SubsetToSet([Product].[Product], 'Selection', 'public'),1)",['B']),
+    ("Tail(TM1SubsetToSet([Product].[Product], 'Selection', 'public'))",['A']),
+])
+def test_static_public_subsets_preserve_declared_member_order_and_evidence(supplied,axis,expected):
+    query='SELECT '+axis+' ON 0, {[Measures].[Measures].[Quantity]} ON 1 FROM [QueryCube]'
+    set_static_subset(supplied,query=query);contract=build(supplied)
+    assert contract['status']=='CANDIDATE_READY'
+    p=program(contract,'query')
+    cells=[{'product':'A','measure':'Quantity','value':3},{'product':'B','measure':'Quantity','value':7}]
+    result=execute_program(p,cells,[],{})
+    assert [r['product'] for r in result]==expected
+    assert [r['value'] for r in result]==[7 if name=='B' else 3 for name in expected]
+    assert [r['axis_0'] for r in result]==list(range(len(expected)))
+    binding,=p['subset_bindings']
+    assert binding['ordered_members']==['B','A'] and binding['scope']=='public' and binding['owner'] is None
+    assert binding['metadata_evidence']['locator'].endswith('/subsets/0')
+    span=binding['source_span'];assert 'TM1SubsetToSet' in query[span['start']:span['end']]
+    assert binding['source_evidence']['file_id'] in {f['file_id'] for f in contract['source_ir']['evidence_files']}
+
+
+def test_static_subset_crossjoin_preserves_axis_cell_order(supplied):
+    set_static_subset(supplied,query="SELECT CrossJoin(TM1SubsetToSet([Product].[Product], 'Selection', 'public'), {[Measures].[Measures].[Quantity]}) ON 0 FROM [QueryCube]")
+    p=program(build(supplied),'query')
+    cells=[{'product':'A','measure':'Quantity','value':3},{'product':'B','measure':'Quantity','value':7}]
+    assert execute_program(p,cells,[],{})==[
+        {'axis_0':0,'product':'B','measure':'Quantity','value':7},
+        {'axis_0':1,'product':'A','measure':'Quantity','value':3}]
+
+
+@pytest.mark.parametrize('change',[
+    'missing_scope','private','private_only','missing_subset','wrong_hierarchy','key_path','property_path',
+    'dynamic','empty','duplicate','missing_member','duplicate_declaration','head_hides_duplicate',
+    'head_hides_missing_member','dimension_overlap','no_metadata',
+])
+def test_unsupported_subset_expansion_blocks_the_entire_candidate(supplied,change):
+    set_static_subset(supplied)
+    path=supplied/'metadata.json';metadata=json.loads(path.read_text());subset=metadata['subsets'][0]
+    query=(supplied/'query.mdx').read_text()
+    if change=='missing_scope':query=query.replace(", 'public'",'')
+    elif change=='private':query=query.replace("'public'","'private'");subset.update(scope='private',owner='named-owner')
+    elif change=='private_only':subset.update(scope='private',owner='named-owner')
+    elif change=='missing_subset':subset['name']='Other'
+    elif change=='wrong_hierarchy':query=query.replace('[Product].[Product]','[Product].[Unknown]')
+    elif change=='key_path':query=query.replace('[Product].[Product]','[Product].&[Product]')
+    elif change=='property_path':query=query.replace('[Product].[Product]','[Product].[Product].CurrentMember')
+    elif change=='dynamic':subset.update(members=None,expression='{[Product].[Product].[A]}')
+    elif change=='empty':subset['members']=[]
+    elif change in {'duplicate','head_hides_duplicate'}:subset['members']=['B','B']
+    elif change in {'missing_member','head_hides_missing_member'}:subset['members']=['B','Missing']
+    elif change=='duplicate_declaration':metadata['subsets'].append(copy.deepcopy(subset))
+    elif change=='dimension_overlap':query=query.replace(' ON 0, {', ' ON 0, {[Product].[Product].[A],')
+    elif change=='no_metadata':metadata['subsets']=[]
+    if change.startswith('head_hides'):
+        query=query.replace("TM1SubsetToSet([Product].[Product], 'Selection', 'public')", "Head(TM1SubsetToSet([Product].[Product], 'Selection', 'public'),1)")
+    write(path,metadata);(supplied/'query.mdx').write_text(query);refresh(supplied)
+    contract=build(supplied)
+    assert contract['status']=='BLOCKED'
+    capability=next(c for c in contract['capabilities'] if c['unit_id']=='query')
+    assert capability['decision']=='UNSUPPORTED' and capability['program'] is None and capability['reasons']
+    with pytest.raises(ValueError,match='blocks all'):render(contract)
+
+
+def test_public_subset_does_not_select_a_private_subset_with_the_same_name(supplied):
+    set_static_subset(supplied)
+    path=supplied/'metadata.json';metadata=json.loads(path.read_text())
+    private=copy.deepcopy(metadata['subsets'][0]);private.update(scope='private',owner='named-owner',members=['A'])
+    metadata['subsets'].insert(0,private);write(path,metadata);refresh(supplied)
+    p=program(build(supplied),'query')
+    assert p['subset_bindings'][0]['ordered_members']==['B','A']
+    assert p['subset_bindings'][0]['metadata_evidence']['locator'].endswith('/subsets/1')
+
+
+@pytest.mark.parametrize('change',['members','metadata_evidence','source_span','omit_binding','requests'])
+def test_rehashed_subset_contract_cannot_change_expansion_or_evidence(supplied,change):
+    set_static_subset(supplied);contract=build(supplied);p=program(contract,'query')
+    if change=='members':p['subset_bindings'][0]['ordered_members'].reverse()
+    elif change=='metadata_evidence':p['subset_bindings'][0]['metadata_evidence']['locator']='json:/unrelated'
+    elif change=='source_span':p['subset_bindings'][0]['source_span']['start']=0
+    elif change=='omit_binding':p.pop('subset_bindings')
+    else:p['requests'].reverse()
+    contract['contract_id']=contract_id(contract)
+    with pytest.raises(SchemaValidationError):validate_contract(contract)
+
+
+def test_supplied_subset_metadata_reaches_reports_notebooks_and_acceptance_drafts(supplied,tmp_path):
+    from ssis_migration.generator.tm1 import runtime
+    from ssis_migration.validator.acceptance import load_package,draft_documents,evaluate_acceptance
+    set_static_subset(supplied)
+    report=run_migration(str(supplied/'manifest.json'),str(tmp_path/'output'),target_mapping=str(supplied/'target_mapping.json'))
+    assert report['status']=='GENERATED' and all(f['status']=='PASS' for f in report['fixture_results'])
+    assert report['execution_status']=='NOT_RUN' and not report['migration_accepted']
+    expansion,=report['subset_expansion']['query']
+    assert expansion['ordered_members']==['B','A']
+    directory=Path(report['artifacts']['report']).parent
+    assert (directory/'utilities.py').read_text()==Path(runtime.__file__).read_text()
+    contract=json.loads((directory/'generation_contract.json').read_text())
+    artifacts,_=render(contract);validate_rendered(contract,artifacts)
+    package=load_package(directory);policy,evidence=draft_documents(package)
+    assert len(policy['behaviors'])==len(contract['obligation_ids'])
+    assert not evaluate_acceptance(package,policy,evidence,report_root=tmp_path)['acceptance']['accepted']
+
+
+def test_static_subset_demo_emits_a_standalone_kernel_without_source_execution(tmp_path):
+    from ssis_migration.ui import run_frontend_migration,artifact_archive,extract_bundle,bundle_candidates,validate_bundle_scope
+    from ssis_migration.validator.acceptance import load_package,draft_documents,evaluate_acceptance
+    source=ROOT/'examples/tm1/static_subset_demo'
+    uploaded=extract_bundle(artifact_archive(source),tmp_path/'uploaded')
+    manifest,=bundle_candidates(uploaded)
+    validate_bundle_scope(manifest,uploaded)
+    report=run_frontend_migration(manifest,tmp_path/'output',target_mapping=uploaded/'target_mapping.json')
+    assert report['status']=='GENERATED' and report['execution_status']=='NOT_RUN' and not report['migration_accepted']
+    assert len(report['fixture_results'])==2 and all(r['status']=='PASS' for r in report['fixture_results'])
+    directory=Path(report['artifacts']['report']).parent
+    contract=json.loads((directory/'generation_contract.json').read_text())
+    namespace={};exec(compile((directory/'utilities.py').read_text(),'<trusted-subset-fixture-kernel>','exec'),namespace)
+    for case in contract['mapping_source']['document']['fixture_cases']:
+        output=namespace['execute_program'](program(contract,'query'),case['cells'],case['rows'],case['parameters'])
+        assert output==case['expected']
+        assert [row['product'] for row in output]==['B','A']
+    shutil.rmtree(uploaded)
+    package=load_package(directory);policy,evidence=draft_documents(package)
+    assert not evaluate_acceptance(package,policy,evidence,report_root=tmp_path)['acceptance']['accepted']
+
+
 def set_leaf_rules(root, source):
     (root/'rules.rux').write_text(source)
     path=root/'target_mapping.json';mapping=json.loads(path.read_text())

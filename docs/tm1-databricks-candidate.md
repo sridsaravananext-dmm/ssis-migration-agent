@@ -84,7 +84,8 @@ production migration engine.
 | Source behavior | Candidate strategy | Rejected examples |
 | --- | --- | --- |
 | TI Data section row assignments, numeric +/−/* and comparisons, IF/ELSE, ItemSkip, CellPutN | Explicit ordinal sorting; separate per-record locals; last write to a coordinate wins; earlier writes survive ItemSkip | Nonempty prolog/metadata/epilog, loops, functions, source queries, commands, processes, persistent variables, implicit defaults, increments, destructive calls |
-| Literal MDX member/tuple sets, bounded static CrossJoin/Head/Tail and slicer with every cube dimension explicit | Read explicit leaf cells, retain axis positions and axis-0-fastest cell order | NON EMPTY, general functions, subsets, defaults, properties, aliases, aggregation, subqueries, duplicate tuples |
+| Literal MDX member/tuple sets, bounded static CrossJoin/Head/Tail and slicer with every cube dimension explicit | Read explicit leaf cells, retain axis positions and axis-0-fastest cell order | NON EMPTY, general functions, private/dynamic subsets, defaults, properties, aliases, aggregation, subqueries, duplicate tuples |
+| TM1SubsetToSet with explicit public scope and static supplied metadata | Expand canonical ordered members with source/metadata evidence, then reuse the existing bounded cell-query kernel | Private/dynamic subsets, omitted scope, ambiguous declarations, empty/duplicate/unknown members and unsupported hierarchy paths |
 | Full-coordinate N-qualified numeric constant rules | Constant overlays on explicitly pre-rule stored cells | Feeders, directives, overlapping rules, dynamic/reference expressions, string rules, ambiguous source file precedence |
 | Explicit same-cube leaf-rule DB reads | New pre-rule leaf snapshot declaration; dependency order derived from literal reads, including evaluated rule cells | Cycles, dynamic/cross-cube reads, noncanonical members, unsupported arithmetic/functions and sparse/consolidated semantics |
 
@@ -98,6 +99,8 @@ behavior or TM1 engine lifecycle equivalence.
 See [same-cube leaf-rule generation](tm1-leaf-rule-generation.md) for the new
 opt-in semantic declaration, dependency/evidence reporting and standalone demo.
 The earlier constant-rule profile remains unchanged and still rejects DB reads.
+Static public subsets are described in [their capability guide](tm1-static-subset-generation.md);
+the literal-query and existing rule runtimes are unchanged.
 
 The separate synthetic demo supplies LoadCube, QueryCube and RuleCube and full
 metadata. Original incomplete examples keep their original missing-evidence and
