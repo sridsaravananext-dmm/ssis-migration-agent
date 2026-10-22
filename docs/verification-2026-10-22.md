@@ -2,6 +2,14 @@
 
 Working branch: `GenericAITool-version01`.
 
+Latest follow-up: [same-cube leaf-rule generation](tm1-leaf-rule-generation.md)
+passed **1,215 tests, with 4 live Databricks checks skipped**, in 397.27 seconds.
+The 25 new cases cover rule reads/dependencies, blocked behavior, compatibility,
+standalone and mixed generated kernels, fixture gating and acceptance drafts.
+Installed-only wheel checks passed six synthetic cases across both demos.
+The preceding commit's archived candidate replayed all 437 obligations unchanged.
+The table below records the earlier offline-continuation checkpoint.
+
 | Check | Result and scope |
 | --- | --- |
 | Full regression | **1,184 passed, 4 skipped**, 360.18 seconds. The four skips require live Databricks provider credentials. |

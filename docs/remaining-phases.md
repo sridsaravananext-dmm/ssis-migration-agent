@@ -38,6 +38,10 @@ Sequential increments in this continuation:
    published SHA-512 verification. **Eight real integration tests passed.**
    This covers repository fixtures and test-only Dts stubs, not real SSIS runtime
    references or all source scripts.
+8. Same-cube leaf-rule generation: **implemented** for explicit literal DB reads
+   and acyclic complete-coordinate N rules. Dependency ordering, source evidence,
+   standalone notebooks and acceptance drafts are covered; existing constant-rule
+   artifacts retain their utility bytes. See [capability details](tm1-leaf-rule-generation.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations
@@ -46,7 +50,7 @@ Missing real exports or runtime observations must remain visible in reports.
 
 Still requiring implementation/evidence: production PowerCenter/BODS/ODI target
 translation and version-specific semantics; native BODS ATL and unsupported ODI
-classes/KMs; wider TM1 consolidation, feeder, sparse/empty-cell, nonconstant rule
+classes/KMs; wider TM1 consolidation, feeder, sparse/empty-cell, dynamic/cross-cube/cyclic rule
 and process-lifecycle behavior; real SSIS runtime references/observations; live
 Databricks controlled execution and independent source observations; assessed
 business criticality/weights and data-equivalence coverage. These have not been

@@ -39,6 +39,15 @@ critical behavior and all mandatory evidence gates.
 
 Working branch: `GenericAITool-version01`.
 
+[Same-cube leaf-rule candidates](docs/tm1-leaf-rule-generation.md) now support
+literal TM1 DB cell reads with explicit dependency ordering. Cycles and dynamic
+or cross-cube reads block generation; the existing constant-rule profile and
+previous candidate utility bytes remain unchanged.
+
+Latest verification: **1,215 tests passed, 4 live Databricks checks skipped**.
+Installed-wheel and previous-candidate replay checks passed; execution and source
+equivalence remain unverified.
+
 Implementation details and remaining scope:
 
 - [XML source adapter profiles](docs/xml-source-adapters.md).

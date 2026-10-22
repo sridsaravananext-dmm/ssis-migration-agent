@@ -1,0 +1,115 @@
+{
+  "mapping_version": "1.0",
+  "export_format": "tm1_databricks_mapping_v1",
+  "source_bundle_sha256": "c0431827cfa2abcdda4d3c8d666c3bb8638ad96795a3b37fa4f89c179adf27dc",
+  "semantic_profile": {
+    "name": "dense_numeric_leaf_snapshot_v1",
+    "numeric_domain": "EXACT_INTEGER_53",
+    "complete_coordinate_domains": true,
+    "canonical_identifiers_only": true,
+    "no_hidden_rules_or_feeders": true,
+    "full_cell_visibility": true,
+    "record_order_semantics": "SOURCE_RECORD_ORDINAL"
+  },
+  "max_rows": 100,
+  "models": [
+    {
+      "model_id": "rules",
+      "cube": "RuleCube",
+      "coordinates": [
+        {
+          "dimension": "Product",
+          "hierarchy": "Product",
+          "column": "product"
+        },
+        {
+          "dimension": "Measures",
+          "hierarchy": "Measures",
+          "column": "measure"
+        }
+      ],
+      "value_column": "value",
+      "input_table": null,
+      "value_semantics": "STORED_BEFORE_SUPPLIED_LEAF_RULES"
+    }
+  ],
+  "units": [
+    {
+      "unit_id": "rules",
+      "model_id": "rules",
+      "datasource_table": null,
+      "order_column": null,
+      "parameters": {}
+    }
+  ],
+  "fixture_cases": [
+    {
+      "case_id": "leaf_read_two",
+      "unit_id": "rules",
+      "cells": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        }
+      ],
+      "rows": [],
+      "parameters": {},
+      "expected": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 6
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 2
+        }
+      ],
+      "provenance": {
+        "kind": "SYNTHETIC",
+        "description": "Manually specified dense leaf lookup: stored B=2 implies evaluated A=6. No TM1 runtime was executed."
+      }
+    },
+    {
+      "case_id": "leaf_read_seven",
+      "unit_id": "rules",
+      "cells": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 1
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 7
+        }
+      ],
+      "rows": [],
+      "parameters": {},
+      "expected": [
+        {
+          "product": "A",
+          "measure": "Quantity",
+          "value": 21
+        },
+        {
+          "product": "B",
+          "measure": "Quantity",
+          "value": 7
+        }
+      ],
+      "provenance": {
+        "kind": "SYNTHETIC",
+        "description": "Manually specified changed input: stored B=7 implies evaluated A=21. No TM1 runtime was executed."
+      }
+    }
+  ]
+}

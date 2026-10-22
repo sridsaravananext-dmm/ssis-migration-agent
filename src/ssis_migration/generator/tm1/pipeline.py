@@ -73,8 +73,11 @@ snapshot identifiers and independent TM1 observations in your review. Compare ev
 business rule and edge case. Criticality and weights remain unassigned; the minimum 80%
 weighted verified semantic gate and all mandatory gates still apply.
 
-Databricks human review is optional for continuing implementation. Consolidations, feeders, sparse/empty-cell semantics,
-MDX functions/aggregations, nonconstant rules, TI lifecycle logic, general floating arithmetic,
+Databricks human review is optional for continuing implementation. Same-cube, literal,
+acyclic leaf-rule DB reads are supported only with the explicit pre-rule leaf snapshot
+profile. Their dependency order and source evidence are in the target contract/report.
+Consolidations, feeders, sparse/empty-cell semantics, general MDX functions/aggregations,
+dynamic/cross-cube/cyclic rules, TI lifecycle logic, general floating arithmetic,
 source transaction/error semantics, full C# compilation/equivalence and other adapters remain
 outside this candidate. Continuing implementation does not waive execution, data-equivalence,
 critical-behavior or weighted semantic acceptance gates.
@@ -151,6 +154,12 @@ def run_tm1_generation(source, output, target_mapping, *, workspace_config=None)
                             'fixture_results.json','generation_validation.json','validation_results.json','DATABRICKS_REVIEW.md','target_mapping.json',
                             'source_envelope.json','normalized_ir.json','migration_plan.json','migration_contracts.json',
                             'plan_ir_binding.json','source_evidence_index.json']}}
+    report['rule_evaluation'] = {c['unit_id']:{
+        'cube':c['program']['model']['cube'], 'evaluation_order':c['program']['evaluation_order'],
+        'rules':[{key:r[key] for key in ('coordinates','source_statement_id','source_order','source_span','read_coordinates')}
+                 for r in c['program']['rules']],
+        'dependencies':c['program']['rule_dependencies'],
+    } for c in contract['capabilities'] if c['program'] is not None and c['program']['kind']=='leaf_rules'}
     # Keep the original source-only review report for diagnostics and backward compatibility.
     review['artifacts']['report'] = str(directory/'source_review_report.json')
     review['artifacts']['validation'] = str(directory/'source_review_validation.json')

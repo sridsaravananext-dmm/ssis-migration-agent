@@ -84,8 +84,9 @@ production migration engine.
 | Source behavior | Candidate strategy | Rejected examples |
 | --- | --- | --- |
 | TI Data section row assignments, numeric +/−/* and comparisons, IF/ELSE, ItemSkip, CellPutN | Explicit ordinal sorting; separate per-record locals; last write to a coordinate wins; earlier writes survive ItemSkip | Nonempty prolog/metadata/epilog, loops, functions, source queries, commands, processes, persistent variables, implicit defaults, increments, destructive calls |
-| Literal MDX member/tuple axis sets and slicer with every cube dimension explicit | Read explicit leaf cells, retain axis positions and axis-0-fastest cell order | NON EMPTY, functions, subsets, defaults, properties, aliases, aggregation, subqueries, duplicate tuples |
+| Literal MDX member/tuple sets, bounded static CrossJoin/Head/Tail and slicer with every cube dimension explicit | Read explicit leaf cells, retain axis positions and axis-0-fastest cell order | NON EMPTY, general functions, subsets, defaults, properties, aliases, aggregation, subqueries, duplicate tuples |
 | Full-coordinate N-qualified numeric constant rules | Constant overlays on explicitly pre-rule stored cells | Feeders, directives, overlapping rules, dynamic/reference expressions, string rules, ambiguous source file precedence |
+| Explicit same-cube leaf-rule DB reads | New pre-rule leaf snapshot declaration; dependency order derived from literal reads, including evaluated rule cells | Cycles, dynamic/cross-cube reads, noncanonical members, unsupported arithmetic/functions and sparse/consolidated semantics |
 
 A source unit is translated as a whole. An unsupported construct, conflicting
 metadata, unused/missing mapping or failed fixture blocks executable output for
@@ -93,6 +94,10 @@ the entire package. Cross-unit rule evaluation is blocked. Units run independent
 snapshots; no source execution dependencies are guessed. Input/output snapshots
 represent final candidate cell states, not source transactions, locking, error
 behavior or TM1 engine lifecycle equivalence.
+
+See [same-cube leaf-rule generation](tm1-leaf-rule-generation.md) for the new
+opt-in semantic declaration, dependency/evidence reporting and standalone demo.
+The earlier constant-rule profile remains unchanged and still rejects DB reads.
 
 The separate synthetic demo supplies LoadCube, QueryCube and RuleCube and full
 metadata. Original incomplete examples keep their original missing-evidence and

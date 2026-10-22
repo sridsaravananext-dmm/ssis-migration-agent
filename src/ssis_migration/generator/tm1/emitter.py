@@ -4,11 +4,11 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
-from pathlib import Path
 
 from ssis_migration.generator.job_generator import JobGenerator
 from ssis_migration.generator.notebook import NotebookAssembler
 from . import runtime
+from .leaf_runtime import execute_program, kernel_source
 from .contract import require_candidate
 
 
@@ -26,7 +26,7 @@ def verify_fixtures(contract):
     for case in contract['mapping_source']['document']['fixture_cases']:
         program = programs[case['unit_id']]
         try:
-            actual = runtime.execute_program(program, case['cells'], case['rows'], case['parameters'])
+            actual = execute_program(program, case['cells'], case['rows'], case['parameters'])
             types = output_types(program)
             expected = []
             if len(case['expected']) > program['max_rows']:raise ValueError('Expected output exceeds the preview bound.')
@@ -190,7 +190,7 @@ def render(contract):
     data = '\nimport json\n' + '\n'.join(name+' = json.loads('+repr(json.dumps(value,ensure_ascii=False,allow_nan=False))+')'
              for name,value in [('PROGRAMS',programs),('OUTPUT_TYPES',types),('CASES',cases),
                                  ('VIEW_NAMES',{n:'tm1_preview_'+hashlib.sha256(n.encode()).hexdigest()[:16] for n in programs})]) + '\n'
-    utility = Path(runtime.__file__).read_text(encoding='utf-8')
+    utility = kernel_source(programs)
     description = ('# TM1 Databricks candidate\n\nBounded dense numeric leaf snapshots only; exact integer arithmetic. '
                    'Generated code has not established source equivalence. Review the target contract and semantic declarations first. '
                    'Inputs are read-only; results appear in session temporary views. No persistent writes, deployment or source connections. '

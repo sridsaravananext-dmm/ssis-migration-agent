@@ -15,6 +15,7 @@ from ssis_migration.adapters import get_adapter
 from ssis_migration.generator.tm1.contract import build_contract, contract_id, load_mapping, validate_contract
 from ssis_migration.generator.tm1.emitter import render, validate_rendered, verify_fixtures
 from ssis_migration.generator.tm1.runtime import execute_program, exact_integer
+from ssis_migration.generator.tm1.leaf_runtime import execute_program as execute_leaf_program
 from ssis_migration.migrate import run_migration
 from ssis_migration.schemas import SchemaValidationError
 
@@ -58,6 +59,133 @@ def supplied(tmp_path):
 
 
 def program(contract,unit):return next(c['program'] for c in contract['capabilities'] if c['unit_id']==unit)
+
+
+def set_leaf_rules(root, source):
+    (root/'rules.rux').write_text(source)
+    path=root/'target_mapping.json';mapping=json.loads(path.read_text())
+    next(m for m in mapping['models'] if m['cube']=='RuleCube')['value_semantics']='STORED_BEFORE_SUPPLIED_LEAF_RULES'
+    write(path,mapping);refresh(root)
+
+
+@pytest.mark.parametrize('source,expected,order',[
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity')*3;",[6,2],[0]),
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity')*3; ['Product':'B','Measures':'Quantity']=N:5;",[15,5],[1,0]),
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity')+DB('RuleCube','B','Quantity'); ['Product':'B','Measures':'Quantity']=N:5;",[10,5],[1,0]),
+    ("['Product':'B','Measures':'Quantity']=N:5; ['Product':'A','Measures':'Quantity']=N:-(DB('RuleCube','B','Quantity')+2);",[-7,5],[0,1]),
+])
+def test_leaf_rule_reads_use_evaluated_dependencies_not_source_order(supplied,source,expected,order):
+    set_leaf_rules(supplied,source);contract=build(supplied)
+    assert contract['status']=='CANDIDATE_READY'
+    p=program(contract,'rules');assert p['kind']=='leaf_rules'
+    assert [r['source_order'] for r in p['rules']]==order
+    cells=[{'product':'A','measure':'Quantity','value':1},{'product':'B','measure':'Quantity','value':2}]
+    original=copy.deepcopy(cells)
+    assert [r['value'] for r in execute_leaf_program(p,cells,[],{})]==expected
+    assert cells==original
+    assert all(r['source_statement_id'] and r['source_span'] for r in p['rules'])
+    if len(order)>1:
+        assert len(p['rule_dependencies'])==1
+        assert p['rule_dependencies'][0]=={'source_coordinates':['B','Quantity'],'target_coordinates':['A','Quantity']}
+
+
+@pytest.mark.parametrize('source,reason',[
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube','A','Quantity')+1;",'Cyclic'),
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity'); ['Product':'B','Measures':'Quantity']=N:DB('RuleCube','A','Quantity');",'Cyclic'),
+    ("['Product':'A','Measures':'Quantity']=N:DB('OtherCube','B','Quantity');",'Cross-cube'),
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube','Missing','Quantity');",'missing/non-leaf'),
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B');",'every ordered coordinate'),
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube',1,'Quantity');",'literal'),
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube',!Product,'Quantity');",'literal'),
+    ("['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity')/2;",'Unsupported scalar operator'),
+    ("['Product':'A','Measures':'Quantity']=N:STET;",'Unsupported scalar construct'),
+    ("['Product':'A','Measures':'Quantity']=N:1; ['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity');",'Overlapping'),
+    ("SKIPCHECK; ['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity');",'directives/feeders'),
+])
+def test_unsupported_leaf_rule_dependencies_block_all_generation(supplied,source,reason):
+    set_leaf_rules(supplied,source);contract=build(supplied)
+    capability=next(c for c in contract['capabilities'] if c['unit_id']=='rules')
+    assert contract['status']=='BLOCKED' and capability['program'] is None
+    assert any(reason in r for r in capability['reasons'])
+    with pytest.raises(ValueError,match='blocks all'):render(contract)
+
+
+def test_legacy_constant_rule_profile_does_not_authorize_cell_reads(supplied,candidate):
+    assert program(candidate,'rules')['kind']=='constant_rules'
+    (supplied/'rules.rux').write_text("['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity')*3;")
+    refresh(supplied)
+    assert build(supplied)['status']=='BLOCKED'
+
+
+def test_leaf_rule_input_changes_are_observed_and_overflow_never_returns_a_prefix(supplied):
+    set_leaf_rules(supplied,"['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity')+1;")
+    p=program(build(supplied),'rules')
+    cells=[{'product':'A','measure':'Quantity','value':0},{'product':'B','measure':'Quantity','value':7}]
+    assert execute_leaf_program(p,cells,[],{})[0]['value']==8
+    cells[1]['value']=(1<<53)-1;original=copy.deepcopy(cells)
+    with pytest.raises(ValueError,match='exceeds'):execute_leaf_program(p,cells,[],{})
+    assert cells==original
+    with pytest.raises(ValueError,match='no row/parameter'):execute_leaf_program(p,cells,[],{'unused':1})
+
+
+@pytest.mark.parametrize('change',['dependency','order','read','expression'])
+def test_leaf_rule_contract_replay_rejects_rehashed_dependency_changes(supplied,change):
+    set_leaf_rules(supplied,"['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity')*3; ['Product':'B','Measures':'Quantity']=N:2;")
+    contract=build(supplied);p=program(contract,'rules')
+    if change=='dependency':p['rule_dependencies']=[]
+    elif change=='order':p['rules'].reverse()
+    elif change=='read':p['rules'][1]['read_coordinates']=[]
+    else:p['rules'][1]['value']['left']['coordinates']=['A','Quantity']
+    contract['contract_id']=contract_id(contract)
+    with pytest.raises(SchemaValidationError):validate_contract(contract)
+
+
+def test_optional_leaf_kernel_preserves_old_candidate_utility_bytes(candidate):
+    from ssis_migration.generator.tm1 import runtime
+    artifacts,_=render(candidate)
+    assert artifacts['utilities.py']==Path(runtime.__file__).read_text()
+    assert '_resolve_leaf_reads' not in artifacts['utilities.py']
+
+
+@pytest.mark.parametrize('bundle',['leaf','mixed'])
+def test_leaf_rules_generate_standalone_notebooks_and_unassessed_acceptance_drafts(tmp_path,supplied,bundle):
+    from ssis_migration.validator.acceptance import load_package,draft_documents,evaluate_acceptance
+    source=ROOT/'examples/tm1/leaf_rules_demo'
+    if bundle=='mixed':
+        source=supplied
+        set_leaf_rules(source,"['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity')*3; ['Product':'B','Measures':'Quantity']=N:2;")
+    report=run_migration(str(source/'manifest.json'),str(tmp_path/'output'),target_mapping=str(source/'target_mapping.json'))
+    assert report['status']=='GENERATED' and report['execution_status']=='NOT_RUN'
+    assert not report['migration_accepted'] and report['coverage']['semantic']['weighted_verified_percent'] is None
+    assert len(report['fixture_results'])==(2 if bundle=='leaf' else 4)
+    assert all(r['status']=='PASS' for r in report['fixture_results'])
+    directory=Path(report['artifacts']['report']).parent
+    contract=json.loads((directory/'generation_contract.json').read_text())
+    evaluation=report['rule_evaluation']['rules']
+    assert next(r for r in evaluation['rules'] if r['coordinates']==['A','Quantity'])['read_coordinates']==[['B','Quantity']]
+    expected_edges=[] if bundle=='leaf' else [{'source_coordinates':['B','Quantity'],'target_coordinates':['A','Quantity']}]
+    assert evaluation['dependencies']==expected_edges
+    utility=(directory/'utilities.py').read_text()
+    assert 'from .runtime' not in utility
+    namespace={};exec(compile(utility,'<controlled-leaf-kernel>','exec'),namespace)
+    for case in contract['mapping_source']['document']['fixture_cases']:
+        assert namespace['execute_program'](program(contract,case['unit_id']),case['cells'],case['rows'],case['parameters'])==case['expected']
+    for name in ('Migration.ipynb','Validation.ipynb'):
+        notebook=json.loads((directory/name).read_text())
+        assert any(''.join(c['source'])==utility for c in notebook['cells'] if c['cell_type']=='code')
+    package=load_package(directory);policy,evidence=draft_documents(package)
+    assert len(policy['behaviors'])==len(contract['obligation_ids'])
+    result=evaluate_acceptance(package,policy,evidence,report_root=tmp_path)
+    assert not result['acceptance']['accepted'] and result['coverage']['semantic']['verified_percent'] is None
+
+
+def test_failed_leaf_fixture_prevents_any_runnable_artifacts(supplied,tmp_path):
+    set_leaf_rules(supplied,"['Product':'A','Measures':'Quantity']=N:DB('RuleCube','B','Quantity')*4;")
+    report=run_migration(str(supplied/'manifest.json'),str(tmp_path/'output'),target_mapping=str(supplied/'target_mapping.json'))
+    assert report['status']=='BLOCKED'
+    assert any(r['status']=='FAIL' for r in report['fixture_results'])
+    directory=Path(report['artifacts']['report']).parent
+    assert not list(directory.glob('*.ipynb')) and not (directory/'job.json').exists()
 
 
 def test_all_units_lower_without_promoting_source_review_contracts(candidate):

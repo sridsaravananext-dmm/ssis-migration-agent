@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 from decimal import Decimal
 from itertools import product
+import heapq
 import math
 
 from .metadata.catalog import Catalog
@@ -25,10 +26,10 @@ def one(candidates, label):
     return candidates[0]['value']
 
 
-def scalar(expression, symbols):
+def scalar(expression, symbols, *, cell_model=None):
     kind = expression['kind']
     if kind == 'group':
-        return scalar(expression['value'], symbols)
+        return scalar(expression['value'], symbols, cell_model=cell_model)
     if kind == 'literal':
         if expression['literal_type'] == 'STRING':
             return {'op':'literal', 'value':expression['value']}, 'STRING'
@@ -41,20 +42,33 @@ def scalar(expression, symbols):
         require(name in symbols, 'Variable has no definite per-record value: ' + name)
         return {'op':'variable', 'name':name}, symbols[name]
     if kind == 'unary':
-        value, data_type = scalar(expression['value'], symbols)
+        value, data_type = scalar(expression['value'], symbols, cell_model=cell_model)
         require(data_type == 'NUMERIC' and expression['operator'] in {'+', '-'}, 'Unsupported unary expression.')
         return {'op':'positive' if expression['operator'] == '+' else 'negate', 'value':value}, data_type
     if kind == 'binary':
-        left, lt = scalar(expression['left'], symbols); right, rt = scalar(expression['right'], symbols)
+        left, lt = scalar(expression['left'], symbols, cell_model=cell_model)
+        right, rt = scalar(expression['right'], symbols, cell_model=cell_model)
         operator = expression['operator']
         require(lt == rt == 'NUMERIC', 'Only numeric arithmetic/comparisons are supported; string comparison semantics require review.')
         require(operator in {'+', '-', '*', '=', '<>', '>', '<', '>=', '<='}, 'Unsupported scalar operator: ' + operator)
         return {'op':operator, 'left':left, 'right':right}, 'NUMERIC' if operator in {'+', '-', '*'} else 'BOOLEAN'
+    if kind == 'call' and expression['name'].upper() == 'DB' and cell_model is not None:
+        arguments = expression['arguments']
+        require(len(arguments) == len(cell_model['coordinates'])+1,
+                'Rule DB lookup must supply the cube and every ordered coordinate.')
+        require(all(a['kind']=='literal' and a['literal_type']=='STRING' for a in arguments),
+                'Rule DB lookup requires literal cube and canonical leaf coordinates; dynamic lookups are unsupported.')
+        require(arguments[0]['value']==cell_model['cube'],
+                'Cross-cube rule DB lookups require a separate dependency/evaluation contract.')
+        coordinates = [a['value'] for a in arguments[1:]]
+        require(all(value in axis['members'] for value,axis in zip(coordinates,cell_model['coordinates'])),
+                'Rule DB lookup references a missing/non-leaf canonical member.')
+        return {'op':'cell_value','coordinates':coordinates}, 'NUMERIC'
     raise CapabilityError('Unsupported scalar construct: ' + kind)
 
 
-def typed_expression(expression, symbols, expected):
-    target, actual = scalar(expression, symbols)
+def typed_expression(expression, symbols, expected, *, cell_model=None):
+    target, actual = scalar(expression, symbols, cell_model=cell_model)
     require(actual == expected, 'Expression does not match the declared ' + expected + ' type.')
     return target
 
@@ -161,16 +175,52 @@ def lower_ti(analysis, config, model, catalog, limit):
             'order_column':order,'datasource_table':config['datasource_table'],'statements':body}
 
 
+def rule_reads(expression):
+    """Collect explicit target cell reads from the completely lowered expression."""
+    reads = set(); pending = [expression]
+    while pending:
+        node = pending.pop()
+        if node['op']=='cell_value': reads.add(tuple(node['coordinates']))
+        pending.extend(v for v in node.values() if isinstance(v,dict) and 'op' in v)
+    return reads
+
+
+def order_leaf_rules(rules):
+    """Resolve cell dependencies, never substitute source text order for them."""
+    targets = {tuple(rule['coordinates']):i for i,rule in enumerate(rules)}
+    required = []; followers = [[] for _ in rules]; edges = []
+    for i,rule in enumerate(rules):
+        reads = sorted(rule_reads(rule['value']))
+        rule['read_coordinates'] = [list(key) for key in reads]
+        dependencies = {targets[key] for key in reads if key in targets}
+        required.append(len(dependencies))
+        for predecessor in sorted(dependencies):
+            followers[predecessor].append(i)
+            edges.append({'source_coordinates':rules[predecessor]['coordinates'],
+                          'target_coordinates':rule['coordinates']})
+    ready = [i for i,count in enumerate(required) if count==0]; heapq.heapify(ready)
+    ordered = []
+    while ready:
+        i = heapq.heappop(ready); ordered.append(rules[i])
+        for successor in followers[i]:
+            required[successor] -= 1
+            if required[successor]==0: heapq.heappush(ready,successor)
+    require(len(ordered)==len(rules), 'Cyclic/self-referencing rule DB dependencies are unsupported; no stored-value fallback was substituted.')
+    return ordered, edges
+
+
 def lower_rules(analysis, config, model):
-    require(model['value_semantics'] == 'STORED_BEFORE_SUPPLIED_CONSTANT_RULES', 'Rules require an explicit pre-rule stored snapshot.')
+    leaf_reads = model['value_semantics'] == 'STORED_BEFORE_SUPPLIED_LEAF_RULES'
+    require(leaf_reads or model['value_semantics'] == 'STORED_BEFORE_SUPPLIED_CONSTANT_RULES',
+            'Rules require an explicit pre-rule stored snapshot semantic declaration.')
     require(config['datasource_table'] is None and config['order_column'] is None and not config['parameters'],
             'Rule mapping contains unused datasource/parameter declarations.')
     rules = []; seen = set(); coordinates = model['coordinates']
-    require(analysis['statements'], 'No constant leaf rules were supplied.')
+    require(analysis['statements'], 'No leaf rules were supplied.')
     for statement in analysis['statements']:
         node = statement['ast']
         require(node['kind'] == 'calculation' and node['qualifier'] == 'N',
-                'Only N-qualified full-coordinate constant rules are supported; directives/feeders are blocked.')
+                'Only N-qualified full-coordinate leaf rules are supported; directives/feeders are blocked.')
         selectors = node['area']['selectors']
         by_dimension = {s['dimension']:s['element'] for s in selectors}
         require(len(by_dimension) == len(selectors) == len(coordinates) and
@@ -179,7 +229,16 @@ def lower_rules(analysis, config, model):
         require(all(v in c['members'] for v,c in zip(values,coordinates)), 'Rule area references a missing/non-leaf member.')
         require(tuple(values) not in seen, 'Overlapping rules require source precedence analysis.')
         seen.add(tuple(values))
-        rules.append({'coordinates':values,'value':typed_expression(node['value'], {}, 'NUMERIC')})
+        rule = {'coordinates':values,'value':typed_expression(node['value'], {}, 'NUMERIC',
+                                                             cell_model=model if leaf_reads else None)}
+        if leaf_reads:
+            rule.update(source_statement_id=statement['statement_id'],source_order=statement['source_order'],
+                        source_span=copy.deepcopy(statement['span']))
+        rules.append(rule)
+    if leaf_reads:
+        ordered, edges = order_leaf_rules(rules)
+        return {'kind':'leaf_rules','model':model,'rules':ordered,'rule_dependencies':edges,
+                'evaluation_order':'ACYCLIC_EXPLICIT_CELL_DEPENDENCIES'}
     return {'kind':'constant_rules','model':model,'rules':rules}
 
 

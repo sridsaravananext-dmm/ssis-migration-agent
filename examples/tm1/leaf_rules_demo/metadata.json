@@ -1,0 +1,65 @@
+{
+  "metadata_version": "1.0",
+  "export_format": "tm1_metadata_v1",
+  "platform": "tm1",
+  "source_system": "SYNTHETIC_DATABRICKS_REVIEW_FIXTURE_ONLY",
+  "source_export_version": null,
+  "identifier_matching": "EXACT_CANONICAL_NAMES",
+  "dimensions": [
+    {
+      "name": "Product",
+      "hierarchies": [
+        {
+          "name": "Product",
+          "default_member": null,
+          "members": [
+            {
+              "name": "A",
+              "type": "N",
+              "children": []
+            },
+            {
+              "name": "B",
+              "type": "N",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Measures",
+      "hierarchies": [
+        {
+          "name": "Measures",
+          "default_member": null,
+          "members": [
+            {
+              "name": "Quantity",
+              "type": "N",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "cubes": [
+    {
+      "name": "RuleCube",
+      "dimensions": [
+        {
+          "dimension": "Product",
+          "hierarchy": "Product"
+        },
+        {
+          "dimension": "Measures",
+          "hierarchy": "Measures"
+        }
+      ]
+    }
+  ],
+  "subsets": [],
+  "datasources": [],
+  "processes": []
+}

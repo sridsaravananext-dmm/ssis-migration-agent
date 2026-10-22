@@ -1,0 +1,23 @@
+{
+  "manifest_version": "1.0",
+  "export_format": "tm1_source_bundle_v1",
+  "platform": "tm1",
+  "name": "SyntheticTM1LeafRulePreview",
+  "source_export_version": null,
+  "units": [
+    {
+      "unit_id": "rules",
+      "language": "tm1_rules",
+      "path": "rules.rux",
+      "sha256": "63d77e95d5987587c699d6b071cb6acae8cf227b1c5eec8f5771fb2afbbe1354",
+      "source_cube": "RuleCube",
+      "process_name": null
+    }
+  ],
+  "metadata_files": [
+    {
+      "path": "metadata.json",
+      "sha256": "9e2d12f4a2bff3bed38a1619231923cd7bfe58d201358abf84a0c405c0a106d7"
+    }
+  ]
+}

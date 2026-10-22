@@ -127,6 +127,7 @@
             "enum": [
               "STORED_WITHOUT_RULES",
               "STORED_BEFORE_SUPPLIED_CONSTANT_RULES",
+              "STORED_BEFORE_SUPPLIED_LEAF_RULES",
               "EVALUATED_WITHOUT_RULES"
             ]
           }

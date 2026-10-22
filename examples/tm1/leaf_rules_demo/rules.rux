@@ -1,0 +1,2 @@
+# Synthetic same-cube leaf lookup; expected results are manually specified.
+['Product':'A','Measures':'Quantity'] = N: DB('RuleCube','B','Quantity') * 3;
