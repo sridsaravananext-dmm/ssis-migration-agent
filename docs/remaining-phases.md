@@ -6,11 +6,12 @@ Do not author new synthetic source packages, metadata, input datasets or
 expected outputs. Existing regression examples remain demonstrations, not proof
 of real workload compatibility. See [the source file request](source-export-request.md).
 
-Next: inventory a genuine supplied job and all dependencies; map its source
-behavior/gaps; extend one adapter and Databricks translation capability against
-that evidence; validate using the user's actual source-run outputs and logs when
-available. PowerCenter/BODS/ODI target generation and broader TM1/C# semantics
-remain unfinished. Do not mark these phases complete from structural analysis.
+Next: analyze the declared PowerCenter transformation/session behavior in the
+imported exports, then add supported Databricks translation capabilities against
+that evidence. Use actual source-run inputs/outputs when available; the upstream
+workflow log alone is not equivalence evidence. PowerCenter/BODS/ODI target
+generation and broader TM1/C# semantics remain unfinished. Do not mark these
+phases complete from structural analysis.
 
 The user removed the Databricks human-review checkpoint as a prerequisite to
 further implementation on 2026-10-22. Deployment and live validation are not
@@ -62,8 +63,15 @@ Sequential increments in this continuation:
     originals and upstream log are imported with pinned URLs and byte hashes.
     Explicit Windows-1252 declarations now parse and replay; existing UTF-8 graphs
     are unchanged. All 320 original XML elements survive into review obligations.
-    **Encoding/structural compatibility implemented.** Multi-file binding and
-    transformation semantics remain pending. See the [source audit](public-powercenter-audit.md).
+    **Encoding/structural compatibility implemented.** Multi-file binding is
+    covered below; transformation semantics remain pending. See the [source audit](public-powercenter-audit.md).
+11. Explicit PowerCenter dependency binding: **implemented** for session-to-mapping
+    references with matching repository details, folder UUID and export version.
+    CLI and workbench selection preserve original files, ambiguous/missing links,
+    unsupported constructs and full review obligations. Replay validates every
+    snapshot and original version declaration; single-file graphs are unchanged.
+    See [usage and limits](powercenter-dependency-binding.md). Broader dependency
+    types and target generation remain pending.
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

@@ -26,14 +26,21 @@ def validate_export_review(envelope, graph, plan, contracts):
     validate_native_review_plan(graph, plan, contracts)
 
 
-def run_export_review(source, output, platform, *, workspace_config=None):
-    result = get_adapter(platform).analyze(source)
+def run_export_review(source, output, platform, *, workspace_config=None, dependency_files=None):
+    adapter = get_adapter(platform)
+    if dependency_files:
+        if platform != 'informatica':
+            raise ValueError('Cross-export dependencies are implemented only for PowerCenter XML.')
+        result = adapter.analyze_bundle(source, dependency_files=dependency_files)
+    else:
+        result = adapter.analyze(source)
     graph = result.normalized_ir; envelope = result.source_envelope
     plan, contracts = build_native_review_plan(graph, result.parsed['name'])
     validate_export_review(envelope, graph, plan, contracts)
-    record = envelope['evidence_files'][0]; path = Path(record['path'])
-    if path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest() != record['sha256']:
-        raise ValueError('Export source evidence changed before publishing review artifacts.')
+    for record in envelope['evidence_files']:
+        path = Path(record['path'])
+        if any(p.is_symlink() for p in (path, *path.parents)) or hashlib.sha256(path.read_bytes()).hexdigest() != record['sha256']:
+            raise ValueError('Export source evidence changed before publishing review artifacts.')
     validation = [{'validator': 'export_ir_contract_integrity', 'status': 'PASS', 'scope': 'SOURCE_STRUCTURE'},
                   {'validator': 'target_translation', 'status': 'NOT_IMPLEMENTED', 'scope': 'SEMANTIC_IMPLEMENTATION',
                    'issues': ['Native vendor behavior is not translated by the structural review adapter.']}]

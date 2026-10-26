@@ -51,6 +51,37 @@ def test_native_xml_upload_produces_downloadable_review_without_notebooks(monkey
     assert Path(report['artifacts']['normalized_ir']).is_file()
 
 
+def test_public_powercenter_dependency_requires_selection_then_resolves_in_workbench(monkeypatch):
+    import json
+    root=Path(__file__).resolve().parents[1]
+    sources=root/'examples/public/powercenter_scd1/upstream/SCD1'
+    workflow=UploadedFile('w_scd1.XML',(sources/'w_scd1.XML').read_bytes())
+    mapping=UploadedFile('m_scd1.XML',(sources/'m_scd1.XML').read_bytes())
+    uploads={'package_upload':workflow,'powercenter_dependency_uploads':[mapping]}
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**k:uploads.get(k.get('key')))
+    app=AppTest.from_file(str(root/'app.py')).run()
+    assert not app.exception
+    selection=next(w for w in app.multiselect if w.key=='powercenter_dependencies')
+    assert selection.value==[]
+    next(w for w in app.button if w.label=='🚀 Run Migration').click().run(timeout=30)
+    assert not app.exception
+    unbound=app.session_state['migration_result']
+    assert len(unbound['source_files'])==1 and len(unbound['missing_dependencies'])==1
+    inventory=json.loads((Path(app.session_state['migration_output'])/'configuration/uploaded_input_inventory.json').read_text())
+    assert {Path(f['path']).name for f in inventory}=={'m_scd1.XML','w_scd1.XML'}
+    saved=Path(app.session_state['dependency_upload_directory'])/'m_scd1.XML'
+    selection=next(w for w in app.multiselect if w.key=='powercenter_dependencies')
+    selection.set_value([str(saved)]).run()
+    assert not app.exception
+    next(w for w in app.button if w.label=='🚀 Run Migration').click().run(timeout=30)
+    assert not app.exception
+    bound=app.session_state['migration_result']
+    assert len(bound['source_files'])==2 and bound['missing_dependencies']==[]
+    assert bound['preservation']['node_count']==bound['preservation']['assigned_node_count']==320
+    assert bound['migration_accepted'] is False and bound['generated_artifact_count']==0
+    assert saved.read_bytes()==mapping.content
+
+
 def test_workbench_compares_supplied_observations_without_databricks(monkeypatch):
     root=Path(__file__).resolve().parents[1]
     uploads={key:UploadedFile(key+'.json',(root/'examples/validation'/(key+'.json')).read_bytes())

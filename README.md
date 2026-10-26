@@ -12,8 +12,10 @@ acceptance on real workloads.
 [Existing public exports](docs/public-source-candidates.md) can also be used.
 The first imported source is an unchanged licensed PowerCenter mapping/workflow
 with pinned provenance. Its Windows-1252 declarations now parse and replay with
-original byte hashes; unsupported behavior and missing cross-file dependencies
-remain explicit in review reports. See the [audit](docs/public-powercenter-audit.md).
+original byte hashes. [Explicit dependency selection](docs/powercenter-dependency-binding.md)
+now binds the workflow session to its mapping using matching repository, folder
+UUID and export version. Unsupported behavior and other missing dependencies
+remain explicit. See the [audit](docs/public-powercenter-audit.md).
 
 Incremental, file-based legacy ETL migration framework. **Databricks is the only
 current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
@@ -61,10 +63,15 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Full regression baseline (2026-10-26): **1,246 tests passed, 12 skipped**.
+Full regression baseline (2026-10-26): **1,272 tests passed, 12 skipped**.
 Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
+
+The explicit PowerCenter dependency increment passed **25 binding checks** and
+a real-export workbench selection check. All five prior one-file graphs remain
+exactly unchanged. CLI and installed-wheel review/replay passed after both source
+copies were removed; the resulting review conserves 320 nodes and 382 relationships.
 
 The public PowerCenter increment passed **59 focused XML/intake checks**, exact
 before/after comparison of all three existing UTF-8 XML graphs, the documented

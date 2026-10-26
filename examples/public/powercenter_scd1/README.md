@@ -26,7 +26,18 @@ The workbench also accepts either XML file or its source path. Reports remain
 **BLOCKED / REVIEW_ONLY**: target translation is unimplemented; unsupported
 elements are preserved. The single-file workflow review correctly reports
 `m_scd1` as missing even though the mapping is available as a neighboring file.
-Cross-file dependency binding is a separate implementation increment.
+Cross-file dependency binding is available through explicit selection:
+
+```bash
+python -m ssis_migration.migrate --source examples/public/powercenter_scd1/upstream/SCD1/w_scd1.XML --dependency examples/public/powercenter_scd1/upstream/SCD1/m_scd1.XML --output /tmp/public-powercenter-bound-review
+```
+
+With that selection the session-to-mapping link resolves using matching
+repository, folder UUID and export version. All 320 elements remain in the IR;
+unsupported constructs and target translation still block acceptance. See
+[dependency binding](../../../docs/powercenter-dependency-binding.md) for the
+workbench controls, evidence rules and limits. A one-file review continues to
+report the absent mapping instead of searching the neighboring folder.
 
 No input rows, expected outputs, missing connection bindings or target schemas
 have been invented. These files contain only ASCII-range bytes despite declaring

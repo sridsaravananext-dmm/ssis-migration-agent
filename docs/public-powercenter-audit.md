@@ -60,3 +60,8 @@ checks). All three prior UTF-8 graphs compare exactly to their pre-change form.
 Both public exports passed installed-wheel review and artifact replay after
 deleting the temporary original source copies. The documented CLI command also
 produces the expected blocked review with explicit capability gaps.
+
+Follow-up: [explicit dependency binding](powercenter-dependency-binding.md) is now
+implemented. Selecting the original mapping resolves the workflow's session link;
+single-file behavior remains unchanged. Unsupported constructs, broader dependency
+types, target translation and equivalence are still pending.

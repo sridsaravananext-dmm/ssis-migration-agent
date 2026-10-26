@@ -164,6 +164,7 @@ with tab_upload:
 
     mapping_path=procedures_path=ddl_path=dependency_base=None
     dependency_files=[];file_roles={};selected_mapping_path=None;mapping_doc=None
+    supplied_powercenter_exports=[]
     metadata_paths=[];connection_choices={};connection_bindings=[];effective_connection_doc=None;connection_error=None
     if not native and not xml_native:
         st.header("2. Upload Dependencies (optional)")
@@ -292,12 +293,39 @@ with tab_upload:
     else:
         st.subheader('Native XML structural analysis')
         st.info('This phase inventories the export, builds typed IR and declared dependency links, and downloads review contracts. It does not generate vendor migration notebooks. Unknown constructs and missing definitions remain blockers.')
-        st.caption('Supply a self-contained UTF-8 export. BODS ATL, undocumented XML encodings, ODI knowledge-module execution and source runtime semantics remain unsupported.')
-        if source_path:st.dataframe(input_inventory([source_path]),hide_index=True)
+        st.caption('XML supports UTF-8 and explicitly declared Windows-1252. BODS ATL, other XML encodings, ODI knowledge-module execution and source runtime semantics remain unsupported.')
+        powercenter=source_platform=='informatica' or detected=='powercenter_xml'
+        if powercenter:
+            st.write('**PowerCenter dependency exports**')
+            uploaded_exports=st.file_uploader('Upload PowerCenter dependency XML exports',type=['xml'],
+                accept_multiple_files=True,key='powercenter_dependency_uploads')
+            if uploaded_exports:
+                _,saved_exports=_save_dependencies(uploaded_exports)
+                supplied_powercenter_exports=[p for _,p in saved_exports]
+            options=list(supplied_powercenter_exports)
+            if source_root and package_mode in {'Upload a source bundle (.zip)','Use source path'}:
+                options.extend(p for p in bundle_candidates(source_root) if p!=source_path and describe_file(p)['format']=='powercenter_xml')
+            if package_mode=='Use source path':
+                dependency_paths=st.text_area('Other PowerCenter export paths (one per line)',key='powercenter_dependency_paths')
+                for value in dependency_paths.splitlines():
+                    if not value.strip():continue
+                    path=Path(value.strip()).expanduser().absolute()
+                    if not path.is_file() or any(p.is_symlink() for p in (path,*path.parents)):
+                        source_error='PowerCenter dependency path must identify a readable regular file: '+str(path)
+                        st.error(source_error)
+                    else:options.append(path);supplied_powercenter_exports.append(path)
+            options=list(dict.fromkeys(p for p in options if p!=source_path))
+            labels={str(p):p.name if sum(other.name==p.name for other in options)==1 else str(p) for p in options}
+            selected=st.multiselect('PowerCenter dependency exports to bind',[str(p) for p in options],
+                format_func=lambda value,labels=labels:labels[value],key='powercenter_dependencies')
+            dependency_files=[Path(p) for p in selected]
+            st.caption('Select each dependency to include in this review. Session mappings require matching repository, folder UUID and export version; missing or conflicting definitions remain blocked.')
+        if source_path:st.dataframe(input_inventory([source_path,*dependency_files]),hide_index=True)
         if source_path and source_root:
-            extras=[p for p in artifact_files(source_root) if p.resolve()!=source_path.resolve()]
+            selected_paths={p.resolve() for p in [source_path,*dependency_files]}
+            extras=list(dict.fromkeys(p for p in [*artifact_files(source_root),*supplied_powercenter_exports] if p.resolve() not in selected_paths))
             if extras:
-                st.warning('The structural XML adapter does not consume these other supplied files: '+', '.join(str(p.relative_to(source_root)) for p in extras)+'. Dependencies on them remain unresolved.')
+                st.warning('These other supplied files are not bound to this review: '+', '.join(str(p.relative_to(source_root)) if p.is_relative_to(source_root) else p.name for p in extras)+'. Dependencies on unselected files remain unresolved.')
 
     st.divider()
     st.subheader('Databricks target')
@@ -403,7 +431,7 @@ with tab_run:
                 runtime_mapping.write_text(json.dumps(effective_doc,indent=2,allow_nan=False)+'\n')
                 (configuration_dir/'original_target_mapping.json').write_bytes(selected_mapping_path.read_bytes())
             inventory_paths=artifact_files(source_root) if package_mode in {'Upload a source bundle (.zip)','Use TM1 sample bundle','Use source path'} and source_root else [source_path]
-            inventory_paths=[*inventory_paths,*dependency_files]
+            inventory_paths=[*inventory_paths,*dependency_files,*supplied_powercenter_exports]
             if selected_mapping_path:inventory_paths.append(selected_mapping_path)
             (configuration_dir/'uploaded_input_inventory.json').write_text(json.dumps(input_inventory(inventory_paths),indent=2)+'\n')
             (configuration_dir/'workspace_config.json').write_text(json.dumps(workspace_config,indent=2)+'\n')

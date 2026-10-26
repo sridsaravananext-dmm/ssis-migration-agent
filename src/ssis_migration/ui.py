@@ -191,10 +191,13 @@ def run_frontend_migration(source, output, *, platform=None, target_mapping=None
     xml_native = confirmed in {'informatica','powercenter','informatica_powercenter','bods','sap_bods','odi','oracle_data_integrator'} or (
         platform is None and describe_file(source)['format'] in {'powercenter_xml','bods_xml','odi_xml'})
     if xml_native:
-        if ai or target_mapping or mapping or procedures or ddl or dependencies or file_roles:
-            raise ValueError('Native XML structural analysis requires a self-contained export; SSIS dependency bindings and AI are not consumed.')
+        powercenter = confirmed in {'informatica','powercenter','informatica_powercenter'} or (
+            platform is None and describe_file(source)['format'] == 'powercenter_xml')
+        if ai or target_mapping or mapping or procedures or ddl or file_roles or (dependencies and not powercenter):
+            raise ValueError('Native XML review accepts explicit PowerCenter XML dependencies only; SSIS options and AI are not consumed.')
+        dependency_options = {'dependency_files': [str(p) for p in dependencies]} if dependencies else {}
         return run_migration(source=str(source),output=str(output),source_platform=platform,
-                             workspace_config=workspace_config,execute=False)
+                             workspace_config=workspace_config,execute=False,**dependency_options)
     return run_migration(source=str(source),output=str(output),catalog=catalog,ai=ai,ai_provider='databricks',
                          connection_mapping=str(mapping) if mapping else None,procedures_path=str(procedures) if procedures else None,
                          ddl_path=str(ddl) if ddl else None,dependency_files=[str(p) for p in dependencies],

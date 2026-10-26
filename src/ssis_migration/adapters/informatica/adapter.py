@@ -11,6 +11,15 @@ class PowerCenterAdapter(XMLExportAdapter):
     export_format = 'powercenter_xml'
     roots = frozenset({'POWERMART'})
     supported_export_formats = frozenset({'powercenter_xml'})
+    bundle_profile = 'powercenter_bundle_structure_v1'
+
+    def analyze_bundle(self, source_path, *, dependency_files):
+        from .bundle import analyze_bundle
+        return analyze_bundle(self, source_path, dependency_files)
+
+    def validate_bundle_graph(self, graph):
+        from .bundle import validate_bundle_graph
+        validate_bundle_graph(self, graph)
 
     def export_version(self, root):
         return root.get('REPOSITORY_VERSION')

@@ -1155,10 +1155,12 @@ def run_migration(
         if detected['format'] in {'powercenter_xml', 'bods_xml', 'odi_xml'}:
             native_platform = detected['platform']
     if native_platform in {'informatica', 'bods', 'odi'}:
-        if ai or target_mapping is not None or any((catalog, connection_mapping, ddl_path, procedures_path, dependency_files, file_roles, base_path)):
-            raise ValueError('Native XML structural review does not consume SSIS options, AI or target mappings; supply a self-contained export.')
+        if (ai or target_mapping is not None or any((catalog, connection_mapping, ddl_path, procedures_path, file_roles, base_path))
+                or (dependency_files and native_platform != 'informatica')):
+            raise ValueError('Native XML review does not consume SSIS options, AI or target mappings; only PowerCenter accepts explicit dependency exports.')
         from ssis_migration.adapters.export_pipeline import run_export_review
-        return run_export_review(source, output, native_platform, workspace_config=workspace_config)
+        return run_export_review(source, output, native_platform, workspace_config=workspace_config,
+                                 dependency_files=dependency_files)
     if explicit_tm1 or detected_tm1:
         if ai or any((catalog, connection_mapping, ddl_path, procedures_path, dependency_files, file_roles, base_path)):
             raise ValueError('TM1 uses explicit bundle roles and target mappings; declare dependencies inside its manifest. AI generation is unavailable.')
@@ -1560,7 +1562,7 @@ def main() -> None:
     parser.add_argument(
         "--source",
         required=True,
-        help="Path to an SSIS export/input directory, self-contained PowerCenter/BODS/ODI XML, or TM1 bundle manifest; TM1 generation requires --target-mapping.",
+        help="Path to an SSIS export/input directory, PowerCenter XML (optional --dependency XML), self-contained BODS/ODI XML, or TM1 bundle manifest; TM1 generation requires --target-mapping.",
     )
     parser.add_argument(
         "--output",

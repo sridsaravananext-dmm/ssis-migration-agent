@@ -40,6 +40,23 @@ def local(tag):
     return tag.rsplit('}', 1)[-1]
 
 
+def snapshot_bytes(snapshot, record):
+    """Reconstruct exact XML evidence independently of the original file path."""
+    if not isinstance(snapshot, dict):
+        raise SchemaValidationError('XML source snapshot must be an object.')
+    encoding = snapshot.get('encoding', 'utf-8')
+    if encoding not in ('utf-8', 'windows-1252'):
+        raise SchemaValidationError('XML source snapshot encoding is unsupported.')
+    try:
+        data = snapshot['text'].encode(encoding)
+    except (UnicodeError, KeyError, TypeError, AttributeError) as exc:
+        raise SchemaValidationError('XML source snapshot cannot reproduce its original bytes.') from exc
+    if (hashlib.sha256(data).hexdigest() != record['sha256'] or len(data) != record['size_bytes']
+            or snapshot.get('sha256') != record['sha256']):
+        raise SchemaValidationError('XML source snapshot does not match its evidence hash and size.')
+    return data
+
+
 class ExportGraph:
     def __init__(self, platform, export_format, record, text, version, encoding='utf-8'):
         self.record, self.text = copy.deepcopy(record), text
@@ -197,18 +214,15 @@ def validate_export_graph(graph):
     from .registry import get_adapter
     validate_normalized_ir(graph)
     adapter = get_adapter(graph['source']['platform'])
-    if not isinstance(adapter, XMLExportAdapter) or len(graph['evidence_files']) != 1:
+    if not isinstance(adapter, XMLExportAdapter):
+        raise SchemaValidationError('An XML structural graph needs its registered XML adapter.')
+    bundle_profile = getattr(adapter, 'bundle_profile', None)
+    if bundle_profile is not None and graph['extensions']['source_analysis'].get('profile') == bundle_profile:
+        adapter.validate_bundle_graph(graph)
+        return
+    if len(graph['evidence_files']) != 1:
         raise SchemaValidationError('An XML structural graph needs its registered adapter and one source file.')
-    snapshot = graph['extensions']['source_analysis']['source_snapshot']
-    encoding = snapshot.get('encoding', 'utf-8')
-    if encoding not in ('utf-8', 'windows-1252'):
-        raise SchemaValidationError('XML source snapshot encoding is unsupported.')
-    try:
-        data = snapshot['text'].encode(encoding)
-    except (UnicodeError, KeyError, TypeError, AttributeError) as exc:
-        raise SchemaValidationError('XML source snapshot cannot reproduce its original bytes.') from exc
     record = graph['evidence_files'][0]
-    if hashlib.sha256(data).hexdigest() != record['sha256'] or len(data) != record['size_bytes']:
-        raise SchemaValidationError('XML source snapshot does not match its evidence hash and size.')
+    data = snapshot_bytes(graph['extensions']['source_analysis']['source_snapshot'], record)
     if graph != adapter._build(data, record):
         raise SchemaValidationError('XML graph does not replay from its original source evidence.')

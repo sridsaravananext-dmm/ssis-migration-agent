@@ -7,7 +7,7 @@ partially implemented migration notebook.
 
 | Adapter | Accepted signature/profile | Extracted behavior and limits |
 | --- | --- | --- |
-| `adapters/informatica/adapter.py`, `PowerCenterAdapter` | `POWERMART`; `powercenter_xml_structure_v1` | Typed source/target columns, mapping/transformation instances, scoped definition references, connector data/column links, session mapping references, workflow task/conditional control links. Missing or ambiguous definitions/ports block. Shortcuts and unknown elements block. |
+| `adapters/informatica/adapter.py`, `PowerCenterAdapter` | `POWERMART`; `powercenter_xml_structure_v1`; explicit files use `powercenter_bundle_structure_v1` | Typed source/target columns, mapping/transformation instances, scoped definition references, connector data/column links, session mapping references, workflow task/conditional control links. Explicit cross-file session/mapping binding requires matching repository, folder UUID and export version. Missing or ambiguous definitions/ports block. Shortcuts and unknown elements block. |
 | `adapters/bods/adapter.py`, `BODSAdapter` | `DataServices`, `DIExport`, `DIJob`; `bods_xml_structure_v1` | Bounded DI jobs/workflows/dataflows, transforms, scripts/queries, columns, parameters and datastores. Explicit `sourceId`/`targetId`, `refId` and `datastoreId` links resolve only unique IDs. Link labels do not establish execution order. Other XML encodings and ATL are unsupported. |
 | `adapters/odi/adapter.py`, `ODIAdapter` | `SunopsisExport`; `odi_xml_structure_v1` | Selected `com.sunopsis.dwg.dbobj.Snp*` object classes, original fields, declared identity and foreign-key references. Unknown classes, duplicate fields/keys and missing referenced definitions block. SQL dialect, KM execution and package order are not inferred from text, object names or repository IDs. |
 
@@ -50,9 +50,11 @@ python -m ssis_migration.migrate --source examples/odi/structural_export.xml --o
 
 The API automatically detects these file signatures, or accepts explicit platform
 confirmation. A conflicting confirmation is rejected. The current structural
-path requires a self-contained export; it rejects SSIS-specific dependencies,
-procedure arguments, AI requests and target mappings instead of silently ignoring
-them. Workbench ZIP discovery and direct uploads use the same adapters.
+path rejects SSIS-specific dependencies, procedure arguments, AI requests and
+target mappings instead of silently ignoring them. PowerCenter can now use
+[explicit XML dependency files](powercenter-dependency-binding.md); BODS and ODI
+still require self-contained exports. Workbench ZIP discovery and direct uploads
+use the same adapters.
 
 Before expanding generation, add actual vendor exports with their complete
 dependencies, explicit capability rules, and independently expected semantic
@@ -65,3 +67,8 @@ Windows-1252 declarations parse and replay; the mapping retains 157 elements and
 the workflow 163. Unknown elements remain blockers, and the workflow's separate
 mapping dependency is not silently resolved by single-file analysis. See the
 [audit and next increment](public-powercenter-audit.md).
+
+When the mapping is explicitly selected as a dependency, the native bundle profile
+resolves that declaration link, retains all original files and graph obligations,
+and checks every snapshot during replay. This does not implement transformation
+semantics, connections, runtime execution or target generation.
