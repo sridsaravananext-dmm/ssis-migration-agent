@@ -1,5 +1,16 @@
 # Offline implementation continuation
 
+As of 2026-10-26, the next adapter and semantic work must use real user-supplied
+exports. Do not author new synthetic source packages, metadata, input datasets or
+expected outputs. Existing regression examples remain demonstrations, not proof
+of real workload compatibility. See [the source file request](source-export-request.md).
+
+Next: inventory a genuine supplied job and all dependencies; map its source
+behavior/gaps; extend one adapter and Databricks translation capability against
+that evidence; validate using the user's actual source-run outputs and logs when
+available. PowerCenter/BODS/ODI target generation and broader TM1/C# semantics
+remain unfinished. Do not mark these phases complete from structural analysis.
+
 The user removed the Databricks human-review checkpoint as a prerequisite to
 further implementation on 2026-10-22. Deployment and live validation are not
 part of this continuation. An implementation checkpoint is independent of the

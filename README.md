@@ -1,6 +1,13 @@
 # Legacy ETL Migration Agent
 
-**Last updated date - 10/22/2026**
+**Last updated date - 10/26/2026**
+
+Next work uses genuine exported projects and their dependencies. See the
+[source files requested](docs/source-export-request.md) for each platform, the
+current support limits and what to send first. The workbench also shows and
+downloads this checklist. New synthetic source packages, metadata and expected
+results will not be authored; earlier regression demos do not establish migration
+acceptance on real workloads.
 
 Incremental, file-based legacy ETL migration framework. **Databricks is the only
 current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
@@ -48,9 +55,13 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Latest verification: **1,244 tests passed, 4 live Databricks checks skipped**.
+Last full regression baseline (2026-10-22): **1,244 tests passed, 4 live Databricks checks skipped**.
 Installed-wheel and previous-candidate replay checks passed; execution and source
 equivalence remain unverified.
+
+The 2026-10-26 real-source guidance update passed **56 existing workbench checks**,
+all five platform checklist screens and wheel-content verification. No new
+source examples, metadata fixtures or expected results were authored.
 
 Implementation details and remaining scope:
 

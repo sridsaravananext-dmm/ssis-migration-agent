@@ -17,6 +17,7 @@ if str(SRC) not in sys.path:sys.path.insert(0,str(SRC))
 
 from ssis_migration.adapters.tm1.metadata.catalog import read_json
 from ssis_migration.intake import describe_file
+from ssis_migration.intake.source_requirements import source_export_guide
 from ssis_migration.schemas import validate_document
 from ssis_migration.ui import (artifact_archive, artifact_files, bundle_candidates, effective_mapping,
                                bind_connection_metadata, prepare_run_directory,
@@ -102,6 +103,11 @@ def _save_dependencies(uploaded_files):
 tab_upload,tab_run,tab_artifacts,tab_validation=st.tabs(['📦 Upload & Configure','🚀 Run Migration','📂 Artifacts','🧪 Databricks Validation'])
 with tab_upload:
     st.subheader('Source exports')
+    with st.expander('Real source files to supply',expanded=False):
+        source_guide=source_export_guide(source_platform)
+        st.markdown(source_guide)
+        st.download_button('Download real-source checklist',source_guide,'source_files_required.md',mime='text/markdown')
+    st.caption('Bundled sample modes are regression demonstrations. Supply your own exported workflows and dependencies for work on your migration; no new synthetic source data or expected results will be authored.')
     package_mode=st.radio('Package source',['Upload a source package or script','Use WWI sample package',
                                           'Upload a source bundle (.zip)','Use TM1 sample bundle','Use source path'],
                           horizontal=True,key='package_mode')
