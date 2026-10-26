@@ -13,7 +13,7 @@ from .registry import get_adapter
 from .xml_export import validate_export_graph
 
 
-def validate_export_review(envelope, graph, plan, contracts):
+def validate_export_review(envelope, graph, plan, contracts, *, behavior_analysis=None):
     validate_document(envelope, 'source_envelope_v2'); validate_evidence_references(envelope)
     validate_export_graph(graph)
     for key in ('source', 'evidence_files', 'diagnostics', 'status'):
@@ -23,7 +23,13 @@ def validate_export_review(envelope, graph, plan, contracts):
         raise SchemaValidationError('Export source snapshot and normalized graph disagree.')
     if plan['package_name'] != Path(graph['evidence_files'][0]['path']).stem:
         raise SchemaValidationError('Export review plan name does not identify its source file.')
-    validate_native_review_plan(graph, plan, contracts)
+    if behavior_analysis is not None or 'behavior_analysis_binding' in plan['metadata']:
+        from .informatica.behavior import analyze_behavior, validate_behavior_analysis
+        if behavior_analysis is None:
+            behavior_analysis = analyze_behavior(graph)
+        else:
+            validate_behavior_analysis(behavior_analysis, graph)
+    validate_native_review_plan(graph, plan, contracts, behavior_analysis=behavior_analysis)
 
 
 def run_export_review(source, output, platform, *, workspace_config=None, dependency_files=None):
@@ -35,7 +41,11 @@ def run_export_review(source, output, platform, *, workspace_config=None, depend
     else:
         result = adapter.analyze(source)
     graph = result.normalized_ir; envelope = result.source_envelope
-    plan, contracts = build_native_review_plan(graph, result.parsed['name'])
+    behavior_analysis = None
+    if platform == 'informatica':
+        from .informatica.behavior import analyze_behavior
+        behavior_analysis = analyze_behavior(graph)
+    plan, contracts = build_native_review_plan(graph, result.parsed['name'], behavior_analysis=behavior_analysis)
     validate_export_review(envelope, graph, plan, contracts)
     for record in envelope['evidence_files']:
         path = Path(record['path'])
@@ -73,6 +83,12 @@ def run_export_review(source, output, platform, *, workspace_config=None, depend
     documents = {'source_envelope': envelope, 'normalized_ir': graph, 'migration_plan': plan,
                  'migration_contracts': {'contract_bundle_version': '1.0', 'contracts': contracts},
                  'plan_ir_binding': plan['metadata']['normalized_ir_binding'], 'validation_results': validation}
+    if behavior_analysis is not None:
+        documents['source_behavior_analysis'] = behavior_analysis
+        report['behavior_analysis'] = {
+            'profile': behavior_analysis['profile'], 'semantic_status': 'NOT_VERIFIED',
+            'requirement_count': len(behavior_analysis['requirements']),
+            'unresolved_items': list(dict.fromkeys(value for r in behavior_analysis['requirements'] for value in r['unresolved_items']))}
     if workspace_config is not None: documents['workspace_config'] = workspace_config
     report['artifacts'] = {key: str(directory/(key+'.json')) for key in (*documents, 'migration_report')}
     documents['migration_report'] = report

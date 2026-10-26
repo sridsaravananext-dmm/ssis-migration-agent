@@ -1,14 +1,16 @@
 """Source-neutral review planning and contracts; no target implementation claims."""
 from __future__ import annotations
 
-from ssis_migration.ir.normalized import validate_normalized_ir
+import copy
+
+from ssis_migration.ir.normalized import content_digest, validate_normalized_ir
 from ssis_migration.planner.models import MigrationPlan, MigrationStep
-from ssis_migration.schemas import SchemaValidationError
+from ssis_migration.schemas import SchemaValidationError, validate_document, validate_evidence_references
 from .normalized_plan import bind_plan_to_ir, validate_plan_ir_binding
 from .contract_bridge import build_migration_contract, validate_contract
 
 
-def build_native_review_plan(graph, package_name):
+def build_native_review_plan(graph, package_name, *, behavior_analysis=None):
     validate_normalized_ir(graph)
     if graph['ir_version'] != '2.0':
         raise ValueError('Native review planning requires source-analysis IR v2.')
@@ -29,6 +31,29 @@ def build_native_review_plan(graph, package_name):
                          metadata={'source_platform':graph['source']['platform'], 'scope':'REVIEW_ONLY',
                                    'execution_order':'NOT_ESTABLISHED', 'semantic_status':'NOT_VERIFIED'}).to_dict()
     plan = bind_plan_to_ir(plan, graph)
+    if behavior_analysis is not None:
+        validate_document(behavior_analysis, 'source_behavior_analysis')
+        validate_evidence_references(behavior_analysis)
+        if (behavior_analysis['ir_id'] != graph['ir_id']
+                or behavior_analysis['source_analysis_sha256'] != graph['provenance']['source_analysis_sha256']
+                or behavior_analysis['evidence_files'] != graph['evidence_files']):
+            raise SchemaValidationError('Source behavior analysis does not bind this original source graph.')
+        requirements = behavior_analysis['requirements']
+        if len({r['requirement_id'] for r in requirements}) != len(requirements):
+            raise SchemaValidationError('Duplicate source behavior requirement identities.')
+        ownership = {}
+        for step in plan['steps']:
+            step['metadata']['source_requirements'] = []
+            for node in step['metadata']['normalized_source']['nodes']:
+                ownership.setdefault(node['record']['node_id'], []).append(step)
+        for requirement in requirements:
+            owners = ownership.get(requirement['subject_node_id'], [])
+            if len(owners) != 1:
+                raise SchemaValidationError('Source requirement subject must have one explicit review owner.')
+            owners[0]['metadata']['source_requirements'].append(copy.deepcopy(requirement))
+        plan['metadata']['behavior_analysis_binding'] = {
+            'profile': behavior_analysis['profile'], 'analysis_sha256': content_digest(behavior_analysis),
+            'requirement_count': len(requirements)}
     contracts = []
     for step in plan['steps']:
         contract = build_migration_contract(step, source_platform=graph['source']['platform'],
@@ -38,10 +63,10 @@ def build_native_review_plan(graph, package_name):
     return plan, contracts
 
 
-def validate_native_review_plan(graph, plan, contracts):
+def validate_native_review_plan(graph, plan, contracts, *, behavior_analysis=None):
     """Check every node/edge is conserved and review decisions cannot be upgraded."""
     validate_plan_ir_binding(plan, graph)
-    expected_plan, expected_contracts = build_native_review_plan(graph, plan['package_name'])
+    expected_plan, expected_contracts = build_native_review_plan(graph, plan['package_name'], behavior_analysis=behavior_analysis)
     if plan != expected_plan or contracts != expected_contracts:
         raise SchemaValidationError('Native review plan/contracts omit source obligations or change the capability decision.')
     for step, contract in zip(plan['steps'], contracts):

@@ -21,6 +21,8 @@ class SchemaValidationError(ValueError):
 
 
 _SCHEMA_FILES = {
+    "source_requirement": "source_requirement.v1.json",
+    "source_behavior_analysis": "source_behavior_analysis.v1.json",
     "data_observation": "data_observation.v1.json",
     "databricks_workspace": "databricks_workspace.v1.json",
     "intake_manifest": "intake_manifest.v1.json",
@@ -170,6 +172,10 @@ def validate_evidence_references(document: dict[str, Any]) -> None:
         require_file_id(
             source.get("file_id") if isinstance(source, dict) else None, "/source/file_id",
         )
+
+    if document.get('scope') == 'DECLARATIONS_AND_REVIEW_REQUIREMENTS':
+        for index, requirement in enumerate(document.get('requirements', [])):
+            check_evidence(requirement.get('evidence', []), f'/requirements/{index}/evidence')
 
 
 __all__ = ["SchemaValidationError", "validate_document", "validate_evidence_references"]

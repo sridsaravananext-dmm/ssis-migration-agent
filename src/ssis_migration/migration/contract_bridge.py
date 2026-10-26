@@ -60,6 +60,15 @@ def _collections(legacy: dict[str, Any]) -> dict[str, list[Any]]:
         validate_normalized_scope(scope)
         collections["normalized_node"] = scope["nodes"]
         collections["normalized_edge"] = scope["edges"]
+    if 'source_requirements' in metadata:
+        if scope is None or scope.get('ir_version') != '2.0' or not isinstance(metadata['source_requirements'], list):
+            raise SchemaValidationError('Source requirements need a native IR review scope and an explicit list.')
+        identities = {n['record']['node_id'] for n in scope['nodes']}
+        for requirement in metadata['source_requirements']:
+            validate_document(requirement, 'source_requirement')
+            if requirement['subject_node_id'] not in identities:
+                raise SchemaValidationError('Source requirement subject is outside its preserved review scope.')
+        collections['source_requirement'] = metadata['source_requirements']
     return collections
 
 
@@ -84,6 +93,15 @@ def validate_contract(document: dict[str, Any], step: dict[str, Any] | None = No
     actual = [(item["behavior_id"], item["kind"], item["source_value"]) for item in document["required_behavior"]["obligations"]]
     if expected != actual:
         raise SchemaValidationError("Migration contract omitted or changed a required legacy preservation obligation.")
+    for item in document['required_behavior']['obligations']:
+        if item['kind'] == 'source_requirement':
+            requirement = item['source_value']
+            if item['evidence'] != requirement['evidence']:
+                raise SchemaValidationError('Source requirement evidence differs from its declared behavior evidence.')
+            if any(value not in document['validation_requirements'] for value in requirement['preservation_requirements']):
+                raise SchemaValidationError('Source behavior validation requirements were omitted.')
+            if any(value not in document['unresolved_items'] for value in requirement['unresolved_items']):
+                raise SchemaValidationError('Unresolved source behavior was omitted from its migration contract.')
     for contract_key, legacy_key in (("inputs", "source_objects"), ("outputs", "target_objects")):
         if [item["reference"] for item in document[contract_key]] != legacy.get(legacy_key, []):
             raise SchemaValidationError(f"Migration contract {contract_key} do not preserve original object references.")
@@ -147,9 +165,11 @@ def build_migration_contract(
             obligations.append({
                 "behavior_id": f"{kind}-{index}", "kind": kind,
                 "source_value": copy.deepcopy(value),
-                "evidence": copy.deepcopy(value['record']['evidence'] if kind.startswith('normalized_') else refs),
+                "evidence": copy.deepcopy(value['record']['evidence'] if kind.startswith('normalized_') else value['evidence'] if kind == 'source_requirement' else refs),
                 "verification": "NOT_VERIFIED", "critical": None, "weight": None,
             })
+    source_requirements = collections.get('source_requirement', [])
+    unresolved.extend(value for requirement in source_requirements for value in requirement['unresolved_items'])
     if not obligations:
         unresolved.append("No source-behavior obligations were identified; do not treat an empty contract as coverage.")
 
@@ -240,7 +260,7 @@ def build_migration_contract(
             "Independently validate generated SQL/Python, notebook structure and dependency graphs.",
             "Verify every required behavior against original source evidence; assess criticality and weights explicitly.",
             "Run controlled execution and data reconciliation before acceptance; static checks provide no semantic credit.",
-        ],
+        ] + list(dict.fromkeys(value for requirement in source_requirements for value in requirement['preservation_requirements'])),
         unresolved_items=list(dict.fromkeys(unresolved)),
         assumptions=copy.deepcopy(metadata.get("assumptions", [])),
         status="BLOCKED" if decision == "UNSUPPORTED" else "REVIEW_REQUIRED" if unresolved else "DRAFT",

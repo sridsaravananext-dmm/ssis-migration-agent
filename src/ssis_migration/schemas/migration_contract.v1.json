@@ -115,7 +115,8 @@
                   "source_procedure",
                   "destination_procedure",
                   "normalized_node",
-                  "normalized_edge"
+                  "normalized_edge",
+                  "source_requirement"
                 ]
               },
               "source_value": {},

@@ -72,3 +72,11 @@ When the mapping is explicitly selected as a dependency, the native bundle profi
 resolves that declaration link, retains all original files and graph obligations,
 and checks every snapshot during replay. This does not implement transformation
 semantics, connections, runtime execution or target generation.
+
+PowerCenter reviews also produce a separate
+[declared-behavior analysis](powercenter-behavior-analysis.md). Its native
+expression syntax, router field links, sequence/lookup requirements and session
+policies enter contracts as unverified source requirements. Structural profiles
+and previously generated generic contracts retain their representations. Effective
+configuration, physical connections, runtime equivalence and target translation
+remain unimplemented.

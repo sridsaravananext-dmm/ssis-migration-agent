@@ -17,6 +17,12 @@ now binds the workflow session to its mapping using matching repository, folder
 UUID and export version. Unsupported behavior and other missing dependencies
 remain explicit. See the [audit](docs/public-powercenter-audit.md).
 
+[PowerCenter behavior analysis](docs/powercenter-behavior-analysis.md) now extracts
+31 requirements from the original bound exports, including native expressions,
+router routes, sequence/lookup risks and session/writer settings. They appear in
+contracts and the workbench with source evidence and unresolved items. Runtime
+semantics, effective configuration and target translation remain unverified.
+
 Incremental, file-based legacy ETL migration framework. **Databricks is the only
 current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
 connections are not required; source exports and dependencies are supplied as files.
@@ -25,7 +31,7 @@ connections are not required; source exports and dependencies are supplied as fi
 | --- | --- | --- |
 | SSIS | Existing DTSX → IR → analysis → contracts → deterministic/AI generation → notebooks/jobs/DAB/report | Missing metadata, unsupported tasks and unverified behavior remain blockers |
 | TM1 / Planning Analytics | MDX, rules/feeders, TurboIntegrator and dimensional/process metadata analysis; native IR and bounded Databricks candidates | Dense numeric leaf snapshots and exact integer arithmetic; broader runtime semantics remain unsupported |
-| Informatica PowerCenter | XML declarations, scoped instances, port lineage, workflow links, native IR/contracts/report | Structural analysis only; target translation remains unimplemented |
+| Informatica PowerCenter | XML IR, explicit workflow/mapping binding, native expression syntax and declared behavior requirements in contracts/reports | Runtime semantics, effective configuration, physical connections and target translation remain unverified/unimplemented |
 | SAP Data Services / BODS | Bounded DI XML declarations and explicit object-ID references, native IR/contracts/report | ATL and undocumented XML/link encodings unsupported; no target translation |
 | Oracle ODI | Sunopsis object/field declarations and class-scoped key references, native IR/contracts/report | Unknown classes, knowledge-module execution and target translation remain unsupported |
 
@@ -63,10 +69,16 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Full regression baseline (2026-10-26): **1,272 tests passed, 12 skipped**.
+Full regression baseline (2026-10-26): **1,291 tests passed, 12 skipped**.
 Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
+
+The declared-behavior increment passed **20 focused behavior/workbench checks**
+and **172 existing checks** before the full regression. Six prior structural
+graphs and generic plan/contracts remain exactly unchanged and replayable.
+Installed-wheel behavior and contract replay passed after both source copies
+were removed, including validation of the six older review artifacts.
 
 The explicit PowerCenter dependency increment passed **25 binding checks** and
 a real-export workbench selection check. All five prior one-file graphs remain

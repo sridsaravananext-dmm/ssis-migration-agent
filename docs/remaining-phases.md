@@ -6,9 +6,9 @@ Do not author new synthetic source packages, metadata, input datasets or
 expected outputs. Existing regression examples remain demonstrations, not proof
 of real workload compatibility. See [the source file request](source-export-request.md).
 
-Next: analyze the declared PowerCenter transformation/session behavior in the
-imported exports, then add supported Databricks translation capabilities against
-that evidence. Use actual source-run inputs/outputs when available; the upstream
+Next: extend PowerCenter native expressions/defaults, effective configuration and
+physical metadata binding, then add supported Databricks translation capabilities
+against that evidence. Use actual source-run inputs/outputs when available; the upstream
 workflow log alone is not equivalence evidence. PowerCenter/BODS/ODI target
 generation and broader TM1/C# semantics remain unfinished. Do not mark these
 phases complete from structural analysis.
@@ -72,6 +72,14 @@ Sequential increments in this continuation:
     snapshot and original version declaration; single-file graphs are unchanged.
     See [usage and limits](powercenter-dependency-binding.md). Broader dependency
     types and target generation remain pending.
+12. PowerCenter declared behavior requirements: **implemented** as a separate,
+    versioned analysis with bounded native expression syntax. The real bound
+    exports produce 31 evidence-backed requirements covering transformations,
+    router groups, sequence/lookup risks, target load ranks, session transactions,
+    configuration/overrides and writer/connection policies. The contract bridge
+    preserves every requirement without semantic verification or coverage credit.
+    Old structural graphs and generic contracts are unchanged. See
+    [behavior analysis and limits](powercenter-behavior-analysis.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

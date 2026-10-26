@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:source_requirement:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requirement_id", "subject_node_id", "kind", "declarations", "preservation_requirements", "unresolved_items", "evidence", "semantic_status"],
+  "properties": {
+    "requirement_id": {"type": "string", "pattern": "^requirement-[a-f0-9]{24}$"},
+    "subject_node_id": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "minLength": 1},
+    "declarations": {"type": "object"},
+    "preservation_requirements": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
+    "unresolved_items": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "evidence": {"type": "array", "items": {"$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"}, "minItems": 1},
+    "semantic_status": {"const": "NOT_VERIFIED"}
+  }
+}

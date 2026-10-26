@@ -462,6 +462,13 @@ with tab_run:
         st.write('**Status:** `'+summary['status']+'` · **Execution:** `'+summary['execution']+'`')
         st.caption('Results and downloads below belong to the last completed run; editing the form requires a new run to apply settings.')
         st.json(st.session_state.last_run_settings,expanded=False)
+        if report.get('behavior_analysis'):
+            with st.expander('PowerCenter behavior requirements'):
+                st.write(str(report['behavior_analysis']['requirement_count'])+' source behavior requirements · semantic verification: NOT_VERIFIED')
+                for issue in report['behavior_analysis']['unresolved_items']:st.write('• '+issue)
+                behavior_path=Path(report['artifacts']['source_behavior_analysis'])
+                if behavior_path.is_file():
+                    st.download_button('Download PowerCenter behavior analysis',behavior_path.read_bytes(),'powercenter_behavior_analysis.json',mime='application/json')
         intake=report.get('source_intake',{})
         intake_path=report.get('intake_manifest')
         if intake_path and Path(intake_path).is_file():intake=read_json(Path(intake_path).read_bytes())

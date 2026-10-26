@@ -1,5 +1,11 @@
 # Developer workbench
 
+PowerCenter runs now include a **PowerCenter behavior requirements** panel and a
+direct analysis JSON download. The declared transformations, router/sequence/lookup
+requirements and session/writer policies retain source evidence and unresolved
+items. A parsed expression or a bound mapping remains unverified semantically;
+these reviews do not generate PowerCenter migration notebooks.
+
 The Streamlit frontend runs existing SSIS migrations, bounded TM1 Databricks
 generation, and PowerCenter/BODS/ODI XML structural analysis. Native XML runs
 produce IR, declared dependency links, review contracts and reports; they do not
