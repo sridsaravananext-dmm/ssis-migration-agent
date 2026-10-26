@@ -1,0 +1,42 @@
+{
+  "provenance_version": "1.0",
+  "source_kind": "EXISTING_PUBLIC_EXPORT",
+  "repository": "https://github.com/Praveen-pa/Informatica-Powercenter",
+  "commit": "43a58b9629b767454e5622913d12f53335866ea2",
+  "retrieved_on": "2026-10-26",
+  "license": "MIT",
+  "license_path": "upstream/LICENSE",
+  "modifications": [],
+  "scope": "Native design-time exports and an upstream workflow log; no authored input data or expected output rows.",
+  "notices": "Original embedded Informatica proprietary notices are retained.",
+  "files": [
+    {
+      "path": "upstream/LICENSE",
+      "upstream_path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/Praveen-pa/Informatica-Powercenter/43a58b9629b767454e5622913d12f53335866ea2/LICENSE",
+      "size_bytes": 1074,
+      "sha256": "1b2120cabf16e853a0d2576ff416b9e9cfebbd9a231f8ecdc3117a51771a7b7d"
+    },
+    {
+      "path": "upstream/SCD1/m_scd1.XML",
+      "upstream_path": "SCD1/m_scd1.XML",
+      "url": "https://raw.githubusercontent.com/Praveen-pa/Informatica-Powercenter/43a58b9629b767454e5622913d12f53335866ea2/SCD1/m_scd1.XML",
+      "size_bytes": 21779,
+      "sha256": "f712399f4c8d74f9cd46ba474ad32067a011fa928ceff9e9141b00e1081fa071"
+    },
+    {
+      "path": "upstream/SCD1/w_scd1.XML",
+      "upstream_path": "SCD1/w_scd1.XML",
+      "url": "https://raw.githubusercontent.com/Praveen-pa/Informatica-Powercenter/43a58b9629b767454e5622913d12f53335866ea2/SCD1/w_scd1.XML",
+      "size_bytes": 17345,
+      "sha256": "d581c155dcad3a7d01056fcb64d4f8eed4e81a6b5f4522d354d61e68a6a808c1"
+    },
+    {
+      "path": "upstream/SCD1/w_scd1_log.txt",
+      "upstream_path": "SCD1/w_scd1_log.txt",
+      "url": "https://raw.githubusercontent.com/Praveen-pa/Informatica-Powercenter/43a58b9629b767454e5622913d12f53335866ea2/SCD1/w_scd1_log.txt",
+      "size_bytes": 4001,
+      "sha256": "63d65dcddcd5d252b0d401402574c692590154114d62caa2e3aa08dd27b64b11"
+    }
+  ]
+}

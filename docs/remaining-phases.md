@@ -1,7 +1,8 @@
 # Offline implementation continuation
 
 As of 2026-10-26, the next adapter and semantic work must use real user-supplied
-exports. Do not author new synthetic source packages, metadata, input datasets or
+exports or existing public exports with verified reuse terms and provenance.
+Do not author new synthetic source packages, metadata, input datasets or
 expected outputs. Existing regression examples remain demonstrations, not proof
 of real workload compatibility. See [the source file request](source-export-request.md).
 
@@ -57,6 +58,12 @@ Sequential increments in this continuation:
    metadata and public scope. Expansions carry source/declaration evidence and
    compose with bounded Head/Tail/CrossJoin. Private/dynamic/ambiguous subsets
    remain blocked. See [capability details](tm1-static-subset-generation.md).
+10. Public PowerCenter export compatibility: unchanged licensed mapping/workflow
+    originals and upstream log are imported with pinned URLs and byte hashes.
+    Explicit Windows-1252 declarations now parse and replay; existing UTF-8 graphs
+    are unchanged. All 320 original XML elements survive into review obligations.
+    **Encoding/structural compatibility implemented.** Multi-file binding and
+    transformation semantics remain pending. See the [source audit](public-powercenter-audit.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

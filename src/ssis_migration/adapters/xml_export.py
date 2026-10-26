@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -19,13 +20,30 @@ MAX_BYTES = 16 * 1024 * 1024
 MAX_ELEMENTS = 10000
 
 
+def _decode_xml(data):
+    """Honor bounded, explicit XML encodings without guessing or rewriting bytes."""
+    declaration = re.match(br'^(?:\xef\xbb\xbf)?\s*<\?xml\b[^?]*\?>', data, re.I)
+    encoding = re.search(br'\bencoding\s*=\s*([\'"])([^\'"]+)\1', declaration[0], re.I) if declaration else None
+    codecs = {b'utf-8': 'utf-8', b'utf8': 'utf-8', b'windows-1252': 'windows-1252'}
+    codec = codecs.get(encoding[2].lower()) if encoding else 'utf-8'
+    if codec is None:
+        raise UnsupportedSourceError('XML encoding is unsupported; supply UTF-8 or explicitly declared Windows-1252.')
+    if data.startswith(b'\xef\xbb\xbf') and codec != 'utf-8':
+        raise UnsupportedSourceError('XML encoding declaration conflicts with its UTF-8 byte-order mark.')
+    try:
+        return data.decode(codec), codec
+    except UnicodeError as exc:
+        raise UnsupportedSourceError('XML bytes do not match their supported declared encoding.') from exc
+
+
 def local(tag):
     return tag.rsplit('}', 1)[-1]
 
 
 class ExportGraph:
-    def __init__(self, platform, export_format, record, text, version):
+    def __init__(self, platform, export_format, record, text, version, encoding='utf-8'):
         self.record, self.text = copy.deepcopy(record), text
+        self.encoding = encoding
         self.source = {'platform': platform, 'format': export_format, 'export_version': version,
                        'file_id': record['file_id']}
         self.nodes, self.edges, self.diagnostics = [], [], []
@@ -63,8 +81,12 @@ class ExportGraph:
         return None
 
     def finish(self, profile):
+        snapshot = {'text': self.text, 'sha256': self.record['sha256']}
+        # Keep historical UTF-8 snapshots/graphs byte-for-byte compatible.
+        if self.encoding != 'utf-8':
+            snapshot['encoding'] = self.encoding
         analysis = {'analysis_version': '1.0', 'profile': profile, 'source': self.source,
-                    'source_snapshot': {'text': self.text, 'sha256': self.record['sha256']},
+                    'source_snapshot': snapshot,
                     'semantic_status': 'NOT_VERIFIED'}
         graph = {'ir_version': '2.0', 'ir_id': '', 'source': copy.deepcopy(self.source),
                  'evidence_files': [self.record], 'nodes': self.nodes, 'edges': self.edges,
@@ -98,26 +120,19 @@ class XMLExportAdapter:
     def _build(self, data, record):
         if len(data) > MAX_BYTES:
             raise UnsupportedSourceError('XML export exceeds the 16 MiB offline analysis limit.')
-        try:
-            text = data.decode('utf-8-sig')
-        except UnicodeError as exc:
-            raise UnsupportedSourceError('Supply an UTF-8 XML export; other encodings are unsupported.') from exc
         # PowerCenter commonly declares an external DTD. ElementTree does not
         # retrieve it. Internal subsets/entities are rejected before parsing.
-        import re
         from ssis_migration.intake.inventory import has_unsafe_xml_declarations
         if has_unsafe_xml_declarations(data):
             raise UnsupportedSourceError('XML entities and internal DTD subsets are unsupported.')
-        encoding = re.search(r'^\s*<\?xml\b[^?]*\bencoding\s*=\s*[\'"]([^\'"]+)[\'"]',text,re.I)
-        if encoding and encoding[1].upper() not in {'UTF-8','UTF8'}:
-            raise UnsupportedSourceError('XML encoding declarations other than UTF-8 are unsupported.')
+        text, encoding = _decode_xml(data)
         try:
-            root = ET.fromstring(text)
+            root = ET.fromstring(text.removeprefix('\ufeff'))
         except (ET.ParseError, RecursionError) as exc:
             raise UnsupportedSourceError('Invalid XML export: ' + str(exc)) from exc
         if local(root.tag).upper() not in self.roots:
             raise UnsupportedSourceError(f'{self.platform} adapter does not support XML root {local(root.tag)!r}.')
-        graph = ExportGraph(self.platform, self.export_format, record, data.decode('utf-8'), self.export_version(root))
+        graph = ExportGraph(self.platform, self.export_format, record, text, self.export_version(root), encoding)
 
         def visit(element, path, parent=None, depth=0):
             if len(graph.elements) >= MAX_ELEMENTS or depth > 128:
@@ -184,7 +199,14 @@ def validate_export_graph(graph):
     adapter = get_adapter(graph['source']['platform'])
     if not isinstance(adapter, XMLExportAdapter) or len(graph['evidence_files']) != 1:
         raise SchemaValidationError('An XML structural graph needs its registered adapter and one source file.')
-    data = graph['extensions']['source_analysis']['source_snapshot']['text'].encode('utf-8')
+    snapshot = graph['extensions']['source_analysis']['source_snapshot']
+    encoding = snapshot.get('encoding', 'utf-8')
+    if encoding not in ('utf-8', 'windows-1252'):
+        raise SchemaValidationError('XML source snapshot encoding is unsupported.')
+    try:
+        data = snapshot['text'].encode(encoding)
+    except (UnicodeError, KeyError, TypeError, AttributeError) as exc:
+        raise SchemaValidationError('XML source snapshot cannot reproduce its original bytes.') from exc
     record = graph['evidence_files'][0]
     if hashlib.sha256(data).hexdigest() != record['sha256'] or len(data) != record['size_bytes']:
         raise SchemaValidationError('XML source snapshot does not match its evidence hash and size.')

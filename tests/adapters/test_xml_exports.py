@@ -32,6 +32,7 @@ def test_powercenter_native_graph_resolves_scoped_links_and_retains_columns():
     assert all(e['resolution'] == 'RESOLVED' for e in graph['edges'])
     assert len([n for n in graph['nodes'] if n['operation'] == 'COLUMN']) == 2
     assert graph['extensions']['source_analysis']['source_snapshot']['sha256'] == hashlib.sha256(POWER.read_bytes()).hexdigest()
+    assert set(graph['extensions']['source_analysis']['source_snapshot']) == {'text', 'sha256'}
     assert any(n['attributes'].get('condition') == 'TRUE' for n in graph['nodes'])
 
 

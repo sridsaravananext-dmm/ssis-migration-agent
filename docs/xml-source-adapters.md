@@ -25,8 +25,11 @@ diagnostics. XML is not the sole representation of the export's behavior.
 Source bytes remain available for exact replay; recomputing a graph hash cannot
 authorize omitted nodes, altered conditions or removed relationships.
 
-Limits are UTF-8, 16 MiB, 10,000 elements and depth 128. Entities/internal DTDs,
-symlinks and unsupported encoding declarations are rejected. PowerCenter's normal
+Limits are UTF-8 or explicitly declared Windows-1252, 16 MiB, 10,000 elements and
+depth 128. No encoding is guessed and invalid bytes are not replaced. Windows-1252
+snapshots carry their original encoding; historical UTF-8 snapshots retain their
+existing shape and exact replay behavior. Entities/internal DTDs, symlinks, BOM
+conflicts and unsupported encoding declarations are rejected. PowerCenter's normal
 external DTD declaration is accepted without retrieving or executing the DTD.
 
 `adapters/export_pipeline.py` writes source envelope, normalized IR, migration
@@ -36,7 +39,7 @@ include source format/version/profile, tasks, dependencies, lineage, unsupported
 constructs and missing references. The final lifecycle remains BLOCKED because
 native target translation and source equivalence are not implemented here.
 
-Examples are explicitly **synthetic structural fixtures**, not production vendor
+The original examples below are **synthetic structural fixtures**, not production vendor
 exports or verified runtime observations:
 
 ```bash
@@ -55,3 +58,10 @@ Before expanding generation, add actual vendor exports with their complete
 dependencies, explicit capability rules, and independently expected semantic
 fixtures. Real transformation/KM/default/error/transaction behavior is not
 established by preserving XML records.
+
+The [public PowerCenter SCD1 exports](../examples/public/powercenter_scd1/README.md)
+are now available unchanged with upstream provenance and license. Both native
+Windows-1252 declarations parse and replay; the mapping retains 157 elements and
+the workflow 163. Unknown elements remain blockers, and the workflow's separate
+mapping dependency is not silently resolved by single-file analysis. See the
+[audit and next increment](public-powercenter-audit.md).

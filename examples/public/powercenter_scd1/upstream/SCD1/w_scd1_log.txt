@@ -1,0 +1,25 @@
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_36435 : Starting execution of workflow [w_scd1] in folder [scd] last saved by user [Administrator].
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_44206 : Workflow w_scd1 started with run id [17], run instance name [], run type [Concurrent Run Disabled].
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_44195 : Workflow [w_scd1] service level [SLPriority:5,SLDispatchWaitTime:1800].
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_44253 : Workflow started. Clients will be notified
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_36330 : Start task instance [Start]: Execution started.
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_36318 : Start task instance [Start]: Execution succeeded.
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_36505 : Link [Start --> s_m_scd1]: empty expression string, evaluated to TRUE.
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_36388 : Session task instance [s_m_scd1] is waiting to be started.
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_36682 : Session task instance [s_m_scd1]: started a process with pid [8004] on node [node01].
+2025-03-05 10:46:54 : INFO : (4488 | 3616) : (IS | IS) : node01 : LM_36330 : Session task instance [s_m_scd1]: Execution started.
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [TM_6793 Fetching initialization properties from the Integration Service. : (Wed Mar 05 10:46:54 2025)]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [DISP_20305 The [Preparer] DTM with process id [8004] is running on node [node01].
+ : (Wed Mar 05 10:46:54 2025)]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [PETL_24036 Beginning the prepare phase for the session.]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [TM_6721 Started [Connect to Repository].]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [TM_6722 Finished [Connect to Repository].  It took [0.106] seconds.]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [TM_6794 Connected to repository [REP] in domain [Domain] as user [Administrator] in security domain [Native].]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [TM_6721 Started [Fetch Session from Repository].]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [TM_6722 Finished [Fetch Session from Repository].  It took [0.113] seconds.]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [TM_6721 Started [Partition Group Formation].]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [TM_6722 Finished [Partition Group Formation].  It took [0.01899] seconds.]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [PETL_24037 Finished the prepare phase for the session.]
+2025-03-05 10:46:54 : INFO : (4488 | 12280) : (IS | IS) : node01 : LM_36488 : Session task instance [s_m_scd1] : [TM_6792 Notifying the Integration Service that the prepare phase has been completed. : (Wed Mar 05 10:46:54 2025)]
+2025-03-05 10:46:55 : INFO : (4488 | 4592) : (IS | IS) : node01 : LM_36318 : Session task instance [s_m_scd1]: Execution succeeded.
+2025-03-05 10:46:57 : INFO : (4488 | 10328) : (IS | IS) : node01 : LM_36318 : Workflow [w_scd1]: Execution succeeded.

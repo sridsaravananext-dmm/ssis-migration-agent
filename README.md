@@ -9,6 +9,12 @@ downloads this checklist. New synthetic source packages, metadata and expected
 results will not be authored; earlier regression demos do not establish migration
 acceptance on real workloads.
 
+[Existing public exports](docs/public-source-candidates.md) can also be used.
+The first imported source is an unchanged licensed PowerCenter mapping/workflow
+with pinned provenance. Its Windows-1252 declarations now parse and replay with
+original byte hashes; unsupported behavior and missing cross-file dependencies
+remain explicit in review reports. See the [audit](docs/public-powercenter-audit.md).
+
 Incremental, file-based legacy ETL migration framework. **Databricks is the only
 current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
 connections are not required; source exports and dependencies are supplied as files.
@@ -55,9 +61,15 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Last full regression baseline (2026-10-22): **1,244 tests passed, 4 live Databricks checks skipped**.
-Installed-wheel and previous-candidate replay checks passed; execution and source
+Full regression baseline (2026-10-26): **1,246 tests passed, 12 skipped**.
+Four skips require a live Databricks connection; eight require the optional .NET
+8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
+
+The public PowerCenter increment passed **59 focused XML/intake checks**, exact
+before/after comparison of all three existing UTF-8 XML graphs, the documented
+CLI command, and installed-wheel review/replay after removing the original source
+copies. Public source bytes and license hashes remain unchanged.
 
 The 2026-10-26 real-source guidance update passed **56 existing workbench checks**,
 all five platform checklist screens and wheel-content verification. No new
