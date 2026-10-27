@@ -33,6 +33,12 @@ now preserves scoped property contributions and all four connection owners.
 The lookup's differing declarations remain visible; effective configuration and
 physical database/schema bindings stay unresolved until real metadata is supplied.
 
+[Oracle's original ODI Smart Export](examples/public/oracle_odi_etl_offload/README.md)
+is now preserved with its license and pinned provenance. A read-only CLI/workbench
+[compatibility preflight](docs/public-odi-audit.md) inventories its 45 object
+classes and declared versions. The workbench explains and blocks its unsupported
+encoding/size before IR generation; modern mapping and KM semantics remain pending.
+
 Incremental, file-based legacy ETL migration framework. **Databricks is the only
 current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
 connections are not required; source exports and dependencies are supplied as files.
@@ -43,7 +49,7 @@ connections are not required; source exports and dependencies are supplied as fi
 | TM1 / Planning Analytics | MDX, rules/feeders, TurboIntegrator and dimensional/process metadata analysis; native IR and bounded Databricks candidates | Dense numeric leaf snapshots and exact integer arithmetic; broader runtime semantics remain unsupported |
 | Informatica PowerCenter | XML IR, explicit workflow/mapping binding, native expression syntax and declared behavior requirements in contracts/reports | Runtime semantics, effective configuration, physical connections and target translation remain unverified/unimplemented |
 | SAP Data Services / BODS | Bounded DI XML declarations and explicit object-ID references, native IR/contracts/report | ATL and undocumented XML/link encodings unsupported; no target translation |
-| Oracle ODI | Sunopsis object/field declarations and class-scoped key references, native IR/contracts/report | Unknown classes, knowledge-module execution and target translation remain unsupported |
+| Oracle ODI | Sunopsis object/field declarations and class-scoped key references, native IR/contracts/report; original-export compatibility preflight in CLI/workbench | Real Oracle Smart Export still exceeds structural parser size/encoding limits; modern classes, knowledge-module execution and target translation remain unsupported |
 
 The [developer workbench](docs/developer-workbench.md) supports source upload or
 paths, catalog, bronze/silver/gold schemas, runtime bindings, notebook destination,
@@ -79,10 +85,16 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Full regression baseline (2026-10-27): **1,321 tests passed, 12 skipped**.
+Full regression baseline (2026-10-27): **1,348 tests passed, 12 skipped**.
 Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
+
+The original ODI compatibility increment passed **30 focused checks**, the full
+regression, and installed-wheel CLI/schema/replay checks outside the checkout.
+Original ZIP/XML upload is inventoried and blocked before unsupported IR work;
+six archived PowerCenter version 1/2 analyses and contracts still replay unchanged.
+All original public source/license hashes match their pinned provenance.
 
 The configuration/binding audit passed **50 focused checks** and **73 existing
 checks** before the full regression. Six version 1/2 analyses and contracts remain

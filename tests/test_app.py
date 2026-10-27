@@ -85,6 +85,33 @@ def test_public_powercenter_dependency_requires_selection_then_resolves_in_workb
     assert saved.read_bytes()==mapping.content
 
 
+@pytest.mark.parametrize('upload_mode',['archive','xml'])
+def test_public_oracle_odi_upload_downloads_compatibility_and_blocks_unsupported_ir(monkeypatch,upload_mode):
+    from zipfile import ZipFile
+    from ssis_migration import migrate
+    root=Path(__file__).resolve().parents[1]
+    archive=root/'examples/public/oracle_odi_etl_offload/upstream/CloudAtCustomerODIETLOffload/ODISmartExport_ETLOffload_BigDataCloud@Customer.zip'
+    if upload_mode=='archive':
+        upload=UploadedFile(archive.name,archive.read_bytes());key='bundle_upload'
+    else:
+        with ZipFile(archive) as source:
+            name,=source.namelist();upload=UploadedFile(name,source.read(name))
+        key='package_upload'
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**k:upload if k.get('key')==key else None)
+    def forbidden(*args,**kwargs):raise AssertionError('Over-limit source must not reach migration/IR generation.')
+    monkeypatch.setattr(migrate,'run_migration',forbidden)
+    app=AppTest.from_file(str(root/'app.py'),default_timeout=20).run()
+    if upload_mode=='archive':
+        widget(app,'radio','Package source').set_value('Upload a source bundle (.zip)').run()
+    assert not app.exception
+    assert widget(app,'button','🚀 Run Migration').disabled
+    assert any('41,411 elements' in item.value and '10,000' in item.value for item in app.error)
+    assert any('ISO-8859-1' in item.value for item in app.markdown)
+    assert any(item.label=='ODI export compatibility' for item in app.expander)
+    assert any(item.label=='Download ODI compatibility report' for item in app.get('download_button'))
+    assert app.session_state['migration_result'] is None and app.session_state['migration_output'] is None
+
+
 def test_workbench_compares_supplied_observations_without_databricks(monkeypatch):
     root=Path(__file__).resolve().parents[1]
     uploads={key:UploadedFile(key+'.json',(root/'examples/validation'/(key+'.json')).read_bytes())

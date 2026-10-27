@@ -1,3 +1,4 @@
 # Preserve byte hashes, original encodings and CRLF in third-party exports.
 # Keep upstream whitespace intact as part of those original bytes.
 examples/public/powercenter_scd1/upstream/** -text -whitespace
+examples/public/oracle_odi_etl_offload/upstream/** -text -whitespace

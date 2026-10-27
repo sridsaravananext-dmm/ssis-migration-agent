@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:odi_export_compatibility:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_version", "profile", "scope", "source", "format", "encoding", "version_declarations", "encryption_declarations", "inventory", "structural_parser", "preflight_limits", "status", "semantic_status", "execution_status", "migration_accepted", "required_actions"],
+  "properties": {
+    "report_version": {"const": "1.0"},
+    "profile": {"const": "odi_export_compatibility_v1"},
+    "scope": {"const": "EXPORT_COMPATIBILITY_ONLY"},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+      }
+    },
+    "format": {"const": "odi_xml"},
+    "encoding": {"enum": ["utf-8", "windows-1252", "iso-8859-1"]},
+    "version_declarations": {
+      "type": "object", "additionalProperties": false, "required": ["root", "admin"],
+      "properties": {
+        "root": {"type": "object", "additionalProperties": false, "properties": {"version": {"type": "string"}, "VERSION": {"type": "string"}}},
+        "admin": {
+          "type": "array", "maxItems": 4096,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["locator", "declarations"],
+            "properties": {
+              "locator": {"$ref": "#/$defs/locator"},
+              "declarations": {
+                "type": "object", "additionalProperties": false,
+                "properties": {"RepositoryVersion": {"type": "string"}, "OdiVersion": {"type": "string"}, "IsSmartExportFile": {"type": "string"}}
+              }
+            }
+          }
+        }
+      }
+    },
+    "encryption_declarations": {
+      "type": "array", "maxItems": 4096,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["locator", "contains_cipher_text"],
+        "properties": {"locator": {"$ref": "#/$defs/locator"}, "contains_cipher_text": {"type": ["string", "null"]}}
+      }
+    },
+    "inventory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["element_count", "maximum_depth", "object_count", "field_count", "object_classes", "element_tags", "field_types"],
+      "properties": {
+        "element_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "maximum_depth": {"type": "integer", "minimum": 1, "maximum": 128},
+        "object_count": {"$ref": "#/$defs/count"},
+        "field_count": {"$ref": "#/$defs/count"},
+        "object_classes": {
+          "type": "array", "maxItems": 4096,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["class_name", "count", "structure_supported", "representative_locator"],
+            "properties": {"class_name": {"type": ["string", "null"]}, "count": {"$ref": "#/$defs/count"}, "structure_supported": {"type": "boolean"}, "representative_locator": {"$ref": "#/$defs/locator"}}
+          }
+        },
+        "element_tags": {
+          "type": "array", "maxItems": 4096,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["tag", "count", "structure_supported", "representative_locator"],
+            "properties": {"tag": {"type": "string"}, "count": {"$ref": "#/$defs/count"}, "structure_supported": {"type": "boolean"}, "representative_locator": {"$ref": "#/$defs/locator"}}
+          }
+        },
+        "field_types": {
+          "type": "array", "maxItems": 4096,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["declared_type", "count", "representative_locator"],
+            "properties": {"declared_type": {"type": ["string", "null"]}, "count": {"$ref": "#/$defs/count"}, "representative_locator": {"$ref": "#/$defs/locator"}}
+          }
+        }
+      }
+    },
+    "structural_parser": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "eligibility", "blockers", "max_bytes", "max_elements", "max_depth", "unsupported_object_count", "unsupported_element_count", "dependency_status"],
+      "properties": {
+        "profile": {"const": "odi_xml_structure_v1"},
+        "eligibility": {"enum": ["WITHIN_PREFLIGHT_LIMITS", "BLOCKED"]},
+        "blockers": {"type": "array", "uniqueItems": true, "maxItems": 2, "items": {"enum": ["ELEMENT_LIMIT_EXCEEDED", "UNSUPPORTED_STRUCTURAL_ENCODING"]}},
+        "max_bytes": {"const": 16777216}, "max_elements": {"const": 10000}, "max_depth": {"const": 128},
+        "unsupported_object_count": {"$ref": "#/$defs/count"},
+        "unsupported_element_count": {"$ref": "#/$defs/count"},
+        "dependency_status": {"const": "NOT_ANALYZED"}
+      }
+    },
+    "preflight_limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["max_bytes", "max_elements", "max_depth", "max_distinct_values"],
+      "properties": {"max_bytes": {"const": 16777216}, "max_elements": {"const": 100000}, "max_depth": {"const": 128}, "max_distinct_values": {"const": 4096}}
+    },
+    "status": {"const": "BLOCKED"},
+    "semantic_status": {"const": "NOT_VERIFIED"},
+    "execution_status": {"const": "NOT_RUN"},
+    "migration_accepted": {"const": false},
+    "required_actions": {"type": "array", "minItems": 3, "items": {"type": "string", "minLength": 1}}
+  },
+  "$defs": {
+    "count": {"type": "integer", "minimum": 0, "maximum": 100000},
+    "locator": {"type": "string", "pattern": "^xml:/"}
+  }
+}

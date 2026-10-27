@@ -90,3 +90,12 @@ the recorded behavior version, preserving earlier version 1 reviews.
 now maps selected configuration and instance contributions, and connection owner
 contexts. It retains unknown precedence, physical metadata and runtime values as
 unresolved. Both earlier behavior versions remain replayable.
+
+The [original Oracle ODI Smart Export](../examples/public/oracle_odi_etl_offload/README.md)
+now has a separate, bounded compatibility preflight. It inventories the original
+41,411 elements, 45 object classes, declared ODI/repository versions and explicit
+ISO-8859-1 encoding. Both original ZIP and XML workbench upload provide a JSON
+report and disable an ineligible structural run. The larger preflight inventory
+budget and ISO-8859-1 inventory support do not change the XML IR parser's original
+encoding/element limits. Class/KM semantics, dependencies and target generation
+remain pending; see [the audit](public-odi-audit.md).

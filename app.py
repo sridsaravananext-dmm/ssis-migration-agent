@@ -294,6 +294,24 @@ with tab_upload:
         st.subheader('Native XML structural analysis')
         st.info('This phase inventories the export, builds typed IR and declared dependency links, and downloads review contracts. It does not generate vendor migration notebooks. Unknown constructs and missing definitions remain blockers.')
         st.caption('XML supports UTF-8 and explicitly declared Windows-1252. BODS ATL, other XML encodings, ODI knowledge-module execution and source runtime semantics remain unsupported.')
+        if detected=='odi_xml' and source_path:
+            from ssis_migration.adapters.odi.preflight import inspect_export
+            try:
+                compatibility=inspect_export(source_path)
+                with st.expander('ODI export compatibility',expanded=True):
+                    counts=compatibility['inventory']
+                    st.write(f"{counts['element_count']:,} XML elements · {counts['object_count']:,} objects · {len(counts['object_classes'])} object classes")
+                    st.caption('Compatibility inventory only. Field values are omitted; dependencies and runtime behavior have not been analyzed.')
+                    st.json(compatibility['version_declarations'])
+                    st.dataframe(counts['object_classes'],hide_index=True)
+                    st.download_button('Download ODI compatibility report',json.dumps(compatibility,indent=2),
+                        'odi_export_compatibility.json',mime='application/json')
+                    for action in compatibility['required_actions']:st.write('- '+action)
+                if compatibility['structural_parser']['eligibility']=='BLOCKED':
+                    source_error=compatibility['required_actions'][0]
+                    st.error(source_error)
+            except (ValueError,OSError) as exc:
+                source_error=str(exc);st.error(source_error)
         powercenter=source_platform=='informatica' or detected=='powercenter_xml'
         if powercenter:
             st.write('**PowerCenter dependency exports**')

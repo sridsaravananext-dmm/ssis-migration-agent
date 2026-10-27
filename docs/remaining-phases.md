@@ -6,10 +6,13 @@ Do not author new synthetic source packages, metadata, input datasets or
 expected outputs. Existing regression examples remain demonstrations, not proof
 of real workload compatibility. See [the source file request](source-export-request.md).
 
-Next: extend PowerCenter native expressions/defaults, effective configuration and
-physical metadata binding, then add supported Databricks translation capabilities
-against that evidence. Use actual source-run inputs/outputs when available; the upstream
-workflow log alone is not equivalence evidence. PowerCenter/BODS/ODI target
+Next: introduce a bounded modern ODI structural profile against the unchanged
+Oracle Smart Export now inventoried. PowerCenter effective configuration and
+physical binding still require exact product-version, connection/DDL and run
+metadata; do not guess them while continuing independent ODI work. Add supported
+Databricks translation capabilities against real evidence. Use actual source-run
+inputs/outputs when available; the upstream workflow log alone is not equivalence
+evidence. PowerCenter/BODS/ODI target
 generation and broader TM1/C# semantics remain unfinished. Do not mark these
 phases complete from structural analysis.
 
@@ -93,6 +96,14 @@ Sequential increments in this continuation:
     do not select a winner. Product version, effective configuration and physical
     database/schema bindings remain unverified/unresolved. Versions 1/2 replay
     unchanged. See [configuration and binding readiness](powercenter-configuration-bindings.md).
+15. Oracle ODI public-export audit and compatibility preflight: **implemented**.
+    The unchanged, licensed Oracle ZIP has pinned original/member hashes. Its
+    41,411 XML elements, ISO-8859-1 declaration and unsupported modern classes
+    are inventoried separately from IR. CLI and ZIP/XML workbench flows produce
+    a replayable compatibility report; an ineligible structural run is disabled.
+    Existing parser limits and eligible native review remain unchanged. Modern
+    mapping normalization and KM semantics are not implemented by this inventory.
+    See [the source audit](public-odi-audit.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

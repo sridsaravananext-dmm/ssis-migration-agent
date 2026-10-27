@@ -1,0 +1,43 @@
+{
+  "provenance_version": "1.0",
+  "source_kind": "EXISTING_PUBLIC_EXPORT",
+  "repository": "https://github.com/oracle/data-warehouse-etl-offload-samples",
+  "commit": "4f67a1ccf84c6a4ef02720690cdee61af3027f25",
+  "retrieved_on": "2026-10-27",
+  "license": "UPL-1.0",
+  "license_path": "upstream/LICENSE",
+  "modifications": [],
+  "scope": "Original native ODI Smart Export archive and its existing upstream documentation; no authored workload, input rows or expected outputs.",
+  "notices": "Original Oracle copyright and Universal Permissive License retained. Upstream deployment instructions are context only and are not executed.",
+  "files": [
+    {
+      "path": "upstream/LICENSE",
+      "upstream_path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/oracle/data-warehouse-etl-offload-samples/4f67a1ccf84c6a4ef02720690cdee61af3027f25/LICENSE",
+      "size_bytes": 1866,
+      "sha256": "58606cb7cce643bfe8f43b490f911e7366390854758a99932287fbf8dc74f4af"
+    },
+    {
+      "path": "upstream/README.md",
+      "upstream_path": "README.md",
+      "url": "https://raw.githubusercontent.com/oracle/data-warehouse-etl-offload-samples/4f67a1ccf84c6a4ef02720690cdee61af3027f25/README.md",
+      "size_bytes": 8300,
+      "sha256": "4a0688a6f2d594f5f0783d8e08c58c7b87ffff6e3318d82535be73b3ecd3ac49"
+    },
+    {
+      "path": "upstream/CloudAtCustomerODIETLOffload/ODISmartExport_ETLOffload_BigDataCloud@Customer.zip",
+      "upstream_path": "CloudAtCustomerODIETLOffload/ODISmartExport_ETLOffload_BigDataCloud@Customer.zip",
+      "url": "https://raw.githubusercontent.com/oracle/data-warehouse-etl-offload-samples/4f67a1ccf84c6a4ef02720690cdee61af3027f25/CloudAtCustomerODIETLOffload/ODISmartExport_ETLOffload_BigDataCloud@Customer.zip",
+      "size_bytes": 207779,
+      "sha256": "a61799c8170b5b576f1bcc46be14c06b56c487befb8a13d988fd6c443ff5626f"
+    }
+  ],
+  "archive_members": [
+    {
+      "archive_path": "upstream/CloudAtCustomerODIETLOffload/ODISmartExport_ETLOffload_BigDataCloud@Customer.zip",
+      "path": "ODISmartExport_ETLOffload_BigDataCloud@Customer.xml",
+      "size_bytes": 3363246,
+      "sha256": "672b864a051b636da920565e80531e8d20b01f3b7566170bc16ac454254bea2b"
+    }
+  ]
+}
