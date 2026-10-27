@@ -26,7 +26,10 @@ def validate_export_review(envelope, graph, plan, contracts, *, behavior_analysi
     if behavior_analysis is not None or 'behavior_analysis_binding' in plan['metadata']:
         from .informatica.behavior import analyze_behavior, validate_behavior_analysis
         if behavior_analysis is None:
-            behavior_analysis = analyze_behavior(graph)
+            binding = plan['metadata']['behavior_analysis_binding']
+            if not isinstance(binding, dict):
+                raise SchemaValidationError('Invalid source behavior analysis binding.')
+            behavior_analysis = analyze_behavior(graph, profile=binding.get('profile'))
         else:
             validate_behavior_analysis(behavior_analysis, graph)
     validate_native_review_plan(graph, plan, contracts, behavior_analysis=behavior_analysis)

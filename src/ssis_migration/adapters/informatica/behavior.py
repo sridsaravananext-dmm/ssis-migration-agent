@@ -15,9 +15,12 @@ from ..xml_export import validate_export_graph
 from .expressions import analyze_expression
 
 PROFILE = 'powercenter_declared_behavior_v1'
+LATEST_PROFILE = 'powercenter_declared_behavior_v2'
 
 
 class BehaviorAnalysis:
+    profile = PROFILE
+
     def __init__(self, graph):
         self.graph = graph
         self.nodes = {n['node_id']: n for n in graph['nodes']}
@@ -68,7 +71,7 @@ class BehaviorAnalysis:
                 'declarations': copy.deepcopy(declarations), 'preservation_requirements': preservation,
                 'unresolved_items': list(dict.fromkeys(unresolved)), 'evidence': evidence,
                 'semantic_status': 'NOT_VERIFIED'}
-        item['requirement_id'] = 'requirement-' + content_digest([PROFILE, item])[:24]
+        item['requirement_id'] = 'requirement-' + content_digest([self.profile, item])[:24]
         validate_document(item, 'source_requirement')
         self.requirements.append(item)
 
@@ -233,7 +236,7 @@ class BehaviorAnalysis:
                           'columns': [{'node_id': n['node_id'], 'declaration': copy.deepcopy(self.attrs(n))} for n in fields]},
                           ['Preserve declared column types, precision, nullability and keys; verify physical metadata and actual data constraints.'],
                           ['Exported definitions do not prove observed uniqueness, target matching policy or data equivalence.'])
-        document = {'analysis_version': '1.0', 'profile': PROFILE, 'ir_id': self.graph['ir_id'],
+        document = {'analysis_version': '1.0', 'profile': self.profile, 'ir_id': self.graph['ir_id'],
                     'source_analysis_sha256': self.graph['provenance']['source_analysis_sha256'],
                     'evidence_files': copy.deepcopy(self.graph['evidence_files']), 'requirements': self.requirements,
                     'semantic_status': 'NOT_VERIFIED', 'scope': 'DECLARATIONS_AND_REVIEW_REQUIREMENTS'}
@@ -241,14 +244,19 @@ class BehaviorAnalysis:
         return document
 
 
-def analyze_behavior(graph):
+def analyze_behavior(graph, *, profile=LATEST_PROFILE):
     validate_export_graph(graph)
     if graph['source']['platform'] != 'informatica':
         raise SchemaValidationError('PowerCenter behavior analysis requires a replayable PowerCenter graph.')
-    return BehaviorAnalysis(graph).run()
+    if profile == PROFILE:
+        return BehaviorAnalysis(graph).run()
+    if profile == LATEST_PROFILE:
+        from .behavior_v2 import DefaultBehaviorAnalysis
+        return DefaultBehaviorAnalysis(graph).run()
+    raise SchemaValidationError('Unsupported PowerCenter behavior profile: '+str(profile))
 
 
 def validate_behavior_analysis(document, graph):
     validate_document(document, 'source_behavior_analysis'); validate_evidence_references(document)
-    if document != analyze_behavior(graph):
+    if document != analyze_behavior(graph, profile=document['profile']):
         raise SchemaValidationError('PowerCenter behavior requirements do not replay from the original export declarations.')

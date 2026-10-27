@@ -79,7 +79,7 @@ def test_public_powercenter_dependency_requires_selection_then_resolves_in_workb
     assert len(bound['source_files'])==2 and bound['missing_dependencies']==[]
     assert bound['preservation']['node_count']==bound['preservation']['assigned_node_count']==320
     assert bound['migration_accepted'] is False and bound['generated_artifact_count']==0
-    assert bound['behavior_analysis']['requirement_count']==31
+    assert bound['behavior_analysis']['requirement_count']==33
     assert any(e.label=='PowerCenter behavior requirements' for e in app.expander)
     assert Path(bound['artifacts']['source_behavior_analysis']).is_file()
     assert saved.read_bytes()==mapping.content

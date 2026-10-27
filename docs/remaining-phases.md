@@ -80,6 +80,12 @@ Sequential increments in this continuation:
     preserves every requirement without semantic verification or coverage credit.
     Old structural graphs and generic contracts are unchanged. See
     [behavior analysis and limits](powercenter-behavior-analysis.md).
+13. PowerCenter port defaults: **implemented** in a version 2 behavior profile.
+    Missing/empty/nonempty declarations stay distinct; the original two sequence
+    `ERROR` defaults enter separate contracts, for 33 requirements total. Effective
+    defaults, invocation and failure scope remain unverified. Recorded version 1
+    analyses/contracts still replay; unsupported profiles do not fall back.
+    See [port-default analysis](powercenter-port-defaults.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

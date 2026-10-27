@@ -80,3 +80,8 @@ policies enter contracts as unverified source requirements. Structural profiles
 and previously generated generic contracts retain their representations. Effective
 configuration, physical connections, runtime equivalence and target translation
 remain unimplemented.
+
+PowerCenter's latest behavior profile now includes
+[port-default analysis](powercenter-port-defaults.md). It records all original
+default declarations and the two explicit sequence error expressions. Replay uses
+the recorded behavior version, preserving earlier version 1 reviews.

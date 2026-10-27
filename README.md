@@ -1,6 +1,6 @@
 # Legacy ETL Migration Agent
 
-**Last updated date - 10/26/2026**
+**Last updated date - 10/27/2026**
 
 Next work uses genuine exported projects and their dependencies. See the
 [source files requested](docs/source-export-request.md) for each platform, the
@@ -18,10 +18,15 @@ UUID and export version. Unsupported behavior and other missing dependencies
 remain explicit. See the [audit](docs/public-powercenter-audit.md).
 
 [PowerCenter behavior analysis](docs/powercenter-behavior-analysis.md) now extracts
-31 requirements from the original bound exports, including native expressions,
+33 requirements from the original bound exports, including native expressions,
 router routes, sequence/lookup risks and session/writer settings. They appear in
 contracts and the workbench with source evidence and unresolved items. Runtime
 semantics, effective configuration and target translation remain unverified.
+
+[Version 2 port-default analysis](docs/powercenter-port-defaults.md) preserves
+missing and empty declarations separately and records the two original sequence
+error expressions. Version 1 analyses and contracts remain replayable; no runtime
+fallback or error outcome is invented.
 
 Incremental, file-based legacy ETL migration framework. **Databricks is the only
 current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
@@ -69,10 +74,15 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Full regression baseline (2026-10-26): **1,291 tests passed, 12 skipped**.
+Full regression baseline (2026-10-27): **1,304 tests passed, 12 skipped**.
 Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
+
+The port-default increment passed **33 focused checks** across defaults, legacy
+behavior and the workbench. Three saved version 1 behavior/plan/contracts compare
+exactly and replay. The installed wheel replays both profiles after removing the
+source copies. Original public source and license hashes remain unchanged.
 
 The declared-behavior increment passed **20 focused behavior/workbench checks**
 and **172 existing checks** before the full regression. Six prior structural

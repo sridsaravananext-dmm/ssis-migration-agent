@@ -8,7 +8,7 @@ import pytest
 
 from ssis_migration.adapters import get_adapter
 from ssis_migration.adapters.export_pipeline import validate_export_review
-from ssis_migration.adapters.informatica.behavior import analyze_behavior, validate_behavior_analysis
+from ssis_migration.adapters.informatica.behavior import PROFILE, analyze_behavior, validate_behavior_analysis
 from ssis_migration.adapters.informatica.expressions import analyze_expression
 from ssis_migration.migration.contract_bridge import _contract_id, build_migration_contract, validate_contract
 from ssis_migration.migration.native_review import build_native_review_plan
@@ -26,7 +26,7 @@ def original():
 
 @pytest.fixture(scope='module')
 def behavior(original):
-    return analyze_behavior(original.normalized_ir)
+    return analyze_behavior(original.normalized_ir, profile=PROFILE)
 
 
 def requirement(document, kind, name=None):
@@ -171,7 +171,7 @@ def test_review_pipeline_publishes_behavior_without_acceptance_or_notebooks(tmp_
     artifacts = {key:json.loads(Path(path).read_text()) for key,path in report['artifacts'].items()}
     validate_export_review(artifacts['source_envelope'], artifacts['normalized_ir'], artifacts['migration_plan'],
                            artifacts['migration_contracts']['contracts'], behavior_analysis=artifacts['source_behavior_analysis'])
-    assert report['behavior_analysis']['requirement_count'] == 31
+    assert report['behavior_analysis']['requirement_count'] == 33
     assert report['behavior_analysis']['semantic_status'] == 'NOT_VERIFIED'
     assert report['behavior_analysis']['unresolved_items']
     assert report['coverage']['semantic']['verified_percent'] is None

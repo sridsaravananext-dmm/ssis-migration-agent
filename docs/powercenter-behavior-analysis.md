@@ -30,7 +30,7 @@ include `source_behavior_analysis.json` alongside the existing IR, plan, contrac
 and report. The workbench shows **PowerCenter behavior requirements** after a run
 and provides a direct JSON download.
 
-For the public workflow plus mapping, the pass produces **31 requirements**:
+For the public workflow plus mapping, version 1 produces **31 requirements**:
 six transformations, four router groups, two target load ranks, one session, one
 configuration, nine session transformation instances, two writers, four connection
 references, and the source/target definitions. All 320 structural nodes and 382
@@ -39,6 +39,10 @@ subject node, original declarations, XML evidence, preservation requirements and
 unresolved items. No requirement receives verified semantic coverage, criticality
 or weights automatically.
 
+New runs now use [version 2 port-default analysis](powercenter-port-defaults.md),
+which adds the two explicit sequence error defaults for **33 requirements**.
+The original version 1 profile and its recorded contracts remain replayable.
+
 The native expression syntax profile recognizes declared port references,
 `ISNULL`, bounded predicate negation, comparisons, `AND`/`OR`, parentheses and the
 `DD_UPDATE` flag in update strategies. Limits are 4096 characters, 256 tokens and
@@ -46,6 +50,10 @@ The native expression syntax profile recognizes declared port references,
 outside this profile and retain their text with a review-required result. The
 parser never evaluates expressions, translates them as SQL or supplies missing
 port metadata. Parsed syntax remains `NOT_VERIFIED` semantically.
+
+The separate version 2 default parser additionally recognizes the original
+`ERROR('transformation error')` declarations; it does not execute them or infer
+their failure scope.
 
 Router output `REF_FIELD` declarations bind to unique declared input ports.
 Unconnected output groups remain explicit, including the original unused default
