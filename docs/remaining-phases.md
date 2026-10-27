@@ -1,13 +1,15 @@
 # Offline implementation continuation
 
-As of 2026-10-26, the next adapter and semantic work must use real user-supplied
+As of 2026-10-27, the next adapter and semantic work must use real user-supplied
 exports or existing public exports with verified reuse terms and provenance.
 Do not author new synthetic source packages, metadata, input datasets or
 expected outputs. Existing regression examples remain demonstrations, not proof
 of real workload compatibility. See [the source file request](source-export-request.md).
 
-Next: introduce a bounded modern ODI structural profile against the unchanged
-Oracle Smart Export now inventoried. PowerCenter effective configuration and
+Next: extend ODI native expression/component semantics, physical design/KM
+dependency interpretation and explicit Databricks bindings before target
+translation. The original Oracle mappings now have normalized declarations and
+evidence-backed review contracts. PowerCenter effective configuration and
 physical binding still require exact product-version, connection/DDL and run
 metadata; do not guess them while continuing independent ODI work. Add supported
 Databricks translation capabilities against real evidence. Use actual source-run
@@ -104,6 +106,16 @@ Sequential increments in this continuation:
     Existing parser limits and eligible native review remain unchanged. Modern
     mapping normalization and KM semantics are not implemented by this inventory.
     See [the source audit](public-odi-audit.md).
+16. ODI 12c mapping normalization and generation assessment: **implemented as
+    declaration/contract analysis** for explicit ODI 12.2.1 / repository
+    05.02.02.07 Smart Exports. All 41,411 elements survive as 2,500 nodes and 38,911
+    typed fields; 12 scoped data-flow links and 50 declared attribute-reference
+    lineage links are retained. Seven mapping requirements plus an export review
+    requirement bind into contracts. Per-mapping Databricks assessments retain
+    missing definitions, physical designs/KM behavior, target-binding gaps and
+    both TRUNCATE options as blockers. No notebooks or execution are enabled.
+    Earlier structural/preflight profiles remain unchanged. See
+    [normalization, limits and remaining generation work](odi-mapping-normalization.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

@@ -34,10 +34,13 @@ The lookup's differing declarations remain visible; effective configuration and
 physical database/schema bindings stay unresolved until real metadata is supplied.
 
 [Oracle's original ODI Smart Export](examples/public/oracle_odi_etl_offload/README.md)
-is now preserved with its license and pinned provenance. A read-only CLI/workbench
-[compatibility preflight](docs/public-odi-audit.md) inventories its 45 object
-classes and declared versions. The workbench explains and blocks its unsupported
-encoding/size before IR generation; modern mapping and KM semantics remain pending.
+is preserved with its license and pinned provenance. Its versioned
+[ODI 12c normalizer](docs/odi-mapping-normalization.md) now builds IR for all seven
+mapping declarations, explicit connector/attribute references and all original
+typed fields. Eight evidence-backed requirements enter review contracts. The
+workbench downloads those artifacts and a per-mapping Databricks assessment;
+missing definitions, physical/KM semantics and target bindings still block code
+generation. Earlier structural graphs and compatibility reports remain replayable.
 
 Incremental, file-based legacy ETL migration framework. **Databricks is the only
 current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
@@ -49,7 +52,7 @@ connections are not required; source exports and dependencies are supplied as fi
 | TM1 / Planning Analytics | MDX, rules/feeders, TurboIntegrator and dimensional/process metadata analysis; native IR and bounded Databricks candidates | Dense numeric leaf snapshots and exact integer arithmetic; broader runtime semantics remain unsupported |
 | Informatica PowerCenter | XML IR, explicit workflow/mapping binding, native expression syntax and declared behavior requirements in contracts/reports | Runtime semantics, effective configuration, physical connections and target translation remain unverified/unimplemented |
 | SAP Data Services / BODS | Bounded DI XML declarations and explicit object-ID references, native IR/contracts/report | ATL and undocumented XML/link encodings unsupported; no target translation |
-| Oracle ODI | Sunopsis object/field declarations and class-scoped key references, native IR/contracts/report; original-export compatibility preflight in CLI/workbench | Real Oracle Smart Export still exceeds structural parser size/encoding limits; modern classes, knowledge-module execution and target translation remain unsupported |
+| Oracle ODI | Legacy Sunopsis review plus versioned ODI 12.2.1 mapping IR, typed fields, scoped references/lineage, source requirements and Databricks capability assessment | New profile requires repository 05.02.02.07; unknown classes, missing definitions, physical/KM semantics and target translation remain blocked/unimplemented |
 
 The [developer workbench](docs/developer-workbench.md) supports source upload or
 paths, catalog, bronze/silver/gold schemas, runtime bindings, notebook destination,
@@ -85,10 +88,20 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Full regression baseline (2026-10-27): **1,348 tests passed, 12 skipped**.
+Full regression baseline (2026-10-27): **1,371 tests passed, 12 skipped**.
 Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
+
+The ODI normalization increment passed **22 native checks**, **67 existing
+XML/preflight/workbench checks**, and a complete real ZIP workbench run. All
+41,411 original elements are retained as nodes or typed fields. New mapping
+requirements cannot be removed through a generic plan; target assessments retain
+the unresolved external references and both TRUNCATE options as blockers.
+Installed-wheel API review and full IR/requirement/contract/assessment replay
+passed after the source copy was removed. Three older vendor graphs/envelopes,
+the original ODI compatibility report and six PowerCenter version 1/2 reviews
+remain unchanged and replayable; original source/license hashes still match.
 
 The original ODI compatibility increment passed **30 focused checks**, the full
 regression, and installed-wheel CLI/schema/replay checks outside the checkout.

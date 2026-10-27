@@ -86,7 +86,7 @@ def test_public_powercenter_dependency_requires_selection_then_resolves_in_workb
 
 
 @pytest.mark.parametrize('upload_mode',['archive','xml'])
-def test_public_oracle_odi_upload_downloads_compatibility_and_blocks_unsupported_ir(monkeypatch,upload_mode):
+def test_public_oracle_odi_upload_offers_versioned_normalization_and_legacy_compatibility(monkeypatch,upload_mode):
     from zipfile import ZipFile
     from ssis_migration import migrate
     root=Path(__file__).resolve().parents[1]
@@ -104,12 +104,38 @@ def test_public_oracle_odi_upload_downloads_compatibility_and_blocks_unsupported
     if upload_mode=='archive':
         widget(app,'radio','Package source').set_value('Upload a source bundle (.zip)').run()
     assert not app.exception
-    assert widget(app,'button','🚀 Run Migration').disabled
-    assert any('41,411 elements' in item.value and '10,000' in item.value for item in app.error)
+    assert not widget(app,'button','🚀 Run Migration').disabled
+    assert any('ODI 12.2.1 mapping normalizer' in item.value for item in app.info)
     assert any('ISO-8859-1' in item.value for item in app.markdown)
     assert any(item.label=='ODI export compatibility' for item in app.expander)
     assert any(item.label=='Download ODI compatibility report' for item in app.get('download_button'))
     assert app.session_state['migration_result'] is None and app.session_state['migration_output'] is None
+
+
+def test_public_oracle_odi_workbench_run_downloads_normalized_contracts_and_generation_findings(monkeypatch,tmp_path):
+    import json
+    root=Path(__file__).resolve().parents[1]
+    archive=root/'examples/public/oracle_odi_etl_offload/upstream/CloudAtCustomerODIETLOffload/ODISmartExport_ETLOffload_BigDataCloud@Customer.zip'
+    upload=UploadedFile(archive.name,archive.read_bytes())
+    monkeypatch.setattr(st,'file_uploader',lambda *a,**k:upload if k.get('key')=='bundle_upload' else None)
+    app=AppTest.from_file(str(root/'app.py'),default_timeout=30).run()
+    widget(app,'radio','Package source').set_value('Upload a source bundle (.zip)').run()
+    widget(app,'text_input','Artifact destination path').set_value(str(tmp_path/'artifacts')).run()
+    assert not app.exception and not widget(app,'button','🚀 Run Migration').disabled
+    widget(app,'button','🚀 Run Migration').click().run(timeout=180)
+    assert not app.exception and app.session_state['last_attempt_error'] is None
+    report=app.session_state['migration_result']
+    assert report['export_profile']=='odi_12c_mapping_declarations_v1'
+    assert report['behavior_analysis']['requirement_count']==8
+    assert report['target_generation_assessment']['blocked_mapping_count']==7
+    assert report['generated_artifact_count']==0 and report['migration_accepted'] is False
+    assert report['execution_status']=='NOT_RUN'
+    assert any(e.label=='ODI mapping requirements' for e in app.expander)
+    assert any(e.label=='ODI Databricks generation blockers' for e in app.expander)
+    assert any(b.label=='Download ODI generation assessment' for b in app.get('download_button'))
+    graph=json.loads(Path(report['artifacts']['normalized_ir']).read_text())
+    assert len(graph['nodes'])==2500 and len(graph['edges'])==4760
+    assert not list(Path(app.session_state['migration_output']).rglob('*.ipynb'))
 
 
 def test_workbench_compares_supplied_observations_without_databricks(monkeypatch):

@@ -1,5 +1,11 @@
 # Oracle ODI Smart Export compatibility audit
 
+This page records the legacy compatibility checkpoint. The subsequent
+[versioned ODI mapping normalizer](odi-mapping-normalization.md) now handles this
+original export for IR/contract review, while keeping the earlier preflight
+representation and legacy parser limits unchanged. Databricks generation is
+assessed per mapping and remains blocked by unresolved source/target behavior.
+
 Audit date: 2026-10-27. Source: Oracle's UPL-1.0
 [ETL Offload sample](https://github.com/oracle/data-warehouse-etl-offload-samples/tree/4f67a1ccf84c6a4ef02720690cdee61af3027f25/CloudAtCustomerODIETLOffload),
 pinned to commit `4f67a1ccf84c6a4ef02720690cdee61af3027f25`.

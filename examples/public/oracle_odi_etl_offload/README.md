@@ -11,9 +11,11 @@ authored for this increment. The upstream README is context for the source
 sample; its deployment/installation instructions are not run by the migration tool.
 
 Upload the original ZIP through **Upload a source bundle (.zip)** in the workbench.
-Select its single XML member. The **ODI export compatibility** panel downloads a
-read-only inventory and explains why the structural run is disabled. You can also
-upload the extracted XML directly.
+Select its single XML member. The **ODI export compatibility** panel downloads
+the original legacy-profile inventory. The versioned ODI 12c mapping normalizer
+now permits **Run Migration** for IR/contract review. Its mapping requirements
+and Databricks generation assessment are downloadable after the run. You can
+also upload the extracted XML directly.
 
 For command-line inventory, extract the archive with the existing bounded intake:
 
@@ -35,11 +37,29 @@ Invalid input, preflight resource limits or an existing output file return 2
 without writing a partial compatibility report.
 
 This export declares ODI `12.2.1`, repository `05.02.02.07` and ISO-8859-1.
-It contains 41,411 elements and 2,495 objects in 45 classes. Structural IR is
-blocked by both the unsupported original encoding and the 10,000-element parser
-limit; modern mapping/KM classes also remain unsupported. Preflight does not
-change those limits, build partial IR, resolve dependencies, generate notebooks,
-execute commands or establish migration acceptance.
+It contains 41,411 elements and 2,495 objects in 45 classes. The original legacy
+structural parser remains blocked by its encoding/10,000-element limits. The
+new `odi_12c_mapping_declarations_v1` profile preserves all original elements as
+2,500 IR nodes plus 38,911 typed field declarations, with exact byte replay and
+explicit mapping links. It adds seven mapping requirements plus one export
+review requirement. This does not translate native physical/KM behavior or
+establish migration acceptance.
+
+To produce the new review from the same extracted source:
+
+```bash
+python -m ssis_migration.migrate \
+  --source '/tmp/oracle-odi-source/ODISmartExport_ETLOffload_BigDataCloud@Customer.xml' \
+  --output /tmp/oracle-odi-review > /tmp/oracle-odi-review-run.json
+```
+
+The final status is `BLOCKED` with zero generated notebooks. The report and
+`target_generation_assessment.json` identify missing definitions and unimplemented
+generation capabilities per mapping. In the original, 52 KM references, 32 native
+datatype references, seven column references and one datastore reference remain
+unresolved under strict class/key/GUID binding. These are reference counts, not
+counts of distinct missing objects. The source also retains both TRUNCATE options
+and every declared physical design; no design is automatically selected.
 
 The inventory omits field values and encryption key material. It contains exact
 source SHA-256/size and representative XML locators. Replay requires unchanged
@@ -54,4 +74,5 @@ with open('/tmp/oracle-odi-compatibility.json') as stream:
 validate_preflight(report, '/tmp/oracle-odi-source/ODISmartExport_ETLOffload_BigDataCloud@Customer.xml')
 ```
 
-See the [architecture audit and next work](../../../docs/public-odi-audit.md).
+See the [normalization audit and next work](../../../docs/odi-mapping-normalization.md)
+and the [earlier compatibility checkpoint](../../../docs/public-odi-audit.md).

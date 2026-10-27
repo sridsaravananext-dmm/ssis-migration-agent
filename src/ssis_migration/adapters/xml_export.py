@@ -97,7 +97,7 @@ class ExportGraph:
             element = self.parents.get(element)
         return None
 
-    def finish(self, profile):
+    def finish(self, profile, *, analysis_metadata=None):
         snapshot = {'text': self.text, 'sha256': self.record['sha256']}
         # Keep historical UTF-8 snapshots/graphs byte-for-byte compatible.
         if self.encoding != 'utf-8':
@@ -105,6 +105,8 @@ class ExportGraph:
         analysis = {'analysis_version': '1.0', 'profile': profile, 'source': self.source,
                     'source_snapshot': snapshot,
                     'semantic_status': 'NOT_VERIFIED'}
+        if analysis_metadata is not None:
+            analysis['metadata'] = copy.deepcopy(analysis_metadata)
         graph = {'ir_version': '2.0', 'ir_id': '', 'source': copy.deepcopy(self.source),
                  'evidence_files': [self.record], 'nodes': self.nodes, 'edges': self.edges,
                  'diagnostics': self.diagnostics, 'semantic_status': 'NOT_VERIFIED',
@@ -216,6 +218,10 @@ def validate_export_graph(graph):
     adapter = get_adapter(graph['source']['platform'])
     if not isinstance(adapter, XMLExportAdapter):
         raise SchemaValidationError('An XML structural graph needs its registered XML adapter.')
+    native_profile = getattr(adapter, 'native_profile', None)
+    if native_profile is not None and graph['extensions']['source_analysis'].get('profile') == native_profile:
+        adapter.validate_native_graph(graph)
+        return
     bundle_profile = getattr(adapter, 'bundle_profile', None)
     if bundle_profile is not None and graph['extensions']['source_analysis'].get('profile') == bundle_profile:
         adapter.validate_bundle_graph(graph)

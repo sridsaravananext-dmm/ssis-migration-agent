@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:odi_databricks_assessment:1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["assessment_version", "profile", "target_platform", "scope", "ir_id", "behavior_analysis_sha256", "contracts_sha256", "source_contract_ids", "mappings", "status", "generation_languages", "generated_notebooks", "execution_status", "semantic_status", "migration_accepted"],
+  "properties": {
+    "assessment_version": {"const": "1.0"},
+    "profile": {"const": "odi_databricks_capabilities_v1"},
+    "target_platform": {"const": "databricks"},
+    "scope": {"const": "CAPABILITY_ASSESSMENT_ONLY"},
+    "ir_id": {"type": "string", "pattern": "^ir-[a-f0-9]{64}$"},
+    "behavior_analysis_sha256": {"$ref": "#/$defs/hash"},
+    "contracts_sha256": {"$ref": "#/$defs/hash"},
+    "source_contract_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "mappings": {
+      "type": "array", "maxItems": 256,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["mapping_node_id", "requirement_id", "name", "strategy", "requires_ai", "component_types", "expression_count", "physical_design_count", "selected_physical_design", "unresolved_external_references", "blockers", "semantic_status"],
+        "properties": {
+          "mapping_node_id": {"type": "string", "minLength": 1},
+          "requirement_id": {"type": "string", "pattern": "^requirement-[a-f0-9]{24}$"},
+          "name": {"type": ["string", "null"]},
+          "strategy": {"const": "UNSUPPORTED"}, "requires_ai": {"const": false},
+          "component_types": {"type": "array", "items": {"type": ["string", "null"]}},
+          "expression_count": {"type": "integer", "minimum": 0},
+          "physical_design_count": {"type": "integer", "minimum": 0},
+          "selected_physical_design": {"type": "null"},
+          "unresolved_external_references": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["node_id", "interface", "declared_identity", "declared_guid", "qualified_name", "target_node_id", "resolution"],
+              "properties": {
+                "node_id": {"type": "string", "minLength": 1},
+                "interface": {"type": ["string", "null"]},
+                "declared_identity": {"type": ["string", "null"]},
+                "declared_guid": {"type": ["string", "null"]},
+                "qualified_name": {"type": ["string", "null"]},
+                "target_node_id": {"type": "null"}, "resolution": {"const": "UNRESOLVED"}
+              }
+            }
+          },
+          "blockers": {
+            "type": "array", "minItems": 3,
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["code", "message", "source_node_ids"],
+              "properties": {
+                "code": {"enum": ["NATIVE_COMPONENT_EXPRESSION_SEMANTICS_UNIMPLEMENTED", "PHYSICAL_KM_WRITE_SEMANTICS_UNIMPLEMENTED", "DATABRICKS_BINDINGS_NOT_ESTABLISHED", "EXPORTED_DEFINITIONS_UNRESOLVED", "DESTRUCTIVE_OPTION_REVIEW_REQUIRED"]},
+                "message": {"type": "string", "minLength": 1},
+                "source_node_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}
+              }
+            }
+          },
+          "semantic_status": {"const": "NOT_VERIFIED"}
+        }
+      }
+    },
+    "status": {"const": "BLOCKED"}, "generation_languages": {"const": []}, "generated_notebooks": {"const": []},
+    "execution_status": {"const": "NOT_RUN"}, "semantic_status": {"const": "NOT_VERIFIED"}, "migration_accepted": {"const": false}
+  },
+  "$defs": {"hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+}

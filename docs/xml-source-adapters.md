@@ -9,7 +9,7 @@ partially implemented migration notebook.
 | --- | --- | --- |
 | `adapters/informatica/adapter.py`, `PowerCenterAdapter` | `POWERMART`; `powercenter_xml_structure_v1`; explicit files use `powercenter_bundle_structure_v1` | Typed source/target columns, mapping/transformation instances, scoped definition references, connector data/column links, session mapping references, workflow task/conditional control links. Explicit cross-file session/mapping binding requires matching repository, folder UUID and export version. Missing or ambiguous definitions/ports block. Shortcuts and unknown elements block. |
 | `adapters/bods/adapter.py`, `BODSAdapter` | `DataServices`, `DIExport`, `DIJob`; `bods_xml_structure_v1` | Bounded DI jobs/workflows/dataflows, transforms, scripts/queries, columns, parameters and datastores. Explicit `sourceId`/`targetId`, `refId` and `datastoreId` links resolve only unique IDs. Link labels do not establish execution order. Other XML encodings and ATL are unsupported. |
-| `adapters/odi/adapter.py`, `ODIAdapter` | `SunopsisExport`; `odi_xml_structure_v1` | Selected `com.sunopsis.dwg.dbobj.Snp*` object classes, original fields, declared identity and foreign-key references. Unknown classes, duplicate fields/keys and missing referenced definitions block. SQL dialect, KM execution and package order are not inferred from text, object names or repository IDs. |
+| `adapters/odi/adapter.py`, `ODIAdapter` | `SunopsisExport`; legacy `odi_xml_structure_v1`, plus versioned `odi_12c_mapping_declarations_v1` for explicit 12.2.1 / repository 05.02.02.07 Smart Exports | Legacy selected Snp classes/keys remain unchanged. The new profile normalizes mapping/component/connection/attribute/expression declarations, preserves typed fields and resolves only explicit class/key/GUID references and scoped data-flow/lineage links. Unknown classes, missing definitions and physical/KM semantics stay blocked. No SQL dialect, execution order or write policy is inferred from names. |
 
 The exact class/tag/key tables in each adapter define the supported structural
 profile. A recognized tag is not a supported target-generation capability.
@@ -25,7 +25,7 @@ diagnostics. XML is not the sole representation of the export's behavior.
 Source bytes remain available for exact replay; recomputing a graph hash cannot
 authorize omitted nodes, altered conditions or removed relationships.
 
-Limits are UTF-8 or explicitly declared Windows-1252, 16 MiB, 10,000 elements and
+Legacy shared XML limits are UTF-8 or explicitly declared Windows-1252, 16 MiB, 10,000 elements and
 depth 128. No encoding is guessed and invalid bytes are not replaced. Windows-1252
 snapshots carry their original encoding; historical UTF-8 snapshots retain their
 existing shape and exact replay behavior. Entities/internal DTDs, symlinks, BOM
@@ -95,7 +95,16 @@ The [original Oracle ODI Smart Export](../examples/public/oracle_odi_etl_offload
 now has a separate, bounded compatibility preflight. It inventories the original
 41,411 elements, 45 object classes, declared ODI/repository versions and explicit
 ISO-8859-1 encoding. Both original ZIP and XML workbench upload provide a JSON
-report and disable an ineligible structural run. The larger preflight inventory
+report and explain why the earlier structural profile is ineligible. The larger preflight inventory
 budget and ISO-8859-1 inventory support do not change the XML IR parser's original
 encoding/element limits. Class/KM semantics, dependencies and target generation
 remain pending; see [the audit](public-odi-audit.md).
+
+The [ODI 12c normalization profile](odi-mapping-normalization.md) now accepts the
+original Oracle export for review. It retains explicit ISO-8859-1 bytes in its
+own replay path, folds leaf Object/Field declarations into typed object records,
+and uses separate limits: 16 MiB, 100,000 elements, 6,000 nodes, 20,000 edges,
+256 fields/object, 256 mappings and depth 128. Legacy XML limits are unchanged.
+All seven mappings enter source requirements and contracts; a separate Databricks
+assessment reports why code generation remains unsupported. No partial notebook
+is emitted for missing KM definitions, unresolved metadata or write semantics.

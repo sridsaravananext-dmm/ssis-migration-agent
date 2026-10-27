@@ -23,8 +23,15 @@ def validate_export_review(envelope, graph, plan, contracts, *, behavior_analysi
         raise SchemaValidationError('Export source snapshot and normalized graph disagree.')
     if plan['package_name'] != Path(graph['evidence_files'][0]['path']).stem:
         raise SchemaValidationError('Export review plan name does not identify its source file.')
+    if (graph['source']['platform'] == 'odi'
+            and graph['extensions']['source_analysis']['profile'] == getattr(get_adapter('odi'), 'native_profile', None)
+            and 'behavior_analysis_binding' not in plan['metadata']):
+        raise SchemaValidationError('Native ODI mapping reviews require their source behavior requirements in the plan/contracts.')
     if behavior_analysis is not None or 'behavior_analysis_binding' in plan['metadata']:
-        from .informatica.behavior import analyze_behavior, validate_behavior_analysis
+        if graph['source']['platform'] == 'odi':
+            from .odi.behavior import analyze_behavior, validate_behavior_analysis
+        else:
+            from .informatica.behavior import analyze_behavior, validate_behavior_analysis
         if behavior_analysis is None:
             binding = plan['metadata']['behavior_analysis_binding']
             if not isinstance(binding, dict):
@@ -48,8 +55,15 @@ def run_export_review(source, output, platform, *, workspace_config=None, depend
     if platform == 'informatica':
         from .informatica.behavior import analyze_behavior
         behavior_analysis = analyze_behavior(graph)
+    elif platform == 'odi' and graph['extensions']['source_analysis']['profile'] == getattr(adapter, 'native_profile', None):
+        from .odi.behavior import analyze_behavior
+        behavior_analysis = analyze_behavior(graph)
     plan, contracts = build_native_review_plan(graph, result.parsed['name'], behavior_analysis=behavior_analysis)
     validate_export_review(envelope, graph, plan, contracts)
+    target_assessment = None
+    if platform == 'odi' and behavior_analysis is not None:
+        from ssis_migration.generator.odi.assessment import build_assessment
+        target_assessment = build_assessment(graph, behavior_analysis, contracts)
     for record in envelope['evidence_files']:
         path = Path(record['path'])
         if any(p.is_symlink() for p in (path, *path.parents)) or hashlib.sha256(path.read_bytes()).hexdigest() != record['sha256']:
@@ -92,6 +106,17 @@ def run_export_review(source, output, platform, *, workspace_config=None, depend
             'profile': behavior_analysis['profile'], 'semantic_status': 'NOT_VERIFIED',
             'requirement_count': len(behavior_analysis['requirements']),
             'unresolved_items': list(dict.fromkeys(value for r in behavior_analysis['requirements'] for value in r['unresolved_items']))}
+    if target_assessment is not None:
+        documents['target_generation_assessment'] = target_assessment
+        report['target_generation_assessment'] = {
+            'profile': target_assessment['profile'], 'status': target_assessment['status'],
+            'mapping_count': len(target_assessment['mappings']),
+            'blocked_mapping_count': sum(m['strategy'] == 'UNSUPPORTED' for m in target_assessment['mappings'])}
+        report['source_element_preservation'] = graph['extensions']['source_analysis']['metadata']
+        report['stages']['target_capability_assessment'] = 'COMPLETED'
+        report['required_human_actions'].extend(dict.fromkeys(
+            b['message'] for m in target_assessment['mappings'] for b in m['blockers']
+            if b['message'] not in report['required_human_actions']))
     if workspace_config is not None: documents['workspace_config'] = workspace_config
     report['artifacts'] = {key: str(directory/(key+'.json')) for key in (*documents, 'migration_report')}
     documents['migration_report'] = report

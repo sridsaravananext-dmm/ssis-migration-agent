@@ -11,7 +11,7 @@ import pytest
 from ssis_migration.adapters import get_adapter
 from ssis_migration.adapters.base import SourceEvidenceError, UnsupportedSourceError
 from ssis_migration.adapters.odi import preflight
-from ssis_migration.adapters.xml_export import _decode_xml
+from ssis_migration.adapters.xml_export import _decode_xml, XMLExportAdapter
 from ssis_migration.intake import describe_file
 from ssis_migration.schemas import SchemaValidationError
 from ssis_migration.ui import bundle_candidates, extract_bundle
@@ -78,7 +78,7 @@ def test_real_archive_discovery_versions_counts_and_two_independent_parser_block
     with pytest.raises(UnsupportedSourceError, match='encoding'):
         _decode_xml(original.read_bytes())
     with pytest.raises(UnsupportedSourceError, match='encoding'):
-        get_adapter('odi').analyze(original)
+        XMLExportAdapter._build(get_adapter('odi'), original.read_bytes(), record)
 
 
 def test_every_inventory_count_and_representative_locator_agrees_with_original_xml(original, report):

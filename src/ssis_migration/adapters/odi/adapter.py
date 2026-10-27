@@ -11,6 +11,24 @@ class ODIAdapter(XMLExportAdapter):
     export_format = 'odi_xml'
     roots = frozenset({'SUNOPSISEXPORT'})
     supported_export_formats = frozenset({'odi_xml'})
+    native_profile = 'odi_12c_mapping_declarations_v1'
+
+    def analyze(self, source_path, *, procedures_path=None, file_record=None):
+        if procedures_path is None:
+            from .preflight import inspect_export
+            from .native import matches_preflight, analyze_export
+            inventory = inspect_export(source_path)
+            if matches_preflight(inventory):
+                return analyze_export(source_path, file_record=file_record)
+            if any(admin['declarations'].get('IsSmartExportFile') == 'true'
+                   for admin in inventory['version_declarations']['admin']):
+                from ..base import UnsupportedSourceError
+                raise UnsupportedSourceError('ODI Smart Export product/repository declarations are outside the supported ODI 12.2.1 / 05.02.02.07 profile or are ambiguous.')
+        return super().analyze(source_path, procedures_path=procedures_path, file_record=file_record)
+
+    def validate_native_graph(self, graph):
+        from .native import validate_graph
+        validate_graph(graph)
 
     # Each entry describes a structural declaration, not a migration capability.
     classes = {

@@ -293,7 +293,7 @@ with tab_upload:
     else:
         st.subheader('Native XML structural analysis')
         st.info('This phase inventories the export, builds typed IR and declared dependency links, and downloads review contracts. It does not generate vendor migration notebooks. Unknown constructs and missing definitions remain blockers.')
-        st.caption('XML supports UTF-8 and explicitly declared Windows-1252. BODS ATL, other XML encodings, ODI knowledge-module execution and source runtime semantics remain unsupported.')
+        st.caption('Legacy XML supports UTF-8 and explicitly declared Windows-1252. The versioned ODI 12.2.1 Smart Export normalizer also preserves explicit ISO-8859-1. BODS ATL, ODI knowledge-module execution and source runtime semantics remain unsupported.')
         if detected=='odi_xml' and source_path:
             from ssis_migration.adapters.odi.preflight import inspect_export
             try:
@@ -301,15 +301,19 @@ with tab_upload:
                 with st.expander('ODI export compatibility',expanded=True):
                     counts=compatibility['inventory']
                     st.write(f"{counts['element_count']:,} XML elements · {counts['object_count']:,} objects · {len(counts['object_classes'])} object classes")
-                    st.caption('Compatibility inventory only. Field values are omitted; dependencies and runtime behavior have not been analyzed.')
+                    st.caption('This inventory checks the legacy structural profile. Availability of versioned ODI mapping review is shown below. Field values are omitted; dependencies and runtime behavior are not analyzed by this inventory.')
                     st.json(compatibility['version_declarations'])
                     st.dataframe(counts['object_classes'],hide_index=True)
                     st.download_button('Download ODI compatibility report',json.dumps(compatibility,indent=2),
                         'odi_export_compatibility.json',mime='application/json')
                     for action in compatibility['required_actions']:st.write('- '+action)
                 if compatibility['structural_parser']['eligibility']=='BLOCKED':
-                    source_error=compatibility['required_actions'][0]
-                    st.error(source_error)
+                    from ssis_migration.adapters.odi.native import matches_preflight
+                    if matches_preflight(compatibility):
+                        st.info('The legacy ODI structural profile is blocked, but the versioned ODI 12.2.1 mapping normalizer can build review IR and contracts from this original export. Databricks generation remains gated by mapping, physical design and Knowledge Module findings.')
+                    else:
+                        source_error=compatibility['required_actions'][0]
+                        st.error(source_error)
             except (ValueError,OSError) as exc:
                 source_error=str(exc);st.error(source_error)
         powercenter=source_platform=='informatica' or detected=='powercenter_xml'
@@ -481,12 +485,19 @@ with tab_run:
         st.caption('Results and downloads below belong to the last completed run; editing the form requires a new run to apply settings.')
         st.json(st.session_state.last_run_settings,expanded=False)
         if report.get('behavior_analysis'):
-            with st.expander('PowerCenter behavior requirements'):
+            behavior_label='ODI mapping requirements' if report.get('source_platform')=='odi' else 'PowerCenter behavior requirements'
+            with st.expander(behavior_label):
                 st.write(str(report['behavior_analysis']['requirement_count'])+' source behavior requirements · semantic verification: NOT_VERIFIED')
                 for issue in report['behavior_analysis']['unresolved_items']:st.write('• '+issue)
                 behavior_path=Path(report['artifacts']['source_behavior_analysis'])
                 if behavior_path.is_file():
-                    st.download_button('Download PowerCenter behavior analysis',behavior_path.read_bytes(),'powercenter_behavior_analysis.json',mime='application/json')
+                    behavior_name='ODI mapping' if report.get('source_platform')=='odi' else 'PowerCenter behavior'
+                    st.download_button('Download '+behavior_name+' analysis',behavior_path.read_bytes(),'source_behavior_analysis.json',mime='application/json')
+        if report.get('target_generation_assessment'):
+            with st.expander('ODI Databricks generation blockers'):
+                assessment_path=Path(report['artifacts']['target_generation_assessment'])
+                st.json(read_json(assessment_path.read_bytes()))
+                st.download_button('Download ODI generation assessment',assessment_path.read_bytes(),'odi_generation_assessment.json',mime='application/json')
         intake=report.get('source_intake',{})
         intake_path=report.get('intake_manifest')
         if intake_path and Path(intake_path).is_file():intake=read_json(Path(intake_path).read_bytes())

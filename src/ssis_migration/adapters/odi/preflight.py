@@ -39,6 +39,17 @@ def _read_source(path):
     return data
 
 
+def _decode_inventory_xml(data):
+    """Original ODI byte declarations; does not extend legacy XML IR support."""
+    declaration = re.match(br'^(?:\xef\xbb\xbf)?\s*<\?xml\b[^?]*\?>', data, re.I)
+    declared = re.search(br'\bencoding\s*=\s*([\'\"])([^\'\"]+)\1', declaration[0], re.I) if declaration else None
+    if declared and declared[2].lower() == b'iso-8859-1':
+        if data.startswith(b'\xef\xbb\xbf'):
+            raise UnsupportedSourceError('ODI XML encoding conflicts with its byte-order mark.')
+        return data.decode('iso-8859-1'), 'iso-8859-1'
+    return _decode_xml(data)
+
+
 def inspect_export(source_path):
     """Count original declarations without interpreting fields or expanding IR.
 
@@ -52,14 +63,7 @@ def inspect_export(source_path):
     # Oracle's original explicitly declares ISO-8859-1, which the structural
     # parser does not accept. Inventory it without extending that parser or
     # rewriting the original declaration. Other encodings use its exact rules.
-    declaration = re.match(br'^(?:\xef\xbb\xbf)?\s*<\?xml\b[^?]*\?>', data, re.I)
-    declared_encoding = re.search(br'\bencoding\s*=\s*([\'\"])([^\'\"]+)\1', declaration[0], re.I) if declaration else None
-    if declared_encoding and declared_encoding[2].lower() == b'iso-8859-1':
-        if data.startswith(b'\xef\xbb\xbf'):
-            raise UnsupportedSourceError('ODI XML encoding conflicts with its byte-order mark.')
-        encoding = 'iso-8859-1'
-    else:
-        _, encoding = _decode_xml(data)
+    _, encoding = _decode_inventory_xml(data)
     classes = Counter(); tags = Counter(); field_types = Counter()
     first_classes = {}; first_tags = {}; first_types = {}
     admins = []; encryption = []; stack = []

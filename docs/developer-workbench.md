@@ -17,13 +17,15 @@ physical metadata are visible in the analysis and required actions. Effective
 configuration, product version and physical database/schema bindings remain
 unresolved without the actual supporting exports/context.
 
-ODI uploads now include an **ODI export compatibility** panel and JSON download.
-It inventories original class counts, declared ODI/repository versions and parser
-encoding/size blockers before structural migration. Oracle's unchanged public
-Smart Export can be uploaded as its original ZIP or extracted XML; its unsupported
-IR run is disabled with required next actions. The inventory omits field values
-and encryption keys and earns no semantic coverage. See [the original source and
-usage](../examples/public/oracle_odi_etl_offload/README.md).
+ODI uploads include an **ODI export compatibility** panel and JSON download for
+the earlier structural profile. For explicit ODI 12.2.1 / repository 05.02.02.07
+Smart Exports, a versioned normalizer now permits **Run Migration** to build review
+IR and contracts from the original ZIP or XML. The **ODI mapping requirements**
+and **ODI Databricks generation blockers** panels download source requirements and
+per-mapping capability assessments. Neither selecting a physical design by name
+nor substituting append for TRUNCATE is allowed. Code generation stays blocked
+until source/target capabilities are implemented and bindings are established.
+See [the original source and usage](../examples/public/oracle_odi_etl_offload/README.md).
 
 The Streamlit frontend runs existing SSIS migrations, bounded TM1 Databricks
 generation, and PowerCenter/BODS/ODI XML structural analysis. Native XML runs
