@@ -24,7 +24,7 @@ No source packages, input rows, missing metadata or expected outputs are authore
 Effective configuration, physical metadata binding, target generation and source
 equivalence remain separate unfinished capabilities.
 
-New reviews use `powercenter_declared_behavior_v2`. Version 2 retains the 31
+Version 2 uses `powercenter_declared_behavior_v2`. It retains the 31
 version 1 requirements and adds a `PORT_DEFAULT` requirement for each nonempty
 default expression: **33 requirements** for the original workflow and mapping.
 All 39 port-default declarations are also recorded on their owning transformations,
@@ -51,13 +51,18 @@ Version 1's syntax analyzer and declared behavior remain available:
 from ssis_migration.adapters.informatica.behavior import analyze_behavior
 
 legacy = analyze_behavior(graph, profile='powercenter_declared_behavior_v1')
-current = analyze_behavior(graph)  # powercenter_declared_behavior_v2
+defaults = analyze_behavior(graph, profile='powercenter_declared_behavior_v2')
 ```
 
 Validation reconstructs the exact profile recorded in the plan or analysis.
 Unknown profiles fail explicitly instead of falling back to the latest version.
 The common analysis/requirement schemas, structural IR, contract interface,
 `migration_intent`, provider interfaces and generation gates are unchanged.
+
+The latest default profile is now
+[version 3 configuration/binding analysis](powercenter-configuration-bindings.md).
+To reconstruct version 2 explicitly, call
+`analyze_behavior(graph, profile='powercenter_declared_behavior_v2')`.
 
 Use the existing explicit-dependency CLI command or workbench controls. The
 behavior-analysis download and migration contracts now include the defaults and

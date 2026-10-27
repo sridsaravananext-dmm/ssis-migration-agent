@@ -39,9 +39,11 @@ subject node, original declarations, XML evidence, preservation requirements and
 unresolved items. No requirement receives verified semantic coverage, criticality
 or weights automatically.
 
-New runs now use [version 2 port-default analysis](powercenter-port-defaults.md),
-which adds the two explicit sequence error defaults for **33 requirements**.
-The original version 1 profile and its recorded contracts remain replayable.
+Version 2 [port-default analysis](powercenter-port-defaults.md) adds the two
+explicit sequence error defaults for **33 requirements**. New runs use
+[version 3 configuration/binding analysis](powercenter-configuration-bindings.md),
+which enriches the session and connection requirements. Earlier profiles and
+their recorded contracts remain replayable.
 
 The native expression syntax profile recognizes declared port references,
 `ISNULL`, bounded predicate negation, comparisons, `AND`/`OR`, parentheses and the

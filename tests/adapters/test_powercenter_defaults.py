@@ -7,7 +7,7 @@ import pytest
 
 from ssis_migration.adapters import get_adapter
 from ssis_migration.adapters.export_pipeline import validate_export_review
-from ssis_migration.adapters.informatica.behavior import PROFILE, LATEST_PROFILE, analyze_behavior, validate_behavior_analysis
+from ssis_migration.adapters.informatica.behavior import PROFILE, DEFAULTS_PROFILE, LATEST_PROFILE, analyze_behavior, validate_behavior_analysis
 from ssis_migration.adapters.informatica.defaults import analyze_port_default
 from ssis_migration.adapters.informatica.expressions import analyze_expression
 from ssis_migration.ir.normalized import content_digest
@@ -25,7 +25,7 @@ def source():
 
 @pytest.fixture(scope='module')
 def analysis(source):
-    return analyze_behavior(source.normalized_ir)
+    return analyze_behavior(source.normalized_ir, profile=DEFAULTS_PROFILE)
 
 
 def port(source, name):
@@ -36,11 +36,11 @@ def defaults(analysis):
     return [d for r in analysis['requirements'] if r['kind'] == 'TRANSFORMATION' for d in r['declarations']['port_defaults']]
 
 
-def test_latest_profile_adds_only_declared_nonempty_default_requirements(source, analysis):
+def test_version_two_adds_only_declared_nonempty_default_requirements(source, analysis):
     before = copy.deepcopy(source.normalized_ir)
     validate_behavior_analysis(analysis, source.normalized_ir)
     assert source.normalized_ir == before
-    assert analysis['profile'] == LATEST_PROFILE
+    assert analysis['profile'] == DEFAULTS_PROFILE
     assert len(analysis['requirements']) == 33
     assert Counter(d['default']['declaration_state'] for d in defaults(analysis)) == {'EMPTY': 37, 'EXPRESSION': 2}
     assert len([r for r in analysis['requirements'] if r['kind'] == 'PORT_DEFAULT']) == 2
@@ -134,7 +134,7 @@ def test_unknown_recorded_profile_does_not_fall_back_to_latest(source, analysis)
         validate_export_review(source.source_envelope, source.normalized_ir, plan, contracts)
 
 
-def test_new_reviews_publish_version_two_but_remain_blocked(tmp_path):
+def test_new_reviews_publish_latest_profile_but_remain_blocked(tmp_path):
     report = run_migration(str(SOURCES/'w_scd1.XML'), str(tmp_path), dependency_files=[str(SOURCES/'m_scd1.XML')])
     assert report['behavior_analysis']['profile'] == LATEST_PROFILE
     assert report['behavior_analysis']['requirement_count'] == 33

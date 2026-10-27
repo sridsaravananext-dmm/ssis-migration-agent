@@ -6,10 +6,16 @@ requirements and session/writer policies retain source evidence and unresolved
 items. A parsed expression or a bound mapping remains unverified semantically;
 these reviews do not generate PowerCenter migration notebooks.
 
-New PowerCenter reviews use behavior profile version 2, including distinct
+PowerCenter profile version 2 includes distinct
 absent/empty/default-expression states and source error-expression requirements.
 The public workflow/mapping yields 33 requirements; earlier version 1 downloads
 remain replayable with their recorded profile.
+
+New reviews now use version 3 with configuration contributions and connection
+ownership. Differing property values, empty parameter declarations and missing
+physical metadata are visible in the analysis and required actions. Effective
+configuration, product version and physical database/schema bindings remain
+unresolved without the actual supporting exports/context.
 
 The Streamlit frontend runs existing SSIS migrations, bounded TM1 Databricks
 generation, and PowerCenter/BODS/ODI XML structural analysis. Native XML runs

@@ -86,6 +86,13 @@ Sequential increments in this continuation:
     defaults, invocation and failure scope remain unverified. Recorded version 1
     analyses/contracts still replay; unsupported profiles do not fall back.
     See [port-default analysis](powercenter-port-defaults.md).
+14. PowerCenter configuration/binding audit: **implemented** in behavior profile
+    version 3. Selected configuration declarations and nine instance scopes retain
+    their separate property contributions; four connection references retain
+    distinct ownership and explicit physical-metadata gaps. Differing declarations
+    do not select a winner. Product version, effective configuration and physical
+    database/schema bindings remain unverified/unresolved. Versions 1/2 replay
+    unchanged. See [configuration and binding readiness](powercenter-configuration-bindings.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

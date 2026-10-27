@@ -85,3 +85,8 @@ PowerCenter's latest behavior profile now includes
 [port-default analysis](powercenter-port-defaults.md). It records all original
 default declarations and the two explicit sequence error expressions. Replay uses
 the recorded behavior version, preserving earlier version 1 reviews.
+
+[Version 3 configuration/binding analysis](powercenter-configuration-bindings.md)
+now maps selected configuration and instance contributions, and connection owner
+contexts. It retains unknown precedence, physical metadata and runtime values as
+unresolved. Both earlier behavior versions remain replayable.

@@ -15,7 +15,8 @@ from ..xml_export import validate_export_graph
 from .expressions import analyze_expression
 
 PROFILE = 'powercenter_declared_behavior_v1'
-LATEST_PROFILE = 'powercenter_declared_behavior_v2'
+DEFAULTS_PROFILE = 'powercenter_declared_behavior_v2'
+LATEST_PROFILE = 'powercenter_declared_behavior_v3'
 
 
 class BehaviorAnalysis:
@@ -250,9 +251,12 @@ def analyze_behavior(graph, *, profile=LATEST_PROFILE):
         raise SchemaValidationError('PowerCenter behavior analysis requires a replayable PowerCenter graph.')
     if profile == PROFILE:
         return BehaviorAnalysis(graph).run()
-    if profile == LATEST_PROFILE:
+    if profile == DEFAULTS_PROFILE:
         from .behavior_v2 import DefaultBehaviorAnalysis
         return DefaultBehaviorAnalysis(graph).run()
+    if profile == LATEST_PROFILE:
+        from .behavior_v3 import ConfigurationBehaviorAnalysis
+        return ConfigurationBehaviorAnalysis(graph).run()
     raise SchemaValidationError('Unsupported PowerCenter behavior profile: '+str(profile))
 
 

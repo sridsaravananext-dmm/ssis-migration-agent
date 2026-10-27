@@ -28,6 +28,11 @@ missing and empty declarations separately and records the two original sequence
 error expressions. Version 1 analyses and contracts remain replayable; no runtime
 fallback or error outcome is invented.
 
+[Version 3 configuration/binding analysis](docs/powercenter-configuration-bindings.md)
+now preserves scoped property contributions and all four connection owners.
+The lookup's differing declarations remain visible; effective configuration and
+physical database/schema bindings stay unresolved until real metadata is supplied.
+
 Incremental, file-based legacy ETL migration framework. **Databricks is the only
 current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
 connections are not required; source exports and dependencies are supplied as files.
@@ -74,10 +79,16 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Full regression baseline (2026-10-27): **1,304 tests passed, 12 skipped**.
+Full regression baseline (2026-10-27): **1,321 tests passed, 12 skipped**.
 Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
+
+The configuration/binding audit passed **50 focused checks** and **73 existing
+checks** before the full regression. Six version 1/2 analyses and contracts remain
+unchanged. Installed-wheel replay passed for all three profiles after source
+removal, including the six previous archives; original source/license hashes
+remain unchanged.
 
 The port-default increment passed **33 focused checks** across defaults, legacy
 behavior and the workbench. Three saved version 1 behavior/plan/contracts compare
