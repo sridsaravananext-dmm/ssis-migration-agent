@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:odi_expression_analysis:1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["analysis_version", "profile", "expression_node_id", "owner_property_name", "source_fields", "status", "ast", "bindings", "semantic_status", "unresolved_items", "evidence"],
+  "properties": {
+    "analysis_version": {"const": "1.0"}, "profile": {"const": "odi_native_expression_syntax_v1"},
+    "expression_node_id": {"$ref": "#/$defs/node_id"}, "owner_property_name": {"type": ["string", "null"]},
+    "source_fields": {"type": "object", "additionalProperties": false, "required": ["Txt", "ParsedTxt", "Text", "ParsedText", "IsParsed", "TextOnly"], "properties": {
+      "Txt": {"$ref": "#/$defs/text"}, "ParsedTxt": {"$ref": "#/$defs/text"}, "Text": {"$ref": "#/$defs/text"}, "ParsedText": {"$ref": "#/$defs/text"}, "IsParsed": {"$ref": "#/$defs/text"}, "TextOnly": {"$ref": "#/$defs/text"}
+    }},
+    "status": {"enum": ["PARSED", "REVIEW_REQUIRED", "EMPTY_DECLARATION", "TEXT_METADATA_DECLARATION"]},
+    "ast": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/ast"}]},
+    "bindings": {"type": "array", "maxItems": 256, "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reference_node_id", "reference_key", "reference_text", "validity_declaration", "attribute_node_id", "component_node_id", "alias", "column", "resolution", "evidence"],
+      "properties": {
+        "reference_node_id": {"$ref": "#/$defs/node_id"}, "reference_key": {"$ref": "#/$defs/text"}, "reference_text": {"$ref": "#/$defs/text"}, "validity_declaration": {"$ref": "#/$defs/text"},
+        "attribute_node_id": {"type": ["string", "null"]}, "component_node_id": {"type": ["string", "null"]}, "alias": {"$ref": "#/$defs/text"}, "column": {"$ref": "#/$defs/text"},
+        "resolution": {"enum": ["BOUND", "UNRESOLVED"]}, "evidence": {"$ref": "#/$defs/evidence"}
+      }
+    }},
+    "semantic_status": {"const": "NOT_VERIFIED"}, "unresolved_items": {"type": "array", "items": {"type": "string"}}, "evidence": {"$ref": "#/$defs/evidence"}
+  },
+  "allOf": [{"if": {"properties": {"status": {"const": "PARSED"}}}, "then": {"properties": {"ast": {"$ref": "#/$defs/ast"}}}, "else": {"properties": {"ast": {"type": "null"}}}}],
+  "$defs": {
+    "text": {"type": ["string", "null"], "maxLength": 65536}, "node_id": {"type": "string", "pattern": "^node-[a-f0-9]{24}$"},
+    "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"}},
+    "reference": {"type": "object", "additionalProperties": false, "required": ["kind", "reference_key", "attribute_node_id"], "properties": {"kind": {"const": "ATTRIBUTE_REFERENCE"}, "reference_key": {"type": "string", "pattern": "^R[0-9]+$"}, "attribute_node_id": {"$ref": "#/$defs/node_id"}}},
+    "ast": {"oneOf": [
+      {"$ref": "#/$defs/reference"},
+      {"type": "object", "additionalProperties": false, "required": ["kind", "name", "argument"], "properties": {"kind": {"const": "CALL"}, "name": {"enum": ["SUM", "YEAR"]}, "argument": {"$ref": "#/$defs/reference"}}},
+      {"type": "object", "additionalProperties": false, "required": ["kind", "operator", "left", "right"], "properties": {"kind": {"const": "COMPARE"}, "operator": {"const": "="}, "left": {"$ref": "#/$defs/reference"}, "right": {"$ref": "#/$defs/reference"}}}
+    ]}
+  }
+}

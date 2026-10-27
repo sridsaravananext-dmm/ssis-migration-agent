@@ -10,6 +10,7 @@ from ..xml_export import validate_export_graph
 from .native import PROFILE as GRAPH_PROFILE, value
 
 PROFILE = 'odi_12c_mapping_requirements_v1'
+LATEST_PROFILE = 'odi_12c_mapping_requirements_v2'
 
 
 class MappingIndex:
@@ -96,7 +97,7 @@ class MappingIndex:
         }
 
 
-def analyze_behavior(graph, *, profile=PROFILE):
+def _analyze_v1(graph, *, profile=PROFILE):
     if profile != PROFILE:
         raise SchemaValidationError('Unsupported ODI mapping requirements profile.')
     validate_export_graph(graph)
@@ -146,6 +147,15 @@ def analyze_behavior(graph, *, profile=PROFILE):
                 'semantic_status': 'NOT_VERIFIED', 'scope': 'DECLARATIONS_AND_REVIEW_REQUIREMENTS'}
     validate_document(document, 'source_behavior_analysis'); validate_evidence_references(document)
     return document
+
+
+def analyze_behavior(graph, *, profile=LATEST_PROFILE):
+    if profile == PROFILE:
+        return _analyze_v1(graph)
+    if profile == LATEST_PROFILE:
+        from .behavior_v2 import analyze
+        return analyze(graph)
+    raise SchemaValidationError('Unsupported ODI mapping requirements profile.')
 
 
 def validate_behavior_analysis(document, graph):

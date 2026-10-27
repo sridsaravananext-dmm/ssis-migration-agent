@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:odi_expression_candidates:1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["candidate_version", "profile", "scope", "ir_id", "behavior_analysis_sha256", "contracts_sha256", "entries", "candidate_count", "status", "execution_status", "generated_notebooks", "semantic_status", "migration_accepted"],
+  "properties": {
+    "candidate_version": {"const": "1.0"}, "profile": {"const": "odi_databricks_expression_candidates_v1"}, "scope": {"const": "EXPRESSION_SYNTAX_REVIEW_ONLY"},
+    "ir_id": {"type": "string", "pattern": "^ir-[a-f0-9]{64}$"}, "behavior_analysis_sha256": {"$ref": "#/$defs/hash"}, "contracts_sha256": {"$ref": "#/$defs/hash"},
+    "candidate_count": {"type": "integer", "minimum": 0, "maximum": 512},
+    "entries": {"type": "array", "maxItems": 512, "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["expression_node_id", "requirement_id", "syntax_sha256", "status", "databricks_sql_expression", "validation_status", "logical_bindings", "evidence", "unresolved_items", "semantic_status"],
+      "properties": {
+        "expression_node_id": {"type": "string", "pattern": "^node-[a-f0-9]{24}$"}, "requirement_id": {"type": "string", "pattern": "^requirement-[a-f0-9]{24}$"}, "syntax_sha256": {"$ref": "#/$defs/hash"},
+        "status": {"enum": ["CANDIDATE", "NO_CANDIDATE"]}, "databricks_sql_expression": {"type": ["string", "null"], "maxLength": 4096}, "validation_status": {"enum": ["PASS_SYNTAX_ONLY", "NOT_GENERATED"]},
+        "logical_bindings": {"$ref": "urn:ssis-migration:schema:odi_expression_analysis:1.0#/properties/bindings"},
+        "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"}},
+        "unresolved_items": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "semantic_status": {"const": "NOT_VERIFIED"}
+      },
+      "allOf": [{"if": {"properties": {"status": {"const": "CANDIDATE"}}}, "then": {"properties": {"databricks_sql_expression": {"type": "string", "minLength": 1}, "validation_status": {"const": "PASS_SYNTAX_ONLY"}}}, "else": {"properties": {"databricks_sql_expression": {"type": "null"}, "validation_status": {"const": "NOT_GENERATED"}}}}]
+    }},
+    "status": {"const": "REVIEW_REQUIRED"}, "execution_status": {"const": "NOT_RUN"}, "generated_notebooks": {"const": []}, "semantic_status": {"const": "NOT_VERIFIED"}, "migration_accepted": {"const": false}
+  },
+  "$defs": {"hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+}

@@ -21,6 +21,8 @@ class SchemaValidationError(ValueError):
 
 
 _SCHEMA_FILES = {
+    "odi_expression_candidates": "odi_expression_candidates.v1.json",
+    "odi_expression_analysis": "odi_expression_analysis.v1.json",
     "odi_databricks_assessment": "odi_databricks_assessment.v1.json",
     "odi_export_compatibility": "odi_export_compatibility.v1.json",
     "source_requirement": "source_requirement.v1.json",

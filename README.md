@@ -37,7 +37,8 @@ physical database/schema bindings stay unresolved until real metadata is supplie
 is preserved with its license and pinned provenance. Its versioned
 [ODI 12c normalizer](docs/odi-mapping-normalization.md) now builds IR for all seven
 mapping declarations, explicit connector/attribute references and all original
-typed fields. Eight evidence-backed requirements enter review contracts. The
+typed fields. The latest source profile adds bounded expression syntax and
+procedure/KM command/option analysis, for 247 evidence-backed requirements. The
 workbench downloads those artifacts and a per-mapping Databricks assessment;
 missing definitions, physical/KM semantics and target bindings still block code
 generation. Earlier structural graphs and compatibility reports remain replayable.
@@ -88,7 +89,7 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Full regression baseline (2026-10-27): **1,371 tests passed, 12 skipped**.
+Full regression baseline (2026-10-27): **1,389 tests passed, 12 skipped**.
 Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
@@ -102,6 +103,13 @@ Installed-wheel API review and full IR/requirement/contract/assessment replay
 passed after the source copy was removed. Three older vendor graphs/envelopes,
 the original ODI compatibility report and six PowerCenter version 1/2 reviews
 remain unchanged and replayable; original source/license hashes still match.
+
+[ODI expression and KM analysis](docs/odi-expression-km-analysis.md) now preserves
+all 89 expression records and produces 41 independently parsed Databricks SQL
+review fragments. Date conversion and window logic remain untranslated. All 80
+procedure/KM steps, 20 options and 135 unresolved association records retain their
+source evidence and flags. Fragments earn no semantic coverage or migration
+acceptance; they are separate from executable notebook generation.
 
 The original ODI compatibility increment passed **30 focused checks**, the full
 regression, and installed-wheel CLI/schema/replay checks outside the checkout.

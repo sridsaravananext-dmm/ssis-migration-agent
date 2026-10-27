@@ -126,12 +126,15 @@ def test_public_oracle_odi_workbench_run_downloads_normalized_contracts_and_gene
     assert not app.exception and app.session_state['last_attempt_error'] is None
     report=app.session_state['migration_result']
     assert report['export_profile']=='odi_12c_mapping_declarations_v1'
-    assert report['behavior_analysis']['requirement_count']==8
+    assert report['behavior_analysis']['requirement_count']==247
+    assert report['target_expression_review']['record_count']==89
+    assert report['target_expression_review']['candidate_count']==41
     assert report['target_generation_assessment']['blocked_mapping_count']==7
     assert report['generated_artifact_count']==0 and report['migration_accepted'] is False
     assert report['execution_status']=='NOT_RUN'
     assert any(e.label=='ODI mapping requirements' for e in app.expander)
     assert any(e.label=='ODI Databricks generation blockers' for e in app.expander)
+    assert any(e.label=='ODI expression syntax candidates' for e in app.expander)
     assert any(b.label=='Download ODI generation assessment' for b in app.get('download_button'))
     graph=json.loads(Path(report['artifacts']['normalized_ir']).read_text())
     assert len(graph['nodes'])==2500 and len(graph['edges'])==4760

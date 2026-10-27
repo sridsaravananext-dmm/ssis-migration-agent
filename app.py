@@ -498,6 +498,13 @@ with tab_run:
                 assessment_path=Path(report['artifacts']['target_generation_assessment'])
                 st.json(read_json(assessment_path.read_bytes()))
                 st.download_button('Download ODI generation assessment',assessment_path.read_bytes(),'odi_generation_assessment.json',mime='application/json')
+        if report.get('target_expression_review'):
+            with st.expander('ODI expression syntax candidates'):
+                summary=report['target_expression_review']
+                st.write(str(summary['candidate_count'])+' SQL expression fragments from '+str(summary['record_count'])+' source records')
+                st.caption('Syntax review only. Physical bindings, types, null/aggregate/calendar semantics and complete mapping/KM behavior remain unresolved. No executable notebook or semantic coverage is produced.')
+                candidates_path=Path(report['artifacts']['target_expression_candidates'])
+                st.download_button('Download ODI expression candidates',candidates_path.read_bytes(),'odi_expression_candidates.json',mime='application/json')
         intake=report.get('source_intake',{})
         intake_path=report.get('intake_manifest')
         if intake_path and Path(intake_path).is_file():intake=read_json(Path(intake_path).read_bytes())

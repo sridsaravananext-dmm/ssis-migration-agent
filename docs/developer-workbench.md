@@ -27,6 +27,14 @@ nor substituting append for TRUNCATE is allowed. Code generation stays blocked
 until source/target capabilities are implemented and bindings are established.
 See [the original source and usage](../examples/public/oracle_odi_etl_offload/README.md).
 
+**ODI expression syntax candidates** now downloads 41 Databricks SQL review
+fragments from 89 source expression records. The JSON retains every unsupported,
+empty and layout-text entry, its source bindings and syntax status. The source
+requirements download also includes procedure/KM commands, option defaults and
+unresolved associations. These fragments have no physical table bindings and
+earn no semantic coverage; the overall review stays blocked with zero migration
+notebooks. See [the expression/KM profile](odi-expression-km-analysis.md).
+
 The Streamlit frontend runs existing SSIS migrations, bounded TM1 Databricks
 generation, and PowerCenter/BODS/ODI XML structural analysis. Native XML runs
 produce IR, declared dependency links, review contracts and reports; they do not

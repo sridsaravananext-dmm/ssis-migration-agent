@@ -45,6 +45,14 @@ explicit mapping links. It adds seven mapping requirements plus one export
 review requirement. This does not translate native physical/KM behavior or
 establish migration acceptance.
 
+The latest requirements profile (version 2) adds bounded expression and
+procedure/KM analysis, producing 247 requirements. All 89 expression records are
+retained, including four unsupported date/window forms; 41 have Databricks SQL
+syntax review fragments in `target_expression_candidates.json`. All 80 command
+steps, 20 options and 135 unresolved association records retain source evidence.
+No templates/commands are executed and no effective option or default is invented.
+See [the version-2 scope](../../../docs/odi-expression-km-analysis.md).
+
 To produce the new review from the same extracted source:
 
 ```bash

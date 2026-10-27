@@ -6,8 +6,8 @@ Do not author new synthetic source packages, metadata, input datasets or
 expected outputs. Existing regression examples remain demonstrations, not proof
 of real workload compatibility. See [the source file request](source-export-request.md).
 
-Next: extend ODI native expression/component semantics, physical design/KM
-dependency interpretation and explicit Databricks bindings before target
+Next: extend unsupported date/window and component/type/null semantics, verify
+KM identity/option/template behavior and establish explicit Databricks bindings before target
 translation. The original Oracle mappings now have normalized declarations and
 evidence-backed review contracts. PowerCenter effective configuration and
 physical binding still require exact product-version, connection/DDL and run
@@ -116,6 +116,15 @@ Sequential increments in this continuation:
     both TRUNCATE options as blockers. No notebooks or execution are enabled.
     Earlier structural/preflight profiles remain unchanged. See
     [normalization, limits and remaining generation work](odi-mapping-normalization.md).
+17. ODI bounded expression syntax, SQL review fragments and procedure/KM
+    declarations: **implemented** in source behavior version 2. All 89 expression
+    records remain visible; 41 bounded fragments pass independent target syntax
+    checks. Date/window forms, effective defaults and all runtime semantics remain
+    unverified. Four procedure/KM definitions, 80 steps, 20 options and 135
+    association records enter contracts, totaling 247 source requirements.
+    Differing module IDs remain unresolved; no command/template is executed and
+    no physical design, runtime order or option value is chosen. Version 1 and
+    native IR remain unchanged. See [scope and limits](odi-expression-km-analysis.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

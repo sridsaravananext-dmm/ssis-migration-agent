@@ -61,9 +61,14 @@ def run_export_review(source, output, platform, *, workspace_config=None, depend
     plan, contracts = build_native_review_plan(graph, result.parsed['name'], behavior_analysis=behavior_analysis)
     validate_export_review(envelope, graph, plan, contracts)
     target_assessment = None
+    expression_candidates = None
     if platform == 'odi' and behavior_analysis is not None:
         from ssis_migration.generator.odi.assessment import build_assessment
         target_assessment = build_assessment(graph, behavior_analysis, contracts)
+        from .odi.behavior import LATEST_PROFILE
+        if behavior_analysis['profile'] == LATEST_PROFILE:
+            from ssis_migration.generator.odi.expressions import build_candidates
+            expression_candidates = build_candidates(graph, behavior_analysis, contracts)
     for record in envelope['evidence_files']:
         path = Path(record['path'])
         if any(p.is_symlink() for p in (path, *path.parents)) or hashlib.sha256(path.read_bytes()).hexdigest() != record['sha256']:
@@ -117,6 +122,13 @@ def run_export_review(source, output, platform, *, workspace_config=None, depend
         report['required_human_actions'].extend(dict.fromkeys(
             b['message'] for m in target_assessment['mappings'] for b in m['blockers']
             if b['message'] not in report['required_human_actions']))
+    if expression_candidates is not None:
+        documents['target_expression_candidates'] = expression_candidates
+        report['target_expression_review'] = {
+            'profile': expression_candidates['profile'], 'scope': expression_candidates['scope'],
+            'record_count': len(expression_candidates['entries']), 'candidate_count': expression_candidates['candidate_count'],
+            'semantic_status': 'NOT_VERIFIED', 'execution_status': 'NOT_RUN'}
+        report['stages']['target_expression_syntax_review'] = 'COMPLETED'
     if workspace_config is not None: documents['workspace_config'] = workspace_config
     report['artifacts'] = {key: str(directory/(key+'.json')) for key in (*documents, 'migration_report')}
     documents['migration_report'] = report

@@ -1,5 +1,10 @@
 # ODI 12c mapping normalization
 
+This page records the original normalization/requirements checkpoint. The native
+IR profile remains unchanged. Subsequent [behavior version 2](odi-expression-km-analysis.md)
+adds expression syntax, SQL review fragments and procedure/KM/option declarations;
+it preserves the version-1 review and its eight original requirements for replay.
+
 Implementation audit: 2026-10-27. This increment uses the unchanged Oracle
 [Smart Export and provenance](../examples/public/oracle_odi_etl_offload/README.md).
 No legacy source, source rows, metadata or expected workload results are authored.
