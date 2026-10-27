@@ -6,16 +6,21 @@ Do not author new synthetic source packages, metadata, input datasets or
 expected outputs. Existing regression examples remain demonstrations, not proof
 of real workload compatibility. See [the source file request](source-export-request.md).
 
-Next implementation: add versioned, design-scoped physical dependency analysis
-from the original export's 11 design, 48 physical-node, 25 execution-unit and
-25 execution-group declarations. Preserve alternative designs and exact scoped
-references without choosing a design, execution order or effective KM option.
-Missing exact module/metadata definitions and explicit target bindings remain
-blockers. Establish date/calendar/index and window-default/order semantics,
-extend component/type/null analysis and verify KM identity/option/template
-behavior before target translation. The original Oracle mappings now have
-normalized declarations and
-evidence-backed review contracts. PowerCenter effective configuration and
+Next implementation: analyze the original export's source topology/context
+declarations, including five physical schemas, five context associations and
+30 connection-property records. Preserve exact declared chains and ambiguities
+without choosing an effective context or inventing Databricks bindings. These
+objects are already retained as unsupported graph classes; this analysis must
+not silently change the frozen graph profile. Verify exact KM/module definitions,
+command/option/template behavior and explicit source/target physical bindings
+against real supporting exports and run context. Design-scoped dependency
+analysis now preserves the original physical
+alternatives and property chains, but does not select a design, execution order
+or effective KM option. Missing definitions and bindings remain blockers.
+Establish date/calendar/index and window-default/order semantics and extend
+component/type/null analysis before target translation. The original Oracle
+mappings now have normalized declarations and evidence-backed review contracts.
+PowerCenter effective configuration and
 physical binding still require exact product-version, connection/DDL and run
 metadata; do not guess them while continuing independent ODI work. Add supported
 Databricks translation capabilities against real evidence. Use actual source-run
@@ -142,6 +147,19 @@ Sequential increments in this continuation:
     earlier behavior/candidate profiles remain available for recorded-profile
     replay. Whole-workflow generation, execution and semantic acceptance stay
     blocked. See [implementation and limits](odi-date-window-analysis.md).
+19. ODI physical-design dependency analysis: **implemented** in source behavior
+    version 4 and physical profile `odi_12c_physical_dependencies_v1`. Eleven
+    design requirements bring the total to 258. All 11 designs, 48 physical nodes,
+    25 execution units, 25 groups and 153 physical properties retain their typed
+    declarations, scopes and dependency findings. The eight potentially
+    destructive declarations remain visible without selecting effective options.
+    Exact design/context and same-design unit/group links are analyzed without
+    changing native graph edges. Candidate version 3 binds the existing 44 SQL
+    review fragments to the new requirements; native expression syntax remains
+    unchanged. Earlier behavior versions 1–3 and candidate profiles remain
+    available for recorded-profile replay. No design, runtime strategy, execution,
+    physical target binding or semantic acceptance is inferred. The workbench
+    downloads the physical analysis; see [scope and remaining evidence](odi-physical-dependency-analysis.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

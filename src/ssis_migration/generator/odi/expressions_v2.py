@@ -62,13 +62,12 @@ def _check_window(parsed, ast, bindings):
         raise SchemaValidationError('Generated window changed its exact single-bound frame or invented an endpoint.')
 
 
-def build_candidates(graph, analysis, contracts):
-    from ssis_migration.adapters.odi.behavior_v3 import PROFILE as SOURCE_PROFILE
+def _build_candidates(graph, analysis, contracts, *, source_profile, profile, candidate_version, schema):
     validate_document(analysis, 'source_behavior_analysis')
-    if (analysis['profile'] != SOURCE_PROFILE or graph['source']['platform'] != 'odi'
+    if (analysis['profile'] != source_profile or graph['source']['platform'] != 'odi'
             or analysis['ir_id'] != graph['ir_id'] or analysis['source_analysis_sha256'] != graph['provenance']['source_analysis_sha256']
             or analysis['evidence_files'] != graph['evidence_files']):
-        raise SchemaValidationError('Window candidates require their original bound version-3 source analysis.')
+        raise SchemaValidationError('Window candidates require their original bound source analysis profile.')
     requirements = []
     for contract in contracts:
         validate_contract(contract)
@@ -105,12 +104,18 @@ def build_candidates(graph, analysis, contracts):
     known = {n['node_id'] for n in graph['nodes'] if n['attributes'].get('object_class') == 'SnpMapExpr'}
     if len(entries) != len(known) or {e['expression_node_id'] for e in entries} != known:
         raise SchemaValidationError('Extended candidate review omitted or duplicated source expressions.')
-    report = {'candidate_version': '2.0', 'profile': PROFILE, 'scope': 'EXPRESSION_SYNTAX_REVIEW_ONLY', 'ir_id': graph['ir_id'],
+    report = {'candidate_version': candidate_version, 'profile': profile, 'scope': 'EXPRESSION_SYNTAX_REVIEW_ONLY', 'ir_id': graph['ir_id'],
         'behavior_analysis_sha256': content_digest(analysis), 'contracts_sha256': content_digest(contracts), 'entries': entries,
         'candidate_count': sum(e['status'] == 'CANDIDATE' for e in entries), 'status': 'REVIEW_REQUIRED', 'execution_status': 'NOT_RUN',
         'generated_notebooks': [], 'semantic_status': 'NOT_VERIFIED', 'migration_accepted': False}
-    validate_document(report, 'odi_expression_candidates_v2')
+    validate_document(report, schema)
     return report
+
+
+def build_candidates(graph, analysis, contracts):
+    from ssis_migration.adapters.odi.behavior_v3 import PROFILE as SOURCE_PROFILE
+    return _build_candidates(graph, analysis, contracts, source_profile=SOURCE_PROFILE,
+                             profile=PROFILE, candidate_version='2.0', schema='odi_expression_candidates_v2')
 
 
 def validate_candidates(report, envelope, graph, plan, contracts, analysis):

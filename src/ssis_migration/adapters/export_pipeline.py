@@ -62,16 +62,22 @@ def run_export_review(source, output, platform, *, workspace_config=None, depend
     validate_export_review(envelope, graph, plan, contracts)
     target_assessment = None
     expression_candidates = None
+    physical_analysis = None
     if platform == 'odi' and behavior_analysis is not None:
         from ssis_migration.generator.odi.assessment import build_assessment
         target_assessment = build_assessment(graph, behavior_analysis, contracts)
-        from .odi.behavior import LATEST_PROFILE, SYNTAX_PROFILE
+        from .odi.behavior import LATEST_PROFILE, SYNTAX_PROFILE, WINDOW_PROFILE
         if behavior_analysis['profile'] == SYNTAX_PROFILE:
             from ssis_migration.generator.odi.expressions import build_candidates
             expression_candidates = build_candidates(graph, behavior_analysis, contracts)
-        elif behavior_analysis['profile'] == LATEST_PROFILE:
+        elif behavior_analysis['profile'] == WINDOW_PROFILE:
             from ssis_migration.generator.odi.expressions_v2 import build_candidates
             expression_candidates = build_candidates(graph, behavior_analysis, contracts)
+        elif behavior_analysis['profile'] == LATEST_PROFILE:
+            from ssis_migration.generator.odi.expressions_v3 import build_candidates
+            from .odi.physical import extract_physical_analysis
+            expression_candidates = build_candidates(graph, behavior_analysis, contracts)
+            physical_analysis = extract_physical_analysis(behavior_analysis)
     for record in envelope['evidence_files']:
         path = Path(record['path'])
         if any(p.is_symlink() for p in (path, *path.parents)) or hashlib.sha256(path.read_bytes()).hexdigest() != record['sha256']:
@@ -132,6 +138,12 @@ def run_export_review(source, output, platform, *, workspace_config=None, depend
             'record_count': len(expression_candidates['entries']), 'candidate_count': expression_candidates['candidate_count'],
             'semantic_status': 'NOT_VERIFIED', 'execution_status': 'NOT_RUN'}
         report['stages']['target_expression_syntax_review'] = 'COMPLETED'
+    if physical_analysis is not None:
+        documents['source_physical_analysis'] = physical_analysis
+        report['physical_analysis'] = {
+            'profile': physical_analysis['profile'], **physical_analysis['summary'],
+            'semantic_status': 'NOT_VERIFIED', 'execution_status': 'NOT_RUN'}
+        report['stages']['physical_dependency_analysis'] = 'COMPLETED'
     if workspace_config is not None: documents['workspace_config'] = workspace_config
     report['artifacts'] = {key: str(directory/(key+'.json')) for key in (*documents, 'migration_report')}
     documents['migration_report'] = report

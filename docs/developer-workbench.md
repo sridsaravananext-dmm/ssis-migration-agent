@@ -27,6 +27,17 @@ nor substituting append for TRUNCATE is allowed. Code generation stays blocked
 until source/target capabilities are implemented and bindings are established.
 See [the original source and usage](../examples/public/oracle_odi_etl_offload/README.md).
 
+**ODI physical designs and dependencies** shows the 11 designs, 48 physical nodes,
+25 execution units and 25 groups. **Download ODI physical dependency analysis**
+downloads `odi_physical_analysis.json` (stored in the artifact bundle as
+`source_physical_analysis.json`), including all 153 physical properties,
+parent scopes, exact declared links and unresolved dependencies. Its eight
+potentially destructive declarations are retained for review; their runtime
+effect is not established. The 11 design requirements join the source contracts
+for 258 requirements total. No alternative design, execution order, effective
+option, runtime engine or Databricks physical binding is chosen. See
+[the physical dependency profile](odi-physical-dependency-analysis.md).
+
 **ODI expression syntax candidates** now downloads 44 Databricks SQL review
 fragments from 89 source expression records, including three LAG/MAX/SUM windows.
 The JSON retains every unsupported,
@@ -38,7 +49,9 @@ notebooks. The source analysis recognizes the date conversion but retains its
 original substring index and format tokens without generating date SQL. Window
 defaults and ordering uniqueness remain unverified; no omitted direction, LAG
 argument or frame endpoint is inserted. See [date/window analysis](odi-date-window-analysis.md)
-and [the earlier expression/KM profile](odi-expression-km-analysis.md).
+and [the earlier expression/KM profile](odi-expression-km-analysis.md). Candidate
+version 3 binds these same fragments to behavior version 4's physical-design
+requirements without enabling mapping execution.
 
 The Streamlit frontend runs existing SSIS migrations, bounded TM1 Databricks
 generation, and PowerCenter/BODS/ODI XML structural analysis. Native XML runs

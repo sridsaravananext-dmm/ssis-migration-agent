@@ -126,3 +126,18 @@ defaults and the exact `ROWS 3 PRECEDING` form; runtime defaults and ordering
 uniqueness remain unverified. The native IR and 247 requirement count are
 unchanged. Earlier behavior/candidate profiles retain explicit replay dispatch;
 the complete workflow remains blocked with no execution or semantic credit.
+
+[Source behavior version 4](odi-physical-dependency-analysis.md) adds 11 physical
+design requirements, for 258 total. The physical dependency profile preserves
+11 designs, 48 physical nodes, 25 execution units, 25 groups and 153 physical
+properties, including 16 parent-linked descendants. Original typed fields,
+alternative designs and exact scope/reference evidence remain visible. Eight
+potentially destructive property declarations are retained without assigning
+effective values. Additional design/context and unit/group relationships are
+resolved only by exact class/key and mapping/design scope, without changing the
+native graph. The physical JSON download is separate from target code.
+Candidate version 3 retains 44 syntax review fragments from all 89 expression
+records, bound to the new contracts; source syntax version 2 is unchanged.
+Behavior versions 1–3 and earlier candidate profiles remain available for replay.
+Physical/KM semantics, missing definitions, target bindings and complete mapping
+generation stay blocked; no execution or semantic acceptance follows.

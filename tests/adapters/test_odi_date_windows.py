@@ -29,7 +29,7 @@ def result(tmp_path_factory):
 
 @pytest.fixture(scope='module')
 def analysis(result):
-    return analyze_behavior(result.normalized_ir)
+    return analyze_behavior(result.normalized_ir, profile=PROFILE)
 
 
 @pytest.fixture(scope='module')

@@ -45,10 +45,10 @@ explicit mapping links. It adds seven mapping requirements plus one export
 review requirement. This does not translate native physical/KM behavior or
 establish migration acceptance.
 
-The latest requirements profile (version 3) retains the version-2 procedure/KM
-analysis and adds bounded native date/window syntax, producing 247 requirements.
+The version-3 requirements profile retained the version-2 procedure/KM analysis
+and added bounded native date/window syntax, producing 247 requirements.
 All 89 expression records are retained: 45 parsed native expressions, 37 empty
-declarations and seven layout records. Candidate version 2 has 44 Databricks SQL
+declarations and seven layout records. Its candidate version 2 has 44 Databricks SQL
 syntax review fragments in `target_expression_candidates.json`, including three
 LAG/MAX/SUM windows. Their omitted defaults and ordering uniqueness remain
 unverified. The date AST preserves substring start `0`, length `10` and format
@@ -58,6 +58,19 @@ steps, 20 options and 135 unresolved association records retain source evidence.
 No templates/commands are executed and no effective option or default is invented.
 See [date/window syntax and limits](../../../docs/odi-date-window-analysis.md)
 and [the earlier version-2 scope](../../../docs/odi-expression-km-analysis.md).
+
+The latest requirements profile (version 4) adds 11 physical-design requirements,
+for 258 total. `source_physical_analysis.json` retains all 11 designs, 48 physical
+nodes, 25 execution units, 25 groups and 153 physical properties, including 16
+parent-linked descendants. Four mappings have alternative designs; none is
+selected. Eight literal `true` declarations remain visible: two `TRUNCATE`,
+three `TRUNCATE_TARGET_TABLE` and three `OVERWRITE_TARGET_TABLE` properties.
+These are scoped declarations, not established effective options or permission
+to execute. Exact design/context and same-design unit/group relationships are
+analyzed without changing the native graph. Candidate version 3 keeps the same
+44 SQL fragments and all 89 entries bound to the new requirements. Earlier
+profiles remain available for replay. See
+[physical dependency analysis](../../../docs/odi-physical-dependency-analysis.md).
 
 To produce the new review from the same extracted source:
 

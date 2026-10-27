@@ -493,6 +493,14 @@ with tab_run:
                 if behavior_path.is_file():
                     behavior_name='ODI mapping' if report.get('source_platform')=='odi' else 'PowerCenter behavior'
                     st.download_button('Download '+behavior_name+' analysis',behavior_path.read_bytes(),'source_behavior_analysis.json',mime='application/json')
+        if report.get('physical_analysis'):
+            with st.expander('ODI physical designs and dependencies'):
+                physical_summary=report['physical_analysis']
+                st.write(str(physical_summary['design_count'])+' physical designs · '+str(physical_summary['physical_node_count'])+' physical nodes · '+str(physical_summary['execution_unit_count'])+' execution units · '+str(physical_summary['execution_group_count'])+' groups')
+                st.caption('Design alternatives, property scopes and unresolved dependencies are retained for review. No design, execution order, effective option or Databricks physical binding is selected.')
+                st.json(physical_summary)
+                physical_path=Path(report['artifacts']['source_physical_analysis'])
+                st.download_button('Download ODI physical dependency analysis',physical_path.read_bytes(),'odi_physical_analysis.json',mime='application/json')
         if report.get('target_generation_assessment'):
             with st.expander('ODI Databricks generation blockers'):
                 assessment_path=Path(report['artifacts']['target_generation_assessment'])

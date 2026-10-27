@@ -37,9 +37,14 @@ physical database/schema bindings stay unresolved until real metadata is supplie
 is preserved with its license and pinned provenance. Its versioned
 [ODI 12c normalizer](docs/odi-mapping-normalization.md) now builds IR for all seven
 mapping declarations, explicit connector/attribute references and all original
-typed fields. Source behavior version 3 adds typed date/window syntax to the
-expression and procedure/KM analysis, retaining 247 evidence-backed requirements. The
-workbench downloads those artifacts and a per-mapping Databricks assessment;
+typed fields. Source behavior version 4 adds one requirement per physical design
+to the expression and procedure/KM analysis, producing 258 evidence-backed
+requirements. The [physical dependency analysis](docs/odi-physical-dependency-analysis.md)
+retains all 11 designs, 48 physical nodes, 25 execution units, 25 groups and 153
+physical properties with their scope chains and unresolved dependencies. Eight
+potentially destructive declarations remain explicit; their effective runtime
+values are not established. The workbench downloads these artifacts and a
+per-mapping Databricks assessment;
 missing definitions, physical/KM semantics and target bindings still block complete
 notebook generation. Earlier structural graphs and compatibility reports remain replayable.
 
@@ -53,7 +58,7 @@ connections are not required; source exports and dependencies are supplied as fi
 | TM1 / Planning Analytics | MDX, rules/feeders, TurboIntegrator and dimensional/process metadata analysis; native IR and bounded Databricks candidates | Dense numeric leaf snapshots and exact integer arithmetic; broader runtime semantics remain unsupported |
 | Informatica PowerCenter | XML IR, explicit workflow/mapping binding, native expression syntax and declared behavior requirements in contracts/reports | Runtime semantics, effective configuration, physical connections and target translation remain unverified/unimplemented |
 | SAP Data Services / BODS | Bounded DI XML declarations and explicit object-ID references, native IR/contracts/report | ATL and undocumented XML/link encodings unsupported; no target translation |
-| Oracle ODI | Legacy Sunopsis review plus versioned ODI 12.2.1 mapping IR, typed fields, scoped references/lineage, source requirements and Databricks capability assessment | New profile requires repository 05.02.02.07; unknown classes, missing definitions, physical/KM semantics and target translation remain blocked/unimplemented |
+| Oracle ODI | Legacy Sunopsis review plus versioned ODI 12.2.1 mapping IR, scoped references/lineage, physical dependency analysis, source requirements and Databricks capability assessment | New profile requires repository 05.02.02.07; unknown classes, missing definitions, physical/KM semantics and target translation remain blocked/unimplemented |
 
 The [developer workbench](docs/developer-workbench.md) supports source upload or
 paths, catalog, bronze/silver/gold schemas, runtime bindings, notebook destination,
@@ -89,7 +94,7 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Full regression baseline (2026-10-27): **1,406 tests passed, 12 skipped**.
+Full regression baseline (2026-10-27): **1,435 tests passed, 12 skipped**.
 Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
@@ -115,9 +120,22 @@ procedure/KM steps, 20 options and 135 unresolved association records with their
 source evidence and flags. Fragments earn no semantic coverage or migration
 acceptance; complete notebook generation remains blocked.
 
-This increment passed **18 focused checks** and the full regression. Installed-wheel
+The date/window increment passed **18 focused checks** and the full regression. Installed-wheel
 review and replay passed after source removal, including exact comparisons of
 earlier behavior analyses, plans/contracts/assessments and 41 original SQL candidates.
+
+The physical increment preserves alternative designs, original property scopes
+and explicit design/context and unit/group links. Its new expression-candidate
+profile retains the same 44 syntax review fragments from all 89 records, bound to
+all 258 requirements. The workbench's **ODI physical designs and dependencies**
+panel downloads the physical analysis, stored as `source_physical_analysis.json`
+in the artifact bundle. No design, runtime engine,
+execution order, effective option or target physical binding is inferred.
+
+The physical increment passed 29 new physical-analysis cases, 35 earlier
+expression checks, the original-ZIP workbench run and the full regression.
+Installed-wheel source-removed replay passed; archived behavior profiles 1–3,
+their plans/contracts/assessments and earlier SQL candidate reports compare exactly.
 
 The original ODI compatibility increment passed **30 focused checks**, the full
 regression, and installed-wheel CLI/schema/replay checks outside the checkout.

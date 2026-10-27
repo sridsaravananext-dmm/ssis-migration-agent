@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:odi_physical_analysis:1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["analysis_version", "profile", "ir_id", "source_analysis_sha256", "evidence_files", "designs", "unscoped_records", "destructive_property_node_ids", "summary", "status", "execution_status", "semantic_status", "migration_accepted"],
+  "properties": {
+    "analysis_version": {"const": "1.0"}, "profile": {"const": "odi_12c_physical_dependencies_v1"},
+    "ir_id": {"type": "string", "pattern": "^ir-[a-f0-9]{64}$"},
+    "source_analysis_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evidence_files": {"$ref": "urn:ssis-migration:schema:normalized_ir:2.0#/properties/evidence_files"},
+    "designs": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/design"}},
+    "unscoped_records": {"type": "array", "maxItems": 8192, "items": {"$ref": "#/$defs/record"}},
+    "destructive_property_node_ids": {"$ref": "#/$defs/ids"},
+    "summary": {"type": "object", "additionalProperties": false,
+      "required": ["design_count", "physical_node_count", "execution_unit_count", "execution_group_count", "property_count", "unscoped_record_count", "destructive_property_count", "reference_resolution_counts", "definition_resolution_counts"],
+      "properties": {
+        "design_count": {"type": "integer", "minimum": 0, "maximum": 256},
+        "physical_node_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "execution_unit_count": {"type": "integer", "minimum": 0, "maximum": 2048},
+        "execution_group_count": {"type": "integer", "minimum": 0, "maximum": 2048},
+        "property_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "unscoped_record_count": {"type": "integer", "minimum": 0, "maximum": 8192},
+        "destructive_property_count": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "reference_resolution_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 65536}},
+        "definition_resolution_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 65536}}
+      }},
+    "status": {"const": "REVIEW_REQUIRED"}, "execution_status": {"const": "NOT_RUN"},
+    "semantic_status": {"const": "NOT_VERIFIED"}, "migration_accepted": {"const": false}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1},
+    "nullable_text": {"type": ["string", "null"]},
+    "ids": {"type": "array", "maxItems": 4096, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "urn:ssis-migration:schema:common:1.0#/$defs/evidence"}},
+    "fields": {"type": "array", "maxItems": 256, "items": {"type": "object", "additionalProperties": false,
+      "required": ["name", "declared_type", "value", "attributes", "tail", "nested_child_count", "evidence"],
+      "properties": {
+        "name": {"$ref": "#/$defs/nullable_text"}, "declared_type": {"$ref": "#/$defs/nullable_text"},
+        "value": {"type": "string"}, "attributes": {"type": "object", "additionalProperties": {"type": "string"}},
+        "tail": {"type": "string"}, "nested_child_count": {"type": "integer", "minimum": 0, "maximum": 6000},
+        "evidence": {"$ref": "#/$defs/evidence"}
+      }}},
+    "definition": {"type": "object", "additionalProperties": false,
+      "required": ["reference_node_id", "interface", "declared_identity", "declared_guid", "qualified_name", "target_class", "candidate_node_ids", "target_node_id", "resolution", "rule", "evidence"],
+      "properties": {
+        "reference_node_id": {"$ref": "#/$defs/id"}, "interface": {"$ref": "#/$defs/nullable_text"},
+        "declared_identity": {"$ref": "#/$defs/nullable_text"}, "declared_guid": {"$ref": "#/$defs/nullable_text"},
+        "qualified_name": {"$ref": "#/$defs/nullable_text"}, "target_class": {"$ref": "#/$defs/nullable_text"},
+        "candidate_node_ids": {"$ref": "#/$defs/ids"}, "target_node_id": {"$ref": "#/$defs/nullable_text"},
+        "resolution": {"enum": ["RESOLVED", "MISSING_DECLARATION", "NONNUMERIC_DECLARATION", "AMBIGUOUS_DECLARATION", "MISSING_TARGET", "AMBIGUOUS_TARGET", "UNSUPPORTED_INTERFACE", "GUID_MISMATCH"]},
+        "rule": {"const": "class_key_and_exact_guid"}, "evidence": {"$ref": "#/$defs/evidence"}
+      },
+      "allOf": [{"if": {"properties": {"resolution": {"const": "RESOLVED"}}}, "then": {"properties": {"target_node_id": {"$ref": "#/$defs/id"}}}, "else": {"properties": {"target_node_id": {"type": "null"}}}}]},
+    "reference": {"type": "object", "additionalProperties": false,
+      "required": ["field", "target_class", "declared_identity", "candidate_node_ids", "target_node_id", "resolution", "rule", "definition_reference", "evidence"],
+      "properties": {
+        "field": {"$ref": "#/$defs/id"}, "target_class": {"$ref": "#/$defs/id"},
+        "declared_identity": {"$ref": "#/$defs/nullable_text"}, "candidate_node_ids": {"$ref": "#/$defs/ids"},
+        "target_node_id": {"$ref": "#/$defs/nullable_text"},
+        "resolution": {"enum": ["RESOLVED", "MISSING_DECLARATION", "NONNUMERIC_DECLARATION", "AMBIGUOUS_DECLARATION", "MISSING_TARGET", "AMBIGUOUS_TARGET", "CROSS_MAPPING", "CROSS_DESIGN", "UNRESOLVED_OWNER", "INTERFACE_MISMATCH"]},
+        "rule": {"enum": ["class_key", "class_key_same_mapping", "class_key_same_design"]},
+        "definition_reference": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/definition"}]},
+        "evidence": {"$ref": "#/$defs/evidence"}
+      },
+      "allOf": [{"if": {"properties": {"resolution": {"const": "RESOLVED"}}}, "then": {"properties": {"target_node_id": {"$ref": "#/$defs/id"}}}, "else": {"properties": {"target_node_id": {"type": "null"}}}}]},
+    "record": {"type": "object", "additionalProperties": false,
+      "required": ["node_id", "object_class", "declared_identity", "name", "declared_fields", "references", "scope_chain_node_ids", "scope_design_node_ids", "scope_resolution", "diagnostics", "evidence"],
+      "properties": {
+        "node_id": {"$ref": "#/$defs/id"}, "object_class": {"enum": ["SnpPhyNode", "SnpExecUnit", "SnpExecUnitGrp", "SnpMapProp"]},
+        "declared_identity": {"$ref": "#/$defs/nullable_text"}, "name": {"$ref": "#/$defs/nullable_text"},
+        "declared_fields": {"$ref": "#/$defs/fields"}, "references": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/reference"}},
+        "scope_chain_node_ids": {"$ref": "#/$defs/ids"}, "scope_design_node_ids": {"$ref": "#/$defs/ids"},
+        "scope_resolution": {"enum": ["BOUND", "UNRESOLVED", "AMBIGUOUS", "CONFLICT", "CYCLE"]},
+        "diagnostics": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+          "required": ["code", "message", "node_ids", "evidence"], "properties": {
+            "code": {"enum": ["COMPONENT_CONNECTION_POINT_MISMATCH", "PHYSICAL_PARENT_CYCLE", "EXECUTION_UNIT_PARENT_CYCLE", "PROPERTY_SCOPE_CYCLE"]},
+            "message": {"type": "string", "minLength": 1}, "node_ids": {"$ref": "#/$defs/ids"}, "evidence": {"$ref": "#/$defs/evidence"}
+          }}},
+        "evidence": {"$ref": "#/$defs/evidence"}
+      }, "allOf": [{"if": {"properties": {"scope_resolution": {"const": "BOUND"}}}, "then": {"properties": {"scope_design_node_ids": {"minItems": 1, "maxItems": 1}}}}]},
+    "design": {"type": "object", "additionalProperties": false,
+      "required": ["design_node_id", "mapping_node_id", "name", "declared_fields", "owner_reference", "context_reference", "physical_nodes", "execution_units", "execution_groups", "properties", "selected_for_execution", "execution_order_status", "unresolved_items", "evidence"],
+      "properties": {
+        "design_node_id": {"$ref": "#/$defs/id"}, "mapping_node_id": {"$ref": "#/$defs/nullable_text"},
+        "name": {"$ref": "#/$defs/nullable_text"}, "declared_fields": {"$ref": "#/$defs/fields"},
+        "owner_reference": {"$ref": "#/$defs/reference"}, "context_reference": {"$ref": "#/$defs/reference"},
+        "physical_nodes": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/record"}},
+        "execution_units": {"type": "array", "maxItems": 2048, "items": {"$ref": "#/$defs/record"}},
+        "execution_groups": {"type": "array", "maxItems": 2048, "items": {"$ref": "#/$defs/record"}},
+        "properties": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/record"}},
+        "selected_for_execution": {"type": "null"}, "execution_order_status": {"const": "NOT_ESTABLISHED"},
+        "unresolved_items": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "evidence": {"$ref": "#/$defs/evidence"}
+      }}
+  }
+}

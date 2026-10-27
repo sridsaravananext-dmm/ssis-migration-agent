@@ -4,6 +4,13 @@ Architecture audit: 2026-10-27. Use the unchanged Oracle Smart Export already
 stored with [pinned provenance](../examples/public/oracle_odi_etl_offload/README.md).
 No source workflow, metadata, input rows or expected workload results are authored.
 
+This records the phase-18 increment: behavior version 3, 247 requirements and
+candidate version 2's 44 SQL review fragments. The following
+[physical dependency increment](odi-physical-dependency-analysis.md) adds behavior
+version 4 and 258 requirements. Its candidate version 3 retains the same 44
+fragments and source syntax profile; the earlier profiles described here remain
+available for replay.
+
 The four remaining expression forms are one TO_DATE/SUBSTR conversion, LAG over
 partition/order declarations, MAX with `ROWS 3 PRECEDING`, and partitioned SUM.
 Their native reference identities and text are available; source runtime settings,
