@@ -10,7 +10,8 @@ from ..xml_export import validate_export_graph
 from .native import PROFILE as GRAPH_PROFILE, value
 
 PROFILE = 'odi_12c_mapping_requirements_v1'
-LATEST_PROFILE = 'odi_12c_mapping_requirements_v2'
+SYNTAX_PROFILE = 'odi_12c_mapping_requirements_v2'
+LATEST_PROFILE = 'odi_12c_mapping_requirements_v3'
 
 
 class MappingIndex:
@@ -152,8 +153,11 @@ def _analyze_v1(graph, *, profile=PROFILE):
 def analyze_behavior(graph, *, profile=LATEST_PROFILE):
     if profile == PROFILE:
         return _analyze_v1(graph)
-    if profile == LATEST_PROFILE:
+    if profile == SYNTAX_PROFILE:
         from .behavior_v2 import analyze
+        return analyze(graph)
+    if profile == LATEST_PROFILE:
+        from .behavior_v3 import analyze
         return analyze(graph)
     raise SchemaValidationError('Unsupported ODI mapping requirements profile.')
 

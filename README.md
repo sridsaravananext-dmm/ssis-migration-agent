@@ -37,11 +37,11 @@ physical database/schema bindings stay unresolved until real metadata is supplie
 is preserved with its license and pinned provenance. Its versioned
 [ODI 12c normalizer](docs/odi-mapping-normalization.md) now builds IR for all seven
 mapping declarations, explicit connector/attribute references and all original
-typed fields. The latest source profile adds bounded expression syntax and
-procedure/KM command/option analysis, for 247 evidence-backed requirements. The
+typed fields. Source behavior version 3 adds typed date/window syntax to the
+expression and procedure/KM analysis, retaining 247 evidence-backed requirements. The
 workbench downloads those artifacts and a per-mapping Databricks assessment;
-missing definitions, physical/KM semantics and target bindings still block code
-generation. Earlier structural graphs and compatibility reports remain replayable.
+missing definitions, physical/KM semantics and target bindings still block complete
+notebook generation. Earlier structural graphs and compatibility reports remain replayable.
 
 Incremental, file-based legacy ETL migration framework. **Databricks is the only
 current target.** DataStage and Ab Initio are explicitly excluded. Legacy server
@@ -89,7 +89,7 @@ previous candidate utility bytes remain unchanged.
 supplied ordered metadata through `TM1SubsetToSet`. Private/dynamic subsets,
 missing scope and ambiguous or invalid members block generation.
 
-Full regression baseline (2026-10-27): **1,389 tests passed, 12 skipped**.
+Full regression baseline (2026-10-27): **1,406 tests passed, 12 skipped**.
 Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, which is unavailable in this environment. Execution and real-source
 equivalence remain unverified.
@@ -104,12 +104,20 @@ passed after the source copy was removed. Three older vendor graphs/envelopes,
 the original ODI compatibility report and six PowerCenter version 1/2 reviews
 remain unchanged and replayable; original source/license hashes still match.
 
-[ODI expression and KM analysis](docs/odi-expression-km-analysis.md) now preserves
-all 89 expression records and produces 41 independently parsed Databricks SQL
-review fragments. Date conversion and window logic remain untranslated. All 80
-procedure/KM steps, 20 options and 135 unresolved association records retain their
+[ODI date/window analysis](docs/odi-date-window-analysis.md) now recognizes 45
+native expressions and produces 44 independently parsed Databricks SQL review
+fragments, including three window expressions. All 89 source records remain
+visible. The date conversion retains its original index and format tokens but
+has no target SQL until source/target date rules are established. Window defaults
+and ordering uniqueness remain unverified. The earlier
+[expression/KM increment](docs/odi-expression-km-analysis.md) retains all 80
+procedure/KM steps, 20 options and 135 unresolved association records with their
 source evidence and flags. Fragments earn no semantic coverage or migration
-acceptance; they are separate from executable notebook generation.
+acceptance; complete notebook generation remains blocked.
+
+This increment passed **18 focused checks** and the full regression. Installed-wheel
+review and replay passed after source removal, including exact comparisons of
+earlier behavior analyses, plans/contracts/assessments and 41 original SQL candidates.
 
 The original ODI compatibility increment passed **30 focused checks**, the full
 regression, and installed-wheel CLI/schema/replay checks outside the checkout.

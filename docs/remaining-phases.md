@@ -6,9 +6,15 @@ Do not author new synthetic source packages, metadata, input datasets or
 expected outputs. Existing regression examples remain demonstrations, not proof
 of real workload compatibility. See [the source file request](source-export-request.md).
 
-Next: extend unsupported date/window and component/type/null semantics, verify
-KM identity/option/template behavior and establish explicit Databricks bindings before target
-translation. The original Oracle mappings now have normalized declarations and
+Next implementation: add versioned, design-scoped physical dependency analysis
+from the original export's 11 design, 48 physical-node, 25 execution-unit and
+25 execution-group declarations. Preserve alternative designs and exact scoped
+references without choosing a design, execution order or effective KM option.
+Missing exact module/metadata definitions and explicit target bindings remain
+blockers. Establish date/calendar/index and window-default/order semantics,
+extend component/type/null analysis and verify KM identity/option/template
+behavior before target translation. The original Oracle mappings now have
+normalized declarations and
 evidence-backed review contracts. PowerCenter effective configuration and
 physical binding still require exact product-version, connection/DDL and run
 metadata; do not guess them while continuing independent ODI work. Add supported
@@ -125,6 +131,17 @@ Sequential increments in this continuation:
     Differing module IDs remain unresolved; no command/template is executed and
     no physical design, runtime order or option value is chosen. Version 1 and
     native IR remain unchanged. See [scope and limits](odi-expression-km-analysis.md).
+18. ODI date/window syntax and window SQL review: **implemented** in source
+    behavior version 3, native syntax version 2 and target-candidate version 2.
+    All 89 records remain visible: 45 parsed native expressions, 37 empty
+    declarations and seven layout records. Three LAG/MAX/SUM window fragments
+    raise the target syntax count to 44. Omitted sort/null directions, LAG
+    arguments and frame endpoints remain omitted; ordering uniqueness is
+    unverified. The date AST preserves `0`, `10` and `'YYYY-MM-DD'` without
+    generating date SQL. The native IR and 247 requirement count are unchanged;
+    earlier behavior/candidate profiles remain available for recorded-profile
+    replay. Whole-workflow generation, execution and semantic acceptance stay
+    blocked. See [implementation and limits](odi-date-window-analysis.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

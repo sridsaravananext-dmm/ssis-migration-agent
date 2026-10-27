@@ -45,13 +45,19 @@ explicit mapping links. It adds seven mapping requirements plus one export
 review requirement. This does not translate native physical/KM behavior or
 establish migration acceptance.
 
-The latest requirements profile (version 2) adds bounded expression and
-procedure/KM analysis, producing 247 requirements. All 89 expression records are
-retained, including four unsupported date/window forms; 41 have Databricks SQL
-syntax review fragments in `target_expression_candidates.json`. All 80 command
+The latest requirements profile (version 3) retains the version-2 procedure/KM
+analysis and adds bounded native date/window syntax, producing 247 requirements.
+All 89 expression records are retained: 45 parsed native expressions, 37 empty
+declarations and seven layout records. Candidate version 2 has 44 Databricks SQL
+syntax review fragments in `target_expression_candidates.json`, including three
+LAG/MAX/SUM windows. Their omitted defaults and ordering uniqueness remain
+unverified. The date AST preserves substring start `0`, length `10` and format
+`'YYYY-MM-DD'`; no date SQL is generated until source/target date rules are
+established. All 80 command
 steps, 20 options and 135 unresolved association records retain source evidence.
 No templates/commands are executed and no effective option or default is invented.
-See [the version-2 scope](../../../docs/odi-expression-km-analysis.md).
+See [date/window syntax and limits](../../../docs/odi-date-window-analysis.md)
+and [the earlier version-2 scope](../../../docs/odi-expression-km-analysis.md).
 
 To produce the new review from the same extracted source:
 

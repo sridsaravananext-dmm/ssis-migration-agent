@@ -4,6 +4,11 @@ Architecture audit: 2026-10-27. Use the unchanged, licensed Oracle Smart Export
 from [the public source](../examples/public/oracle_odi_etl_offload/README.md).
 No source packages, metadata, input rows or expected workload results are authored.
 
+This records the phase-17, behavior-version-2 increment and its original 41 SQL
+review fragments. The following [date/window increment](odi-date-window-analysis.md)
+adds behavior version 3 and 44 fragments; the earlier profiles described here
+remain frozen for replay.
+
 The original has 89 expression records: 45 parsed expression declarations,
 37 empty text declarations and seven layout-text records. Native `ParsedTxt`
 uses `@{R0}` references, bound through explicit `SnpMapExprRef` identities.

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:odi_expression_analysis:2.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["analysis_version", "profile", "expression_node_id", "owner_property_name", "source_fields", "status", "ast", "bindings", "semantic_status", "unresolved_items", "evidence"],
+  "properties": {
+    "analysis_version": {"const": "1.0"}, "profile": {"const": "odi_native_expression_syntax_v2"},
+    "expression_node_id": {"$ref": "urn:ssis-migration:schema:odi_expression_analysis:1.0#/properties/expression_node_id"},
+    "owner_property_name": {"type": ["string", "null"]}, "source_fields": {"$ref": "urn:ssis-migration:schema:odi_expression_analysis:1.0#/properties/source_fields"},
+    "status": {"enum": ["PARSED", "REVIEW_REQUIRED", "EMPTY_DECLARATION", "TEXT_METADATA_DECLARATION"]},
+    "ast": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/ast"}]},
+    "bindings": {"$ref": "urn:ssis-migration:schema:odi_expression_analysis:1.0#/properties/bindings"},
+    "semantic_status": {"const": "NOT_VERIFIED"}, "unresolved_items": {"type": "array", "items": {"type": "string"}},
+    "evidence": {"$ref": "urn:ssis-migration:schema:odi_expression_analysis:1.0#/properties/evidence"}
+  },
+  "allOf": [{"if": {"properties": {"status": {"const": "PARSED"}}}, "then": {"properties": {"ast": {"$ref": "#/$defs/ast"}}}, "else": {"properties": {"ast": {"type": "null"}}}}],
+  "$defs": {
+    "reference": {"$ref": "urn:ssis-migration:schema:odi_expression_analysis:1.0#/$defs/reference"},
+    "integer": {"type": "object", "additionalProperties": false, "required": ["kind", "token"], "properties": {"kind": {"const": "INTEGER_LITERAL"}, "token": {"type": "string", "pattern": "^[0-9]{1,7}$"}}},
+    "ast": {"oneOf": [
+      {"$ref": "urn:ssis-migration:schema:odi_expression_analysis:1.0#/$defs/ast"},
+      {"type": "object", "additionalProperties": false, "required": ["kind", "function", "substring", "format"], "properties": {
+        "kind": {"const": "DATE_CONVERSION"}, "function": {"const": "TO_DATE"},
+        "substring": {"type": "object", "additionalProperties": false, "required": ["function", "argument", "start", "length"], "properties": {"function": {"const": "SUBSTR"}, "argument": {"$ref": "#/$defs/reference"}, "start": {"$ref": "#/$defs/integer"}, "length": {"$ref": "#/$defs/integer"}}},
+        "format": {"type": "object", "additionalProperties": false, "required": ["kind", "token"], "properties": {"kind": {"const": "STRING_LITERAL"}, "token": {"type": "string", "maxLength": 256, "pattern": "^'(?:[^']|'')*'$"}}}
+      }},
+      {"type": "object", "additionalProperties": false, "required": ["kind", "function", "argument", "partition_by", "order_by", "frame", "offset_literal", "default_expression"], "properties": {
+        "kind": {"const": "WINDOW"}, "function": {"enum": ["LAG", "MAX", "SUM"]}, "argument": {"$ref": "#/$defs/reference"},
+        "partition_by": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/reference"}},
+        "order_by": {"type": "array", "maxItems": 16, "items": {"type": "object", "additionalProperties": false, "required": ["expression", "direction", "null_order"], "properties": {"expression": {"$ref": "#/$defs/reference"}, "direction": {"type": "null"}, "null_order": {"type": "null"}}}},
+        "frame": {"anyOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["unit", "syntax_form", "start", "start_direction", "end"], "properties": {"unit": {"const": "ROWS"}, "syntax_form": {"const": "SINGLE_BOUND"}, "start": {"$ref": "#/$defs/integer"}, "start_direction": {"const": "PRECEDING"}, "end": {"type": "null"}}}]},
+        "offset_literal": {"type": "null"}, "default_expression": {"type": "null"}
+      }}
+    ]}
+  }
+}

@@ -35,7 +35,7 @@ def index(result):
 
 @pytest.fixture(scope='module')
 def analysis(result):
-    return analyze_behavior(result.normalized_ir)
+    return analyze_behavior(result.normalized_ir, profile=behavior_v2.PROFILE)
 
 
 @pytest.fixture(scope='module')
@@ -50,7 +50,7 @@ def syntax_entries(analysis):
 
 
 def test_new_profile_accounts_for_every_expression_and_command_without_changing_ir(result, analysis):
-    assert analysis['profile'] == LATEST_PROFILE
+    assert analysis['profile'] == behavior_v2.PROFILE
     assert len(analysis['requirements']) == 247
     assert Counter(r['kind'] for r in analysis['requirements']) == {
         'ODI_MAPPING': 7, 'ODI_EXPORT_REVIEW': 1, 'ODI_PROCEDURE_KM': 4,
@@ -170,7 +170,7 @@ def test_forged_command_flags_cannot_be_authorized_by_rehashed_requirements(resu
     changed = copy.deepcopy(analysis)
     step = next(r for r in changed['requirements'] if r['kind'] == 'ODI_PROCEDURE_KM_COMMAND')
     step['declarations']['effective_command'] = 'invented command'
-    step['requirement_id'] = 'requirement-' + content_digest([LATEST_PROFILE, {k: v for k, v in step.items() if k != 'requirement_id'}])[:24]
+    step['requirement_id'] = 'requirement-' + content_digest([analysis['profile'], {k: v for k, v in step.items() if k != 'requirement_id'}])[:24]
     with pytest.raises(SchemaValidationError): validate_behavior_analysis(changed, result.normalized_ir)
 
 

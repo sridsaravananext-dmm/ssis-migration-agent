@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:odi_expression_candidates:2.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["candidate_version", "profile", "scope", "ir_id", "behavior_analysis_sha256", "contracts_sha256", "entries", "candidate_count", "status", "execution_status", "generated_notebooks", "semantic_status", "migration_accepted"],
+  "properties": {
+    "candidate_version": {"const": "2.0"}, "profile": {"const": "odi_databricks_expression_candidates_v2"},
+    "scope": {"const": "EXPRESSION_SYNTAX_REVIEW_ONLY"}, "ir_id": {"type": "string", "pattern": "^ir-[a-f0-9]{64}$"},
+    "behavior_analysis_sha256": {"$ref": "urn:ssis-migration:schema:odi_expression_candidates:1.0#/$defs/hash"},
+    "contracts_sha256": {"$ref": "urn:ssis-migration:schema:odi_expression_candidates:1.0#/$defs/hash"},
+    "entries": {"$ref": "urn:ssis-migration:schema:odi_expression_candidates:1.0#/properties/entries"},
+    "candidate_count": {"type": "integer", "minimum": 0, "maximum": 512},
+    "status": {"const": "REVIEW_REQUIRED"}, "execution_status": {"const": "NOT_RUN"},
+    "generated_notebooks": {"const": []}, "semantic_status": {"const": "NOT_VERIFIED"}, "migration_accepted": {"const": false}
+  }
+}

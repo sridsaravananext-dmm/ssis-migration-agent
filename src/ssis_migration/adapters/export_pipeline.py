@@ -65,9 +65,12 @@ def run_export_review(source, output, platform, *, workspace_config=None, depend
     if platform == 'odi' and behavior_analysis is not None:
         from ssis_migration.generator.odi.assessment import build_assessment
         target_assessment = build_assessment(graph, behavior_analysis, contracts)
-        from .odi.behavior import LATEST_PROFILE
-        if behavior_analysis['profile'] == LATEST_PROFILE:
+        from .odi.behavior import LATEST_PROFILE, SYNTAX_PROFILE
+        if behavior_analysis['profile'] == SYNTAX_PROFILE:
             from ssis_migration.generator.odi.expressions import build_candidates
+            expression_candidates = build_candidates(graph, behavior_analysis, contracts)
+        elif behavior_analysis['profile'] == LATEST_PROFILE:
+            from ssis_migration.generator.odi.expressions_v2 import build_candidates
             expression_candidates = build_candidates(graph, behavior_analysis, contracts)
     for record in envelope['evidence_files']:
         path = Path(record['path'])

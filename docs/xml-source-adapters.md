@@ -109,10 +109,20 @@ All seven mappings enter source requirements and contracts; a separate Databrick
 assessment reports why code generation remains unsupported. No partial notebook
 is emitted for missing KM definitions, unresolved metadata or write semantics.
 
-ODI source behavior version 2 now adds [bounded native expression syntax and
+ODI source behavior version 2 added [bounded native expression syntax and
 procedure/KM declarations](odi-expression-km-analysis.md) without changing the
 original graph profile. Its 247 source requirements preserve all expression,
 command, option and association declarations. A separate target artifact contains
 41 SQL syntax review fragments and explicit entries for untranslated source
 records. Source native text is not passed to a SQL parser, templates are not
 expanded, and these fragments enable no workflow execution or acceptance.
+
+[Source behavior version 3](odi-date-window-analysis.md) extends native syntax
+analysis to 45 expressions, including the original date conversion and three
+windows. The candidate version-2 artifact contains 44 SQL review fragments from
+all 89 source records. Date SQL is withheld pending dialect/calendar, malformed
+input, substring-index and target-format rules. Window clauses retain omitted
+defaults and the exact `ROWS 3 PRECEDING` form; runtime defaults and ordering
+uniqueness remain unverified. The native IR and 247 requirement count are
+unchanged. Earlier behavior/candidate profiles retain explicit replay dispatch;
+the complete workflow remains blocked with no execution or semantic credit.

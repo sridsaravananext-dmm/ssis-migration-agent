@@ -128,7 +128,7 @@ def test_public_oracle_odi_workbench_run_downloads_normalized_contracts_and_gene
     assert report['export_profile']=='odi_12c_mapping_declarations_v1'
     assert report['behavior_analysis']['requirement_count']==247
     assert report['target_expression_review']['record_count']==89
-    assert report['target_expression_review']['candidate_count']==41
+    assert report['target_expression_review']['candidate_count']==44
     assert report['target_generation_assessment']['blocked_mapping_count']==7
     assert report['generated_artifact_count']==0 and report['migration_accepted'] is False
     assert report['execution_status']=='NOT_RUN'
