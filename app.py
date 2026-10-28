@@ -501,6 +501,14 @@ with tab_run:
                 st.json(physical_summary)
                 physical_path=Path(report['artifacts']['source_physical_analysis'])
                 st.download_button('Download ODI physical dependency analysis',physical_path.read_bytes(),'odi_physical_analysis.json',mime='application/json')
+        if report.get('topology_analysis'):
+            with st.expander('ODI source topology and contexts'):
+                topology_summary=report['topology_analysis']
+                st.write(str(topology_summary['record_count'])+' topology records · '+str(topology_summary['execution_unit_use_count'])+' execution units · '+str(topology_summary['context_candidate_count'])+' context candidates')
+                st.caption('All declared context alternatives and unresolved links are retained. Effective runtime context, inherited connection values and Databricks bindings remain unverified.')
+                st.json(topology_summary)
+                topology_path=Path(report['artifacts']['source_topology_analysis'])
+                st.download_button('Download ODI topology analysis',topology_path.read_bytes(),'odi_topology_analysis.json',mime='application/json')
         if report.get('target_generation_assessment'):
             with st.expander('ODI Databricks generation blockers'):
                 assessment_path=Path(report['artifacts']['target_generation_assessment'])

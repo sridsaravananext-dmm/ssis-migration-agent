@@ -59,7 +59,7 @@ No templates/commands are executed and no effective option or default is invente
 See [date/window syntax and limits](../../../docs/odi-date-window-analysis.md)
 and [the earlier version-2 scope](../../../docs/odi-expression-km-analysis.md).
 
-The latest requirements profile (version 4) adds 11 physical-design requirements,
+The version-4 requirements profile added 11 physical-design requirements,
 for 258 total. `source_physical_analysis.json` retains all 11 designs, 48 physical
 nodes, 25 execution units, 25 groups and 153 physical properties, including 16
 parent-linked descendants. Four mappings have alternative designs; none is
@@ -71,6 +71,20 @@ analyzed without changing the native graph. Candidate version 3 keeps the same
 44 SQL fragments and all 89 entries bound to the new requirements. Earlier
 profiles remain available for replay. See
 [physical dependency analysis](../../../docs/odi-physical-dependency-analysis.md).
+
+The latest requirements profile (version 5) adds one topology-review requirement,
+for 259 total. `source_topology_analysis.json` preserves all 51 original topology
+records: four logical schemas, two contexts, five connections, five physical
+schemas, five context associations and 30 properties. All 25 execution-unit uses
+and 34 context candidates are retained; 25 match the declared design context and
+nine are alternatives. Connection-parent declarations `21` → `18` and `20` →
+`18`, three opaque JDBC text references, undefined/empty/literal-null properties
+and placeholders remain unchanged. No effective context, inherited property,
+runtime engine or target binding is selected, and no connection or source code
+is executed. Candidate version 4 retains the same 44 syntax review fragments and
+89 entries bound to all requirements. Native graph support, the physical profile
+and earlier review profiles remain unchanged. See
+[source topology/context analysis](../../../docs/odi-topology-context-analysis.md).
 
 To produce the new review from the same extracted source:
 
@@ -84,11 +98,14 @@ The final status is `BLOCKED` with zero generated notebooks. The report and
 `target_generation_assessment.json` identify missing definitions and unimplemented
 generation capabilities per mapping. In the original, 52 KM references, 32 native
 datatype references, seven column references and one datastore reference remain
-unresolved under strict class/key/GUID binding. These are reference counts, not
-counts of distinct missing objects. The source also retains both TRUNCATE options
+unresolved under strict class/key/GUID binding. The KM references represent 19
+distinct identity/GUID/name triples; datatype references represent 13. Datatype
+definitions are absent and datatype binding is not registered by the native
+profile. Reference descriptions and names cannot repair missing definitions,
+datastore or column dependencies. The source also retains both TRUNCATE options
 and every declared physical design; no design is automatically selected.
 
-The inventory omits field values and encryption key material. It contains exact
+The compatibility inventory omits field values and encryption key material. It contains exact
 source SHA-256/size and representative XML locators. Replay requires unchanged
 source bytes, which may be relocated:
 

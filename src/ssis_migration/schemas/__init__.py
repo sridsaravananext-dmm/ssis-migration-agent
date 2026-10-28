@@ -21,6 +21,8 @@ class SchemaValidationError(ValueError):
 
 
 _SCHEMA_FILES = {
+    "odi_topology_analysis": "odi_topology_analysis.v1.json",
+    "odi_expression_candidates_v4": "odi_expression_candidates.v4.json",
     "odi_physical_analysis": "odi_physical_analysis.v1.json",
     "odi_expression_candidates_v3": "odi_expression_candidates.v3.json",
     "odi_expression_candidates_v2": "odi_expression_candidates.v2.json",

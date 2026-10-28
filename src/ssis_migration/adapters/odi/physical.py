@@ -322,11 +322,10 @@ def validate_physical_analysis(document, graph):
         raise SchemaValidationError('ODI physical analysis does not replay from all original scoped declarations.')
 
 
-def extract_physical_analysis(behavior_analysis):
-    from .behavior_v4 import PROFILE as BEHAVIOR_PROFILE
+def _extract_physical_analysis(behavior_analysis, *, source_profile):
     validate_document(behavior_analysis, 'source_behavior_analysis'); validate_evidence_references(behavior_analysis)
-    if behavior_analysis['profile'] != BEHAVIOR_PROFILE:
-        raise SchemaValidationError('Physical analysis extraction requires behavior profile version 4.')
+    if behavior_analysis['profile'] != source_profile:
+        raise SchemaValidationError('Physical analysis extraction requires its bound source behavior profile.')
     roots = [r for r in behavior_analysis['requirements'] if r['kind'] == 'ODI_EXPORT_REVIEW']
     if len(roots) != 1 or 'physical_analysis_manifest' not in roots[0]['declarations']:
         raise SchemaValidationError('Physical analysis manifest is missing or ambiguous.')
@@ -365,3 +364,8 @@ def extract_physical_analysis(behavior_analysis):
     if retained_mapped != set(mapped):
         raise SchemaValidationError('A mapping physical-design declaration is missing its review requirement.')
     return document
+
+
+def extract_physical_analysis(behavior_analysis):
+    from .behavior_v4 import PROFILE as BEHAVIOR_PROFILE
+    return _extract_physical_analysis(behavior_analysis, source_profile=BEHAVIOR_PROFILE)

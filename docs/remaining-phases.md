@@ -1,20 +1,25 @@
 # Offline implementation continuation
 
-As of 2026-10-27, the next adapter and semantic work must use real user-supplied
+As of 2026-10-28, the next adapter and semantic work must use real user-supplied
 exports or existing public exports with verified reuse terms and provenance.
 Do not author new synthetic source packages, metadata, input datasets or
 expected outputs. Existing regression examples remain demonstrations, not proof
 of real workload compatibility. See [the source file request](source-export-request.md).
 
-Next implementation: analyze the original export's source topology/context
-declarations, including five physical schemas, five context associations and
-30 connection-property records. Preserve exact declared chains and ambiguities
-without choosing an effective context or inventing Databricks bindings. These
-objects are already retained as unsupported graph classes; this analysis must
-not silently change the frozen graph profile. Verify exact KM/module definitions,
-command/option/template behavior and explicit source/target physical bindings
-against real supporting exports and run context. Design-scoped dependency
-analysis now preserves the original physical
+Next implementation: derive dataflow-linked conversion/null obligations from
+the 79 exact attribute/column bindings and 82 datatype-descriptor uses already
+present. Preserve missing precision, literal-null declarations, derived outputs
+and file/error policies without inventing casts or defaults. Six simple
+source/target mappings are candidates for later projection lowering once
+explicit Databricks bindings and required coercion/file policies exist.
+Verify missing KM and datatype definitions, command/option/template
+behavior, source runtime policies and explicit Databricks bindings against real
+supporting exports and run context. Topology analysis now preserves all source
+connection/context alternatives without selecting effective values or repairing
+missing datastore/column references by names. Physical schemas, context
+associations and connection properties remain unsupported declarations in the
+frozen native graph; the separate analysis does not change graph support.
+Design-scoped dependency analysis preserves the original physical
 alternatives and property chains, but does not select a design, execution order
 or effective KM option. Missing definitions and bindings remain blockers.
 Establish date/calendar/index and window-default/order semantics and extend
@@ -160,6 +165,21 @@ Sequential increments in this continuation:
     available for recorded-profile replay. No design, runtime strategy, execution,
     physical target binding or semantic acceptance is inferred. The workbench
     downloads the physical analysis; see [scope and remaining evidence](odi-physical-dependency-analysis.md).
+20. ODI source topology/context analysis: **implemented** in source behavior
+    version 5 and topology profile `odi_12c_topology_dependencies_v1`. One
+    `ODI_TOPOLOGY_REVIEW` requirement brings the total to 259. All 51 original
+    topology records retain typed fields and identity evidence: four logical
+    schemas, two contexts, five connections, five physical schemas, five context
+    associations and 30 properties. All 25 execution-unit uses and 34 context
+    candidates remain visible, including 25 declared-design-context matches and
+    nine alternatives. Connection-parent declarations, three opaque JDBC text
+    references, undefined/empty/literal-null properties and placeholders are
+    preserved without inheritance, filling or expansion. The native graph and
+    physical profile remain unchanged; behavior profiles 1–4 retain explicit
+    replay dispatch. Candidate version 4 binds the same 44 syntax fragments and
+    89 entries to the new requirements. The workbench downloads topology analysis;
+    no effective context, design, engine, target binding, execution or semantic
+    acceptance is selected. See [scope and remaining evidence](odi-topology-context-analysis.md).
 
 These are incremental capability additions. Structural vendor adapters are not
 full vendor migration engines. Broader TM1 behavior and vendor transformations

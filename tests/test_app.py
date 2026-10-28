@@ -126,7 +126,7 @@ def test_public_oracle_odi_workbench_run_downloads_normalized_contracts_and_gene
     assert not app.exception and app.session_state['last_attempt_error'] is None
     report=app.session_state['migration_result']
     assert report['export_profile']=='odi_12c_mapping_declarations_v1'
-    assert report['behavior_analysis']['requirement_count']==258
+    assert report['behavior_analysis']['requirement_count']==259
     assert report['target_expression_review']['record_count']==89
     assert report['target_expression_review']['candidate_count']==44
     assert report['target_generation_assessment']['blocked_mapping_count']==7
@@ -137,6 +137,14 @@ def test_public_oracle_odi_workbench_run_downloads_normalized_contracts_and_gene
     assert any(e.label=='ODI expression syntax candidates' for e in app.expander)
     assert any(e.label=='ODI physical designs and dependencies' for e in app.expander)
     assert any(b.label=='Download ODI physical dependency analysis' for b in app.get('download_button'))
+    assert any(e.label=='ODI source topology and contexts' for e in app.expander)
+    assert any(b.label=='Download ODI topology analysis' for b in app.get('download_button'))
+    assert report['topology_analysis']['record_count']==51
+    assert report['topology_analysis']['execution_unit_use_count']==25
+    assert report['topology_analysis']['context_candidate_count']==34
+    topology=json.loads(Path(report['artifacts']['source_topology_analysis']).read_text())
+    assert topology['execution_status']=='NOT_RUN' and topology['semantic_status']=='NOT_VERIFIED'
+    assert topology['migration_accepted'] is False
     assert report['physical_analysis']['design_count']==11
     assert report['physical_analysis']['property_count']==153
     physical=json.loads(Path(report['artifacts']['source_physical_analysis']).read_text())

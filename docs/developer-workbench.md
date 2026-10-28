@@ -33,10 +33,21 @@ downloads `odi_physical_analysis.json` (stored in the artifact bundle as
 `source_physical_analysis.json`), including all 153 physical properties,
 parent scopes, exact declared links and unresolved dependencies. Its eight
 potentially destructive declarations are retained for review; their runtime
-effect is not established. The 11 design requirements join the source contracts
-for 258 requirements total. No alternative design, execution order, effective
+effect is not established. The 11 design requirements remain in the source
+contracts. No alternative design, execution order, effective
 option, runtime engine or Databricks physical binding is chosen. See
 [the physical dependency profile](odi-physical-dependency-analysis.md).
+
+**ODI source topology and contexts** shows 51 original topology records and the
+context candidates for all 25 execution-unit uses. **Download ODI topology
+analysis** downloads `odi_topology_analysis.json` (stored in the artifact bundle
+as `source_topology_analysis.json`). All 34 candidates remain visible: 25 match
+their declared design context and nine use an alternative context. The topology
+requirement joins the earlier physical/expression/KM requirements for 259 total.
+Declared connection parents, three opaque JDBC text references and all property
+values/flags/placeholders are retained without selecting an effective context,
+inherited value, runtime engine or Databricks binding. No connection or source
+command is executed. See [the topology/context profile](odi-topology-context-analysis.md).
 
 **ODI expression syntax candidates** now downloads 44 Databricks SQL review
 fragments from 89 source expression records, including three LAG/MAX/SUM windows.
@@ -50,8 +61,8 @@ original substring index and format tokens without generating date SQL. Window
 defaults and ordering uniqueness remain unverified; no omitted direction, LAG
 argument or frame endpoint is inserted. See [date/window analysis](odi-date-window-analysis.md)
 and [the earlier expression/KM profile](odi-expression-km-analysis.md). Candidate
-version 3 binds these same fragments to behavior version 4's physical-design
-requirements without enabling mapping execution.
+version 4 binds these same fragments to all behavior version 5 requirements,
+including physical and topology declarations, without enabling mapping execution.
 
 The Streamlit frontend runs existing SSIS migrations, bounded TM1 Databricks
 generation, and PowerCenter/BODS/ODI XML structural analysis. Native XML runs

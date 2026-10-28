@@ -4,6 +4,13 @@ Architecture audit: 2026-10-27. This increment uses only the unchanged Oracle
 [Smart Export and pinned provenance](../examples/public/oracle_odi_etl_offload/README.md).
 No new source packages, metadata, datasets or expected workload rows are authored.
 
+This records the phase-19 increment: behavior version 4, 258 requirements,
+physical profile version 1 and candidate version 3. The following
+[topology/context increment](odi-topology-context-analysis.md) adds behavior
+version 5 and 259 requirements. It retains this physical profile and its report
+while binding the same 44 expression fragments to all new requirements. Earlier
+recorded profiles remain available for replay.
+
 The original declares 11 physical designs, 48 physical nodes, 25 execution units
 and 25 groups. Four mappings have alternative designs. Its 137 directly attached
 physical properties plus 16 parent-linked descendants total 153 properties.
@@ -111,11 +118,14 @@ Four skips require a live Databricks connection; eight require the optional .NET
 8 SDK, unavailable in this environment. All 29 new physical-analysis cases are
 included. Execution, source equivalence and migration acceptance remain unverified.
 
-The next bounded source-analysis step can use topology already present in the
-same export: five physical schemas, five context associations and 30 connection
-properties, alongside four logical schemas, two contexts and five connections.
-These declarations do not establish an effective run context or Databricks
-bindings. The 32 datatype references represent 13 identity/GUID/name triples;
+The following [topology/context analysis](odi-topology-context-analysis.md) uses
+the same export's five physical schemas, five context associations and 30
+connection properties, alongside four logical schemas, two contexts and five
+connections. These declarations do not establish an effective run context or
+Databricks bindings. Missing KM/type definitions, verified runtime policies and
+explicit source/target bindings remain necessary before complete generation.
+The 32 datatype references represent 13 identity/GUID/name triples;
 datatype definitions are absent and datatype binding is not registered by the
-native profile. The 52 unresolved KM references represent 19 absent definitions.
+native profile. The 52 unresolved KM references represent 19 distinct
+identity/GUID/name triples with absent definitions.
 Reference descriptors do not replace the missing behavior definitions.

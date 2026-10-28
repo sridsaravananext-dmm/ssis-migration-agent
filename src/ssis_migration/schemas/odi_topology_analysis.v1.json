@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ssis-migration:schema:odi_topology_analysis:1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["analysis_version", "profile", "ir_id", "source_analysis_sha256", "evidence_files", "records", "text_bindings", "execution_unit_uses", "opaque_marker_declarations", "summary", "unresolved_items", "status", "execution_status", "semantic_status", "migration_accepted", "evidence"],
+  "properties": {
+    "analysis_version": {"const": "1.0"}, "profile": {"const": "odi_12c_topology_dependencies_v1"},
+    "ir_id": {"type": "string", "pattern": "^ir-[a-f0-9]{64}$"},
+    "source_analysis_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evidence_files": {"$ref": "urn:ssis-migration:schema:normalized_ir:2.0#/properties/evidence_files"},
+    "records": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/record"}},
+    "text_bindings": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/text_binding"}},
+    "execution_unit_uses": {"type": "array", "maxItems": 2048, "items": {"$ref": "#/$defs/unit_use"}},
+    "opaque_marker_declarations": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/marker_declaration"}},
+    "summary": {"type": "object", "additionalProperties": false,
+      "required": ["record_count", "logical_schema_count", "context_count", "connection_count", "physical_schema_count", "context_association_count", "connection_property_count", "execution_unit_use_count", "context_candidate_count", "declared_context_match_count", "alternative_context_candidate_count", "text_binding_count", "declared_text_record_count", "opaque_marker_field_count", "opaque_marker_token_count"],
+      "properties": {
+        "record_count": {"$ref": "#/$defs/count"}, "logical_schema_count": {"$ref": "#/$defs/count"},
+        "context_count": {"$ref": "#/$defs/count"}, "connection_count": {"$ref": "#/$defs/count"},
+        "physical_schema_count": {"$ref": "#/$defs/count"}, "context_association_count": {"$ref": "#/$defs/count"},
+        "connection_property_count": {"$ref": "#/$defs/count"}, "execution_unit_use_count": {"type": "integer", "minimum": 0, "maximum": 2048},
+        "context_candidate_count": {"type": "integer", "minimum": 0, "maximum": 8192},
+        "declared_context_match_count": {"type": "integer", "minimum": 0, "maximum": 8192},
+        "alternative_context_candidate_count": {"type": "integer", "minimum": 0, "maximum": 8192},
+        "text_binding_count": {"$ref": "#/$defs/count"}, "declared_text_record_count": {"type": "integer", "minimum": 0, "maximum": 2048},
+        "opaque_marker_field_count": {"$ref": "#/$defs/count"}, "opaque_marker_token_count": {"$ref": "#/$defs/count"}
+      }},
+    "unresolved_items": {"$ref": "#/$defs/issues"}, "status": {"const": "REVIEW_REQUIRED"},
+    "execution_status": {"const": "NOT_RUN"}, "semantic_status": {"const": "NOT_VERIFIED"},
+    "migration_accepted": {"const": false}, "evidence": {"$ref": "#/$defs/evidence"}
+  },
+  "$defs": {
+    "id": {"$ref": "urn:ssis-migration:schema:odi_physical_analysis:1.0#/$defs/id"},
+    "nullable_text": {"$ref": "urn:ssis-migration:schema:odi_physical_analysis:1.0#/$defs/nullable_text"},
+    "ids": {"$ref": "urn:ssis-migration:schema:odi_physical_analysis:1.0#/$defs/ids"},
+    "fields": {"$ref": "urn:ssis-migration:schema:odi_physical_analysis:1.0#/$defs/fields"},
+    "evidence": {"$ref": "urn:ssis-migration:schema:odi_physical_analysis:1.0#/$defs/evidence"},
+    "reference": {"$ref": "urn:ssis-migration:schema:odi_physical_analysis:1.0#/$defs/reference"},
+    "count": {"type": "integer", "minimum": 0, "maximum": 4096},
+    "issues": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "diagnostics": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+      "required": ["code", "message", "node_ids", "evidence"],
+      "properties": {
+        "code": {"enum": ["DUPLICATE_CLASS_KEY", "DUPLICATE_CONTEXT_ASSOCIATION", "DUPLICATE_CONNECTION_PROPERTY", "CONNECTION_PARENT_CYCLE", "LOGICAL_SCHEMA_TARGET_CYCLE", "PHYSICAL_SCHEMA_TARGET_CYCLE", "TEXT_REPRESENTATION_DISAGREEMENT"]},
+        "message": {"type": "string", "minLength": 1}, "node_ids": {"$ref": "#/$defs/ids"}, "evidence": {"$ref": "#/$defs/evidence"}
+      }}},
+    "record": {"type": "object", "additionalProperties": false,
+      "required": ["node_id", "object_class", "declared_key_field", "declared_identity", "declared_fields", "references", "diagnostics", "evidence"],
+      "properties": {
+        "node_id": {"$ref": "#/$defs/id"}, "object_class": {"enum": ["SnpLschema", "SnpContext", "SnpConnect", "SnpPschema", "SnpPschemaCont", "SnpConnectProp"]},
+        "declared_key_field": {"enum": ["ILschema", "IContext", "IConnect", "IPschema", "GlobalId"]},
+        "declared_identity": {"$ref": "#/$defs/nullable_text"}, "declared_fields": {"$ref": "#/$defs/fields"},
+        "references": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/reference"}},
+        "diagnostics": {"$ref": "#/$defs/diagnostics"}, "evidence": {"$ref": "#/$defs/evidence"}
+      }},
+    "text_record": {"type": "object", "additionalProperties": false,
+      "required": ["node_id", "object_class", "declared_fields", "evidence"],
+      "properties": {"node_id": {"$ref": "#/$defs/id"}, "object_class": {"enum": ["SnpTxtHeader", "SnpMtxt"]},
+        "declared_fields": {"$ref": "#/$defs/fields"}, "evidence": {"$ref": "#/$defs/evidence"}}},
+    "text_binding": {"type": "object", "additionalProperties": false,
+      "required": ["connection_node_id", "field", "declared_text_identity", "resolution", "records", "effective_text", "interpretation", "diagnostics", "evidence"],
+      "properties": {
+        "connection_node_id": {"$ref": "#/$defs/id"}, "field": {"enum": ["ITxtJavaUrl", "ITxtJndiUrl", "ITxtWsBaseUrl"]},
+        "declared_text_identity": {"$ref": "#/$defs/nullable_text"},
+        "resolution": {"enum": ["ONE_DECLARED_RECORD", "MISSING", "AMBIGUOUS", "UNBOUND_DECLARATION", "AMBIGUOUS_DECLARATION", "MISSING_DECLARATION"]},
+        "records": {"type": "array", "maxItems": 2048, "items": {"$ref": "#/$defs/text_record"}},
+        "effective_text": {"type": "null"}, "interpretation": {"const": "DECLARED_TEXT_ONLY"},
+        "diagnostics": {"$ref": "#/$defs/diagnostics"}, "evidence": {"$ref": "#/$defs/evidence"}
+      }},
+    "candidate": {"type": "object", "additionalProperties": false,
+      "required": ["association_node_id", "logical_schema_node_id", "context_node_id", "physical_schema_node_id", "connection_node_id", "logical_schema_reference", "context_reference", "physical_schema_reference", "connection_reference", "connection_chain_node_ids", "connection_chain_status", "declared_context_relation", "effective_binding", "resolution", "evidence"],
+      "properties": {
+        "association_node_id": {"$ref": "#/$defs/id"}, "logical_schema_node_id": {"$ref": "#/$defs/id"},
+        "context_node_id": {"$ref": "#/$defs/nullable_text"}, "physical_schema_node_id": {"$ref": "#/$defs/nullable_text"},
+        "connection_node_id": {"$ref": "#/$defs/nullable_text"},
+        "logical_schema_reference": {"$ref": "#/$defs/reference"}, "context_reference": {"$ref": "#/$defs/reference"},
+        "physical_schema_reference": {"$ref": "#/$defs/reference"},
+        "connection_reference": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/reference"}]},
+        "connection_chain_node_ids": {"$ref": "#/$defs/ids"},
+        "connection_chain_status": {"enum": ["NO_BOUND_PARENT_DECLARATION", "UNRESOLVED", "AMBIGUOUS", "CYCLE"]},
+        "declared_context_relation": {"enum": ["MATCH", "DIFFERENT", "UNRESOLVED"]},
+        "effective_binding": {"type": "null"}, "resolution": {"enum": ["RESOLVED_DECLARATIONS_ONLY", "REVIEW_REQUIRED"]},
+        "evidence": {"$ref": "#/$defs/evidence"}
+      }},
+    "unit_use": {"type": "object", "additionalProperties": false,
+      "required": ["execution_unit_node_id", "declared_fields", "design_node_id", "mapping_node_id", "owner_design_reference", "logical_schema_reference", "declared_context_reference", "context_candidates", "unresolved_items", "evidence"],
+      "properties": {
+        "execution_unit_node_id": {"$ref": "#/$defs/id"}, "declared_fields": {"$ref": "#/$defs/fields"},
+        "design_node_id": {"$ref": "#/$defs/nullable_text"}, "mapping_node_id": {"$ref": "#/$defs/nullable_text"},
+        "owner_design_reference": {"$ref": "#/$defs/reference"}, "logical_schema_reference": {"$ref": "#/$defs/reference"},
+        "declared_context_reference": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/reference"}]},
+        "context_candidates": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/candidate"}},
+        "unresolved_items": {"$ref": "#/$defs/issues"}, "evidence": {"$ref": "#/$defs/evidence"}
+      }},
+    "marker_declaration": {"type": "object", "additionalProperties": false,
+      "required": ["node_id", "field", "markers", "evidence"],
+      "properties": {"node_id": {"$ref": "#/$defs/id"}, "field": {"$ref": "#/$defs/nullable_text"},
+        "markers": {"type": "array", "minItems": 1, "maxItems": 4096, "items": {"type": "object", "additionalProperties": false,
+          "required": ["kind", "token"], "properties": {"kind": {"enum": ["ANGLE_BRACKET_TOKEN", "SHELL_PARAMETER_TEXT"]}, "token": {"type": "string", "minLength": 1, "maxLength": 516}}}},
+        "evidence": {"$ref": "#/$defs/evidence"}}}
+  }
+}

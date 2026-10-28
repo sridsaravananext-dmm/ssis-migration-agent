@@ -141,3 +141,17 @@ records, bound to the new contracts; source syntax version 2 is unchanged.
 Behavior versions 1–3 and earlier candidate profiles remain available for replay.
 Physical/KM semantics, missing definitions, target bindings and complete mapping
 generation stay blocked; no execution or semantic acceptance follows.
+
+[Source behavior version 5](odi-topology-context-analysis.md) adds one complete
+topology-review requirement, for 259 total. Its separate topology profile retains
+51 original records: four logical schemas, two contexts, five connections, five
+physical schemas, five context associations and 30 properties. All 25 execution
+units retain their logical-schema uses and all 34 context candidates, including
+25 declared-design-context matches and nine alternatives. Parent-connection and
+opaque JDBC text references, undefined/empty/literal-null properties and
+placeholders remain declarations without filling, expansion or inherited values.
+The graph's unsupported topology classes and the physical profile are unchanged.
+Candidate version 4 binds the same 44 syntax review fragments and all 89 entries
+to the new contracts; behavior versions 1–4 retain recorded-profile replay.
+Topology declarations establish no effective context, selected design, runtime
+engine, Databricks binding, source connection, execution or semantic acceptance.
