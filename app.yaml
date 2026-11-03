@@ -1,8 +1,14 @@
 command:
   - streamlit
   - run
-  - app.py
-  - --server.port
-  - "8000"
+  - src/frontend/app.py
   - --server.address
   - 0.0.0.0
+  - --server.port
+  - $DATABRICKS_APP_PORT
+  - --server.headless
+  - "true"
+
+env:
+  - name: STREAMLIT_GATHER_USAGE_STATS
+    value: "false"
