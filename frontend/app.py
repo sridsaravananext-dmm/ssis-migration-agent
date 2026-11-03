@@ -13,10 +13,10 @@ from pathlib import Path
 import streamlit as st
 
 # -------------------------------------------------
-# Paths - app.py lives in src/frontend/
+# Paths - app.py lives in frontend/
 # -------------------------------------------------
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parent.parent
 
 SRC = ROOT / "src"
 EXAMPLES = ROOT / "examples"
@@ -28,6 +28,7 @@ RUN_ROOT = Path(tempfile.gettempdir()) / "ssis_migration_app_runs"
 
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
 
 # ---------------------------------------------------------------------------
 # Page config
