@@ -16,6 +16,7 @@ Steps are ordered by their declared dependencies (topological sort).
 from __future__ import annotations
 
 import json
+import ast
 from pathlib import Path
 from typing import Any
 
@@ -67,7 +68,7 @@ class NotebookAssembler:
         unresolved_count = len(plan_dict.get("unresolved", []))
 
         cells.append(self._markdown_cell(
-            f"# {plan_dict['package_name']} \u2014 Databricks Migration\n"
+            f"# {plan_dict['package_name']} \u2014 Databricks Conversion Review\n"
             f"\n"
             f"Generated from SSIS package by the migration agent.\n"
             f"\n"
@@ -89,16 +90,25 @@ class NotebookAssembler:
             "# When run interactively, step_id=\"all\" runs\n"
             "# every step in dependency order.\n"
             "dbutils.widgets.text('step_id', 'all', 'Step ID to execute')\n"
-            "dbutils.widgets.text('catalog', 'main', 'Target catalog')\n"
+            f"dbutils.widgets.text('catalog', {plan_dict.get('metadata', {}).get('catalog', 'main')!r}, 'Target catalog')\n"
             "_step_id = dbutils.widgets.get('step_id')\n"
             "_catalog = dbutils.widgets.get('catalog')\n"
+            f"dbutils.widgets.text('schema', {plan_dict.get('metadata', {}).get('target_schema') or ''!r}, 'Target schema context')\n"
+            "if dbutils.widgets.get('schema'):\n"
+            "    raise RuntimeError('Target schema context requires explicit per-output mapping review before execution.')\n"
         ))
 
         # -------------------------------------------------
         # Setup cell: ETL control-table helpers
         # -------------------------------------------------
 
-        cells.append(self._code_cell(self._setup_helpers_code()))
+        blockers = [f for f in plan_dict.get("unresolved", []) if isinstance(f, dict) and f.get("severity") == "ERROR"]
+        if blockers:
+            cells.append(self._code_cell(
+                "raise RuntimeError('Conversion has unresolved findings. Resolve assessment.json findings and regenerate before execution.')"
+            ))
+        if plan_dict.get("metadata", {}).get("uses_legacy_controls", False):
+            cells.append(self._code_cell(self._setup_helpers_code()))
 
         # -------------------------------------------------
         # Unresolved items warning
@@ -405,7 +415,7 @@ def get_last_etl_cutoff(table_name: str) -> datetime:
         "SELECT MAX(`Cutoff Time`) AS cutoff "
         f"FROM {_ETL_CUTOFF_TABLE} "
         f"WHERE `Table Name` = '{_control_table_key(table_name)}'"
-    ).collect()[0]
+    ).first()
     if row["cutoff"] is None:
         return datetime(1, 1, 1)
     return row["cutoff"]
@@ -428,7 +438,7 @@ def get_lineage_key(table_name: str, cutoff_time) -> int:
         f"WHERE `Table Name` = '{_control_table_key(table_name)}' "
         "ORDER BY `Data Load Started` DESC, `Lineage Key` DESC "
         "LIMIT 1"
-    ).collect()[0]
+    ).first()
     return row["lineage_key"]
 
 
@@ -554,7 +564,7 @@ def update_etl_cutoff(table_name: str, cutoff_time) -> None:
         ``spark.sql()`` calls so they can be nested
         inside the Python ``if`` block.
         """
-        guard = f'if _step_id in ("all", "{step_id}"):'
+        guard = f'if _step_id in ("all", {step_id!r}):'
 
         if code.startswith("%sql\n"):
             sql_body = code[len("%sql\n"):]
@@ -570,4 +580,6 @@ def update_etl_cutoff(table_name: str, cutoff_time) -> None:
                 for line in lines
             )
 
+        if not code.startswith("%sql\n") and not ast.parse(code).body:
+            inner += "\n    raise RuntimeError('No executable implementation is available for this step.')"
         return f"{guard}\n{inner}"

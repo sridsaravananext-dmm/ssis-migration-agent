@@ -1,319 +1,146 @@
 from __future__ import annotations
-
+import hashlib
 import json
-import os
-import re
-import subprocess
 import sys
 import tempfile
 import zipfile
-from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 import streamlit as st
 
-# -------------------------------------------------
-# Paths - app.py lives in frontend/
-# -------------------------------------------------
-
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT / 'src') not in sys.path: sys.path.insert(0, str(ROOT / 'src'))
+from ssis_migration.intake import classify_dependency
+from ssis_migration.procedure_file_loader import read_sql_file
 
-SRC = ROOT / "src"
-EXAMPLES = ROOT / "examples"
+SAMPLE_PACKAGE = ROOT / 'examples/wwi/DailyETLMain.dtsx'
+RUN_ROOT = Path(tempfile.gettempdir()) / 'ssis_conversion_app'
+SAMPLE_MODE = 'Use WWI sample package'
+st.set_page_config(page_title='SSIS Conversion & Assessment', page_icon='🔄', layout='wide')
+st.title('SSIS Conversion & Assessment')
+st.caption('Generate native Spark code, inspect coverage, and identify work that needs human review.')
+for key, value in {'session_id': uuid4().hex, 'result': None, 'output': None}.items():
+    st.session_state.setdefault(key, value)
+workspace = RUN_ROOT / st.session_state.session_id
 
-SAMPLE_PACKAGE = EXAMPLES / "wwi" / "DailyETLMain.dtsx"
-SAMPLE_MAPPING = EXAMPLES / "wwi" / "connection_mapping.json"
-
-RUN_ROOT = Path(tempfile.gettempdir()) / "ssis_migration_app_runs"
-
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-
-# ---------------------------------------------------------------------------
-# Page config
-# ---------------------------------------------------------------------------
-st.set_page_config(
-    page_title="SSIS Migration Accelerator",
-    page_icon="🔄",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# ---------------------------------------------------------------------------
-# Session state
-# ---------------------------------------------------------------------------
-for _key, _default in {
-    "migration_result": None,
-    "migration_output": None,
-    "ddl_text": None,
-    "ddl_report": None,
-}.items():
-    if _key not in st.session_state:
-        st.session_state[_key] = _default
-
-# ---------------------------------------------------------------------------
-# Sidebar
-# ---------------------------------------------------------------------------
 with st.sidebar:
-    st.header("⚙️ Configuration")
-    catalog = st.text_input("Target catalog", value="dev_catalog")
-    ai_enabled = st.checkbox("Enable AI-assisted generation", value=False)
-    st.divider()
-    st.markdown("#### About")
-    st.caption("SSIS -> Databricks Migration Accelerator.")
-    st.warning("This UI does not execute code or deploy without explicit action.", icon="⚠️")
+    st.header('Configuration')
+    catalog = st.text_input('Target catalog', value='dev_catalog')
+    selected_layer = st.selectbox('Logical layer', ['Unspecified', 'Bronze', 'Silver', 'Gold', 'Multi-layer', 'Custom'])
+    layer = st.text_input('Custom layer') if selected_layer == 'Custom' else selected_layer.lower()
+    target_schema = st.text_input('Target schema context (optional)')
+    if target_schema or selected_layer == 'Multi-layer':
+        st.caption('Per-output schema mapping requires review. Source schema names are not rewritten automatically.')
+    description = st.text_area('Package context (optional)')
+    default_schema = st.text_input('Default SQL Server schema', value='dbo')
+    ai = st.checkbox('Enable AI-assisted generation', value=False)
+    strict = st.checkbox('Strict mode', value=False, help='Keep diagnostics and block notebook output when required checks fail.')
+    dry_run = st.checkbox('Dry run', value=False, help='Parse, resolve, and preview the plan without generating a final notebook or calling AI.')
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+upload_tab, results_tab, artifacts_tab, ddl_tab = st.tabs(['Inputs', 'Results', 'Artifacts', 'DDL preview'])
+with upload_tab:
+    mode = st.radio('Package source', ['Upload a .dtsx package', SAMPLE_MODE], horizontal=True)
+    package = st.file_uploader('SSIS package', type=['dtsx']) if mode != SAMPLE_MODE else None
+    if mode == SAMPLE_MODE: st.info('Uses the WWI sample and its adjacent connection mapping.')
+    deps = st.file_uploader('Supporting files (optional)', type=['sql', 'txt', 'json'], accept_multiple_files=True)
+    procedures, ddls, mappings = [], [], []
+    errors = []
+    for upload in deps or []:
+        raw = upload.getvalue()
+        role = classify_dependency(upload.name, raw)
+        options = ['procedures', 'ddl', 'mixed_sql', 'connection_mapping', 'ignore']
+        default = role if role in options else 'ignore'
+        role = st.selectbox(f'Role: {upload.name}', options, index=options.index(default),
+                            key='role_' + hashlib.sha256(raw + upload.name.encode()).hexdigest())
+        if role == 'ignore':
+            st.caption(f'{upload.name}: not supplied to the backend.')
+            continue
+        if role == 'connection_mapping' and classify_dependency(upload.name, raw) != 'connection_mapping':
+            errors.append(f'{upload.name}: invalid connection mapping JSON.')
+            continue
+        name = Path(upload.name.replace('\\', '/')).name
+        saved = workspace / 'uploads' / hashlib.sha256(raw).hexdigest() / name
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        saved.write_bytes(raw)
+        # A mixed file contributes to BOTH collections; every uploaded file is consumed.
+        if role in {'procedures', 'mixed_sql'}: procedures.append(str(saved))
+        if role in {'ddl', 'mixed_sql'}: ddls.append(str(saved))
+        if role == 'connection_mapping': mappings.append(str(saved))
+    if len(mappings) > 1: errors.append('Supply one connection mapping file; it may contain multiple mappings.')
+    for error in errors: st.error(error)
+    st.write(f'Procedure files: {len(procedures)} · DDL files: {len(ddls)}')
+    available = SAMPLE_PACKAGE.is_file() if mode == SAMPLE_MODE else package is not None
+    valid = available and not errors and bool(catalog.strip() and default_schema.strip() and layer.strip())
+    if st.button('Analyze & generate' if not dry_run else 'Preview assessment', type='primary', disabled=not valid):
+        from ssis_migration.migrate import run_migration
+        try:
+            st.session_state.result = None
+            st.session_state.output = None
+            if mode == SAMPLE_MODE:
+                source = SAMPLE_PACKAGE
+            else:
+                name = Path(package.name.replace('\\', '/')).name
+                source = workspace / 'packages' / hashlib.sha256(package.getvalue()).hexdigest() / name
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_bytes(package.getvalue())
+            output = workspace / 'artifacts'
+            with st.spinner('Inspecting source work and generating assessment artifacts…'):
+                report = run_migration(str(source), str(output), catalog=catalog.strip(),
+                    connection_mapping=mappings[0] if mappings else None, base_path=str(ROOT),
+                    procedures_paths=procedures, ddl_paths=ddls, layer=layer.strip(),
+                    target_schema=target_schema.strip() or None, description=description,
+                    default_schema=default_schema.strip(), ai=ai, strict_mode=strict, dry_run=dry_run)
+            st.session_state.result = report
+            st.session_state.output = str(output)
+            st.info(f"Assessment finished: {report['status']}. See Results for findings.")
+        except Exception as exc:
+            st.error(f'Assessment failed: {exc}')
 
-def _file_language(name):
-    ext = Path(name).suffix.lower()
-    return {".py": "python", ".sql": "sql", ".json": "json", ".yaml": "yaml",
-            ".yml": "yaml", ".ipynb": "json", ".md": "markdown", ".csv": "csv"}.get(ext, "text")
-
-def _format_size(size):
-    for unit in ["B", "KB", "MB"]:
-        if size < 1024: return f"{size:.0f} {unit}"
-        size /= 1024
-    return f"{size:.1f} GB"
-
-def _artifact_tree(base):
-    items = []
-    for path in sorted(base.iterdir()):
-        rel = str(path.relative_to(base))
-        if path.is_dir():
-            items.append({"path": rel, "is_dir": True, "size": 0})
-            items.extend(_artifact_tree(path))
-        else:
-            items.append({"path": rel, "is_dir": False, "size": path.stat().st_size})
-    return items
-
-def _run_migration(source_path, output_dir, mapping_path, procedures_path=None, ddl_path=None):
-    from ssis_migration.migrate import run_migration
-    return run_migration(
-        source=str(source_path), output=str(output_dir),
-        catalog=catalog.strip() or None,
-        connection_mapping=str(mapping_path) if mapping_path else None,
-        base_path=str(ROOT), execute=False, ai=ai_enabled,
-        ai_provider="databricks",
-        ddl_path=str(ddl_path) if ddl_path else None,
-        procedures_path=str(procedures_path) if procedures_path else None,
-    )
-
-def _classify_dependency(filename, content_bytes):
-    """Auto-classify an uploaded dependency file by its content."""
-    name = filename.lower()
-    try:
-        text = content_bytes.decode("utf-8", errors="replace")
-    except Exception:
-        return "unknown"
-    upper = text.upper()
-    if name.endswith(".json"):
-        return "connection_mapping"
-    if name.endswith(".sql") or name.endswith(".txt"):
-        has_proc = bool(re.search(r"CREATE\s+(OR\s+ALTER\s+)?PROC", upper))
-        has_table = bool(re.search(r"CREATE\s+TABLE", upper))
-        if has_proc and has_table:
-            return "mixed_sql"
-        if has_proc:
-            return "procedures"
-        if has_table:
-            return "ddl"
-        return "sql_other"
-    return "unknown"
-
-# ---------------------------------------------------------------------------
-# Tabs
-# ---------------------------------------------------------------------------
-tab_upload, tab_run, tab_artifacts, tab_ddl = st.tabs([
-    "📦 Upload & Configure", "🚀 Run Migration", "📂 Artifacts", "📋 DDL Preview"])
-
-# === TAB 1: Upload & Configure ===
-with tab_upload:
-    st.header("1. Select SSIS Package")
-    package_mode = st.radio("Package source", ["Upload a .dtsx package", "Use WWI sample package"], horizontal=True)
-    uploaded_package = None
-    if package_mode == "Upload a .dtsx package":
-        uploaded_package = st.file_uploader("Upload SSIS package (.dtsx)", type=["dtsx"])
+with results_tab:
+    report = st.session_state.result
+    if report is None:
+        st.info('Analyze a package to view its assessment.')
     else:
-        if SAMPLE_PACKAGE.is_file():
-            st.success(f"WWI sample found: `{SAMPLE_PACKAGE.name}`")
-        else:
-            st.error("WWI sample not found. Upload a package instead.")
+        cols = st.columns(4)
+        for col, label, key in zip(cols, ['Discovered', 'Analyzed', 'Generated notebooks', 'Needs review'],
+                ['package_count', 'analyzed_package_count', 'generated_package_count', 'review_required_package_count']):
+            col.metric(label, report.get(key, 0))
+        st.write(f"Status: **{report['status']}**")
+        st.info('Legacy behavioral match: not measured. Static generation coverage is not an accuracy score.')
+        for entry in report['packages']:
+            with st.expander(f"{entry['name']} — {entry['status']}", expanded=True):
+                if entry.get('error'): st.error(entry['error'])
+                if entry.get('message'): st.info(entry['message'])
+                assessment = entry.get('assessment')
+                if assessment:
+                    generation = assessment['generation']
+                    percent = generation['operation_coverage_percent']
+                    st.write(f"Operations passing static checks: {generation['statically_valid_operations']} / {generation['operation_count']}")
+                    if percent is not None: st.write(f'Static operation coverage: {percent}%')
+                    st.caption(generation['basis'])
+                    st.json(assessment['source_accounting'])
+                for item in entry.get('findings', []):
+                    st.write(f"**{item['code']}** — {item['message']}")
+                    st.caption(f"Source: {item['source_id']} · Finding: {item['finding_id']}")
+        archive = workspace / 'assessment_artifacts.zip'
+        with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zipped:
+            for file in Path(st.session_state.output).rglob('*'):
+                if file.is_file(): zipped.write(file, file.relative_to(st.session_state.output))
+        st.download_button('Download assessment artifacts', archive.read_bytes(), file_name='assessment_artifacts.zip')
 
-    st.divider()
-    st.header("2. Upload Dependencies (optional)")
-    st.caption("Upload any dependency files — they are auto-classified by content. "
-               "SQL files with `CREATE PROCEDURE` become procedure definitions; "
-               "SQL files with `CREATE TABLE` become DDL; JSON files become connection mappings. "
-               "Connection setup (catalogs/schemas) can also be done manually in Databricks.")
-    uploaded_deps = st.file_uploader(
-        "Upload dependency files (.sql, .json, .txt)",
-        type=["sql", "json", "txt"],
-        accept_multiple_files=True,
-        key="deps_upload",
-    )
-
-    mapping_path = None
-    procedures_path = None
-    ddl_path = None
-
-    if uploaded_deps:
-        upload_dir = RUN_ROOT / "uploads" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        upload_dir.mkdir(parents=True, exist_ok=True)
-
-        st.write("**Detected dependencies:**")
-        for f in uploaded_deps:
-            ftype = _classify_dependency(f.name, f.getvalue())
-            saved = upload_dir / f.name
-            saved.write_bytes(f.getvalue())
-
-            label = {
-                "procedures": "📋 Procedures",
-                "ddl": "🏗 DDL",
-                "connection_mapping": "🔗 Connection Mapping",
-                "mixed_sql": "📋+🏗 Mixed (Procedures + DDL)",
-                "sql_other": "📄 SQL (unclassified)",
-                "unknown": "❓ Unknown",
-            }.get(ftype, "❓ Unknown")
-
-            st.write(f"- `{f.name}` → {label}")
-
-            if ftype in ("procedures", "mixed_sql") and procedures_path is None:
-                procedures_path = saved
-            elif ftype in ("ddl", "mixed_sql") and ddl_path is None:
-                ddl_path = saved
-                st.session_state.ddl_text = saved.read_text(encoding="utf-8")
-            elif ftype == "connection_mapping" and mapping_path is None:
-                mapping_path = saved
-            elif ftype == "sql_other":
-                # Unclassified SQL: check if it has CREATE TABLE at least
-                st.warning(f"`{f.name}` has SQL content but no CREATE PROCEDURE or CREATE TABLE detected.")
-
-    st.divider()
-    st.header("3. Summary")
-    has_package = (package_mode == "Use WWI sample" and SAMPLE_PACKAGE.is_file()) or (uploaded_package is not None)
-    can_run = has_package
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Package", "✅" if has_package else "❌")
-    c2.metric("Procedures", "✅" if procedures_path else "—")
-    c3.metric("DDL", "✅" if ddl_path else "—")
-
-# === TAB 2: Run Migration ===
-with tab_run:
-    st.header("Run Migration Pipeline")
-    if not can_run:
-        st.info("Complete configuration in the **Upload & Configure** tab first.")
+with artifacts_tab:
+    if not st.session_state.output:
+        st.info('Analyze a package to browse its artifacts.')
     else:
-        st.markdown("Pipeline: Parse → IR → Analyze → Plan → Generate → Notebook")
-        if st.button("🚀 Run Migration", type="primary"):
-            run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-            run_dir = RUN_ROOT / run_id
-            run_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                source_path = SAMPLE_PACKAGE if package_mode == "Use WWI sample" else run_dir / uploaded_package.name
-                if uploaded_package:
-                    source_path.write_bytes(uploaded_package.getvalue())
-                output_dir = run_dir / "artifacts"
-                progress = st.progress(0, text="Starting...")
-                with st.spinner("Running migration pipeline..."):
-                    progress.progress(20, text="Parsing & analyzing...")
-                    report = _run_migration(source_path, output_dir, mapping_path, procedures_path, ddl_path)
-                    progress.progress(80, text="Generating notebook...")
-                    st.session_state.migration_result = report
-                    st.session_state.migration_output = str(output_dir)
-                    progress.progress(100, text="Done!")
-                st.success("✅ Migration pipeline completed!")
-            except Exception as exc:
-                st.error(f"Pipeline failed: {exc}")
-                with st.expander("Traceback"):
-                    st.exception(exc)
-
-    report = st.session_state.migration_result
-    output_value = st.session_state.migration_output
-    if report:
-        st.divider()
-        st.header("Migration Results")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Discovered", report.get("package_count", 0))
-        c2.metric("Analyzed", report.get("analyzed_package_count", 0))
-        c3.metric("Migrated", report.get("migrated_package_count", 0))
-        c4.metric("Failed", report.get("failed_package_count", 0))
-        st.write(f"**Status:** `{report.get('status', 'UNKNOWN')}`")
-        for package in report.get("packages", []):
-            with st.expander(f"📦 {package.get('name', '?')} — {package.get('status', '?')}", expanded=True):
-                if package.get("error"):
-                    st.error(package["error"])
-                stages = package.get("stages", {})
-                for sn, ss in stages.items():
-                    emoji = "✅" if ss == "SUCCEEDED" else "⚠️" if "NOT" in str(ss) else "❌"
-                    st.write(f"{emoji} `{sn}`: {ss}")
-                artifacts = package.get("artifacts", {})
-                if artifacts:
-                    st.write("**Artifacts:**")
-                    for name, path_str in artifacts.items():
-                        st.write(f"{'✅' if Path(path_str).exists() else '❌'} `{name}`")
-                # Show the review report inline (not nested in expander)
-                review_fp = artifacts.get("review")
-                if review_fp and Path(review_fp).is_file():
-                    st.markdown("---")
-                    st.markdown(Path(review_fp).read_text())
-        if output_value and Path(output_value).is_dir():
-            archive = Path(output_value).parent / "migration_artifacts.zip"
-            with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as a:
-                for fp in Path(output_value).rglob("*"):
-                    if fp.is_file(): a.write(fp, arcname=str(fp.relative_to(output_value)))
-            st.download_button("📥 Download artifacts (.zip)", data=archive.read_bytes(), file_name="migration_artifacts.zip")
-
-# === TAB 3: Artifacts Browser ===
-with tab_artifacts:
-    st.header("Artifact Browser")
-    output_value = st.session_state.migration_output
-    if not output_value or not Path(output_value).is_dir():
-        st.info("Run a migration first to browse artifacts.")
-    else:
-        output_path = Path(output_value)
-        pkg_dirs = [d for d in output_path.iterdir() if d.is_dir()]
-        if not pkg_dirs:
-            st.warning("No packages found.")
-        else:
-            selected_pkg = st.selectbox("Select package", options=[d.name for d in pkg_dirs])
-            files = _artifact_tree(output_path / selected_pkg)
-            if files:
-                file_choices = {f["path"]: f for f in files if not f["is_dir"]}
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    st.write("**Files**")
-                    selected_file = st.selectbox("File", options=list(file_choices.keys()))
-                with col2:
-                    if selected_file:
-                        file_full = output_path / selected_pkg / selected_file
-                        st.write(f"**{selected_file}** ({_format_size(file_choices[selected_file]['size'])})")
-                        content = file_full.read_text(encoding="utf-8", errors="replace")
-                        if selected_file.endswith(".ipynb"):
-                            try:
-                                nb = json.loads(content)
-                                st.write(f"Notebook: {len(nb.get('cells', []))} cells")
-                                with st.expander("View JSON"): st.code(content[:10000], language="json")
-                            except: st.code(content[:10000], language=_file_language(selected_file))
-                        else:
-                            st.code(content[:15000], language=_file_language(selected_file))
-                        st.download_button(f"📥 Download", data=content.encode(), file_name=Path(selected_file).name)
-
-# === TAB 4: DDL Preview ===
-with tab_ddl:
-    st.header("DDL Preview")
-    ddl_text = st.session_state.ddl_text
-    if not ddl_text:
-        st.info("Upload a DDL file in the **Upload & Configure** tab to preview it here.")
-    else:
-        st.markdown("Preview of the uploaded DDL file.")
-        create_count = len(re.findall(r"CREATE\s+TABLE", ddl_text, re.IGNORECASE))
-        st.caption(f"{create_count} CREATE TABLE statements")
-        st.code(ddl_text, language="sql")
-        st.download_button("📥 Download DDL", data=ddl_text.encode(), file_name="ddl.sql")
-
-st.divider()
-st.caption("SSIS -> Databricks Migration Accelerator | Review artifacts before deployment.")
+        base = Path(st.session_state.output)
+        files = sorted(str(p.relative_to(base)) for p in base.rglob('*') if p.is_file())
+        if files:
+            selected = st.selectbox('Artifact', files)
+            path = base / selected
+            st.code(path.read_text(encoding='utf-8', errors='replace')[:30000], language='json' if path.suffix in {'.json', '.ipynb'} else None)
+            st.download_button('Download this artifact', path.read_bytes(), file_name=path.name)
+with ddl_tab:
+    if not ddls: st.info('Supply DDL files to preview them here.')
+    for path in ddls:
+        with st.expander(Path(path).name): st.code(read_sql_file(path), language='sql')

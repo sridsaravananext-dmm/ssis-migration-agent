@@ -1,92 +1,57 @@
-"""
-Load stored procedure definitions from a pasted SQL file.
-
-The file should contain one or more CREATE PROCEDURE statements.
-Each procedure is parsed into a {schema.name: body} entry.
-
-Example input format:
-
-    CREATE PROCEDURE Integration.GetLineageKey
-        @LineageKey int OUTPUT,
-        @TableName nvarchar(128)
-    AS
-    BEGIN
-        ...
-    END;
-
-    CREATE OR ALTER PROCEDURE Integration.MigrateStagedCityData
-    AS
-    BEGIN
-        ...
-    END;
-"""
-
+"""Read procedure definitions from multiple files; reject conflicting definitions."""
 from __future__ import annotations
-
 import re
 from pathlib import Path
-from typing import Any
+from ssis_migration.sql_text import QUALIFIED, mask_sql, normalize_name
+
+CREATE = re.compile(rf'\b(?:CREATE\s+(?:OR\s+ALTER\s+)?|ALTER\s+)PROC(?:EDURE)?\s+(?P<name>{QUALIFIED})', re.I)
 
 
-_CREATE_PROC_RE = re.compile(
-    r"""
-    \bCREATE\s+
-    (?:OR\s+ALTER\s+)?
-    PROC(?:EDURE)?\s+
-    (?:
-        \[(?P<schema_a>[^\]]+)\]
-        | (?P<schema_b>\w+)
-    )
-    \s*\.\s*
-    (?:
-        \[(?P<name_a>[^\]]+)\]
-        | (?P<name_b>\w+)
-    )
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
+def read_sql_file(path):
+    raw = Path(path).read_bytes()
+    if raw.startswith((b'\xff\xfe', b'\xfe\xff')):
+        return raw.decode('utf-16')
+    return raw.decode('utf-8-sig')
 
 
-def load_procedures(
-    source: str | Path,
-) -> dict[str, str]:
-    """
-    Load procedure definitions from a SQL file or raw SQL string.
+def parse_procedures(text: str, default_schema='dbo'):
+    matches = list(CREATE.finditer(mask_sql(text)))
+    result = {}
+    for i, match in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        # A SQL Server GO batch boundary ends the definition, not subsequent DDL.
+        batch = re.search(r'^\s*GO\s*(?:--[^\n]*)?$', mask_sql(text)[match.end():end], re.I | re.M)
+        if batch: end = match.end() + batch.start()
+        name = normalize_name(match['name'], default_schema)
+        body = text[match.start():end].strip()
+        if name in result and result[name] != body:
+            raise ValueError(f"Conflicting procedure definitions: {name}")
+        result[name] = body
+    return result
 
-    Returns a dict mapping ``schema.name`` to the full procedure body
-    (including the CREATE PROCEDURE header).
-    """
-    path = Path(source)
-    if path.is_file():
-        text = path.read_text(encoding="utf-8")
+
+def load_procedures(source, default_schema='dbo'):
+    if isinstance(source, Path):
+        text = read_sql_file(source)
     else:
-        text = str(source)
-
-    procedures: dict[str, str] = {}
-
-    # Split text on CREATE PROCEDURE boundaries
-    parts = re.split(
-        r"(?=\bCREATE\s+(?:OR\s+ALTER\s+)?PROC(?:EDURE)?)",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    for part in parts:
-        match = _CREATE_PROC_RE.search(part)
-        if not match:
-            continue
-
-        schema = match.group("schema_a") or match.group("schema_b")
-        name = match.group("name_a") or match.group("name_b")
-        if not schema or not name:
-            continue
-
-        key = f"{schema}.{name}"
-        procedures[key] = part.strip()
-
-    return procedures
+        try:
+            path = Path(source)
+            text = read_sql_file(path) if '\n' not in source and path.is_file() else source
+        except OSError:
+            text = str(source)
+    return parse_procedures(text, default_schema)
 
 
-def list_procedures(source: str | Path) -> list[str]:
-    """Return just the procedure names found in the file."""
-    return sorted(load_procedures(source).keys())
+def load_procedure_files(paths, default_schema='dbo'):
+    definitions, origins = {}, {}
+    for path in paths:
+        for name, body in load_procedures(Path(path), default_schema).items():
+            if name in definitions and definitions[name] != body:
+                raise ValueError(f"Conflicting procedure definitions for {name}: {origins[name]} and {path}")
+            definitions[name] = body
+            origins.setdefault(name, []).append(str(path))
+    return definitions, origins
+
+
+def list_procedures(source):
+    return sorted(load_procedures(source))
