@@ -96,7 +96,7 @@ class NotebookAssembler:
             f"dbutils.widgets.text('schema', {plan_dict.get('metadata', {}).get('target_schema') or ''!r}, 'Target schema context')\n"
             + (
                 f"if dbutils.widgets.get('schema') != {plan_dict.get('metadata', {}).get('target_schema') or ''!r} or _catalog != {plan_dict.get('metadata', {}).get('catalog', 'main')!r}:\n"
-                "    raise RuntimeError('Mapping configuration changed. Regenerate with explicit object mappings before execution.')\n"
+                "    raise RuntimeError('Target naming configuration changed. Regenerate before execution.')\n"
                 if plan_dict.get('metadata', {}).get('planner') == 'source_graph' else
                 "if dbutils.widgets.get('schema'):\n"
                 "    raise RuntimeError('Target schema context requires explicit per-output mapping review before execution.')\n"
@@ -130,6 +130,14 @@ class NotebookAssembler:
                 f"resolved and require manual review:\n\n"
                 f"{items}\n"
             ))
+
+        pending = plan_dict.get('metadata', {}).get('pending_items', [])
+        if pending:
+            rows = '\n'.join(f"- `{item['pending_id']}` — `{item['source_id']}` ({', '.join(item['reason_codes'])})" for item in pending)
+            cells.append(self._markdown_cell(
+                '## Pending implementation sections\n\n'
+                'Named sections retain original calls, connections, and bindings. Supply missing inputs and regenerate; '
+                'available procedure definitions still require supported translation. Pending sections are not implemented operations.\n\n' + rows))
 
         # -------------------------------------------------
         # One section per step
@@ -273,6 +281,9 @@ class NotebookAssembler:
                             "\n\n".join(code_blocks),
                         )
                     ))
+                    cells[-1]['metadata']['ssis_migration'] = {
+                        'step_id':step_id, 'source_ref_id':metadata.get('source_ref_id'),
+                        'pending_ids':metadata.get('pending_ids', [])}
 
                 elif (
                     artifact

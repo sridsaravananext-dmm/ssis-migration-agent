@@ -37,6 +37,10 @@ class AssessmentConfig:
 
         if not isinstance(self.planner_mode, str) or self.planner_mode not in {'graph', 'legacy'}:
             raise ValueError('Planner mode must be graph or legacy')
+        if self.planner_mode == 'graph':
+            from ssis_migration.mapping import location_identifier
+            location_identifier(self.catalog, 'Target catalog')
+            if self.target_schema: location_identifier(self.target_schema, 'Target schema')
         if not isinstance(self.object_mappings, dict) or not isinstance(self.dependency_scopes, dict):
             raise ValueError('Mappings and dependency scopes must be objects')
         from ssis_migration.mapping import target_table

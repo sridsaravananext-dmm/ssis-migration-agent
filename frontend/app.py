@@ -29,18 +29,17 @@ with st.sidebar:
     catalog = st.text_input('Target catalog', value='dev_catalog')
     selected_layer = st.selectbox('Logical layer', ['Unspecified', 'Bronze', 'Silver', 'Gold', 'Multi-layer', 'Custom'])
     layer = st.text_input('Custom layer') if selected_layer == 'Custom' else selected_layer.lower()
-    target_schema = st.text_input('Target schema context (optional)')
-    if target_schema or selected_layer == 'Multi-layer':
-        st.caption('Supply explicit physical object mappings below. Destination writes still require defined load semantics.')
+    target_schema = st.text_input('Target schema (optional)', help='Propose catalog.schema.lowercase_table names. Leave blank to retain target placeholders. Enter only the schema name.')
+    st.caption('Target naming uses your catalog/schema and lowercase table names. Object overrides are optional. Destination writes still need a load strategy.')
     description = st.text_area('Package context (optional)')
     default_schema = st.text_input('Default SQL Server schema', value='dbo')
     ai = st.checkbox('Enable AI-assisted legacy generation', value=False, help='The source-graph planner uses deterministic native translation. AI fallback is currently available in legacy warehouse mode.')
-    strict = st.checkbox('Strict mode', value=False, help='Keep diagnostics and block notebook output when required checks fail.')
+    strict = st.checkbox('Strict mode', value=False, help='Graph mode still writes review drafts with named pending sections. Errors block execution; strict CLI exits nonzero when review is required. Legacy mode withholds incomplete notebooks.')
     dry_run = st.checkbox('Dry run', value=False, help='Parse, resolve, and preview the plan without generating a final notebook or calling AI.')
     with st.expander('Physical mappings and dependency connections'):
         planner_choice = st.selectbox('Planning engine', ['Source graph', 'Legacy warehouse rules'])
         object_text = st.text_area('Physical object mappings (JSON)', value='{}',
-            help='Example: {"source|dbo.Customer": {"target": "catalog.bronze.customer", "layer": "bronze"}}. Unscoped keys apply across connections; scoped keys take precedence.')
+            help='Optional overrides. Example: {"source|dbo.Customer": {"target": "catalog.bronze.customer", "layer": "bronze"}}. Unscoped keys apply across connections; scoped keys take precedence.')
         scope_text = st.text_area('Dependency file connections (JSON)', value='{}',
             help='Example: {"source_procs.sql": "Project.ConnectionManagers[Source]"}. Disambiguates same-named definitions in different databases.')
     configuration_errors = []
@@ -137,7 +136,23 @@ with results_tab:
                     st.write(f"Operations passing static checks: {generation['statically_valid_operations']} / {generation['operation_count']}")
                     if percent is not None: st.write(f'Static operation coverage: {percent}%')
                     st.caption(generation['basis'])
+                    st.write(f"Pending operations: {generation.get('pending_operations', 0)}")
+                    st.write(f"Execution readiness: **{assessment.get('execution_readiness', {}).get('status', 'NOT_ASSESSED')}**")
                     st.json(assessment['source_accounting'])
+                for key, label in [('notebook','Download notebook draft'), ('review','Download review summary')]:
+                    artifact = entry.get('artifacts', {}).get(key)
+                    if artifact and Path(artifact).is_file():
+                        st.download_button(label, Path(artifact).read_bytes(), file_name=Path(artifact).name,
+                            key=key + '_' + hashlib.sha256(artifact.encode()).hexdigest())
+                pending_path = entry.get('artifacts', {}).get('pending_items')
+                if pending_path and Path(pending_path).is_file():
+                    pending_items = json.loads(Path(pending_path).read_text())
+                    if pending_items:
+                        with st.expander(f'Pending implementation sections ({len(pending_items)})'):
+                            for pending in pending_items:
+                                names = ', '.join(p['name'] for p in pending.get('procedures', []))
+                                st.write(f"**{names or pending['kind']}** — {pending['source_id']}")
+                                st.caption(f"{pending['pending_id']} · {', '.join(pending['reason_codes'])}")
                 for item in entry.get('findings', []):
                     st.write(f"**{item['code']}** — {item['message']}")
                     st.caption(f"Source: {item['source_id']} · Finding: {item['finding_id']}")
@@ -145,7 +160,9 @@ with results_tab:
         with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zipped:
             for file in Path(st.session_state.output).rglob('*'):
                 if file.is_file(): zipped.write(file, file.relative_to(st.session_state.output))
-        st.download_button('Download assessment artifacts', archive.read_bytes(), file_name='assessment_artifacts.zip')
+        with st.expander('All diagnostic files'):
+            st.caption('For debugging and traceability. Review the summary and notebook draft first; JSON files are not scripts to run.')
+            st.download_button('Download all diagnostics (ZIP)', archive.read_bytes(), file_name='assessment_artifacts.zip')
 
 with artifacts_tab:
     if not st.session_state.output:
@@ -153,6 +170,8 @@ with artifacts_tab:
     else:
         base = Path(st.session_state.output)
         files = sorted(str(p.relative_to(base)) for p in base.rglob('*') if p.is_file())
+        if not st.checkbox('Show diagnostic artifacts', value=False):
+            files = [name for name in files if name.endswith(('_review.md', '_Migration.ipynb', '/pending_items.json'))]
         if files:
             selected = st.selectbox('Artifact', files)
             path = base / selected

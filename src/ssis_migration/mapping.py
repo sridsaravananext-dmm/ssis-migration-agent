@@ -1,8 +1,9 @@
-"""Explicit legacy-object to Databricks-object mapping; no schema guessing."""
+"""Explicit overrides and visible catalog/schema naming proposals."""
 from __future__ import annotations
 import sqlglot
 from sqlglot import exp, ErrorLevel
 from ssis_migration.sql_text import normalize_name
+import re
 
 
 class ConversionGap(ValueError):
@@ -41,6 +42,38 @@ def resolve_mapping(name, connection, mappings, default_schema='dbo'):
         raise ConversionGap('OBJECT_MAPPING_REQUIRED', f'Provide an explicit target for {name} on connection {connection or "unspecified"}.', key)
     source, value = normalized[selected]
     return target_table(value), source
+
+
+def location_identifier(value, label):
+    """Configuration accepts a single name, never a SQL expression or description."""
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*', value):
+        raise ValueError(f'{label} must be a single identifier, for example develop_dev_silver; omit explanatory text')
+    return value
+
+
+def resolve_target(name, connection, config, *, role):
+    """An override wins; otherwise propose catalog.schema.lowercase_table."""
+    try:
+        mapped, key = resolve_mapping(name, connection, config.object_mappings, config.default_schema)
+        value = config.object_mappings[key]
+        resolution = 'EXPLICIT'
+        layer = value.get('layer') if isinstance(value, dict) else None
+    except ConversionGap as exc:
+        if exc.code != 'OBJECT_MAPPING_REQUIRED': raise
+        try:
+            source = sqlglot.parse_one(name, read='tsql', into=exp.Table)
+        except Exception as error:
+            raise ConversionGap('IDENTIFIER_MAPPING_REVIEW', 'Cannot identify a table name for the naming convention.', name) from error
+        if not 1 <= len(source.parts) <= 3 or source.args.get('alias') or any(not isinstance(p, exp.Identifier) or '.' in p.name for p in source.parts):
+            raise ConversionGap('IDENTIFIER_MAPPING_REVIEW', 'Source needs an explicit unambiguous object override.', name)
+        catalog = location_identifier(config.catalog, 'Target catalog')
+        schema = location_identifier(config.target_schema, 'Target schema') if config.target_schema else '__pending_target_schema__'
+        mapped = exp.Table(this=exp.to_identifier(source.name.casefold(), quoted=True),
+            db=exp.to_identifier(schema, quoted=True), catalog=exp.to_identifier(catalog, quoted=True))
+        key, layer = None, None
+        resolution = 'CONVENTION' if config.target_schema else 'PLACEHOLDER'
+    return mapped, {'source': name, 'connection_reference': connection, 'mapping_key': key,
+        'target': mapped.sql(dialect='databricks'), 'role': role, 'resolution': resolution, 'layer': layer}
 
 
 def translate_sql(sql, connection, config, *, query_only=False):
@@ -83,15 +116,15 @@ def translate_sql(sql, connection, config, *, query_only=False):
         if any('.' in p.name for p in table.parts):
             raise ConversionGap('IDENTIFIER_MAPPING_REVIEW', 'Source identifiers containing dots require an unambiguous mapping representation.')
         source = '.'.join(p.name for p in table.parts)
-        mapped, key = resolve_mapping(source, connection, config.object_mappings, config.default_schema)
         role = 'source' if isinstance(table.parent, (exp.From, exp.Join)) else 'target'
+        mapped, use = resolve_target(source, connection, config, role=role)
         if table.args.get('alias'): mapped.set('alias', table.args['alias'].copy())
         elif table.name != mapped.name and any(c.table == table.name for c in expression.find_all(exp.Column)):
             if role != 'source':
                 raise ConversionGap('SQL_QUALIFIED_COLUMN_REVIEW', 'Target-qualified columns require explicit alias review.')
             mapped.set('alias', exp.TableAlias(this=exp.to_identifier(table.name, quoted=True)))
         table.replace(mapped)
-        used.append({'source': source, 'mapping_key': key, 'target': mapped.sql(dialect='databricks'), 'role': role})
+        used.append(use)
     try:
         result = expression.sql(dialect='databricks', unsupported_level=ErrorLevel.RAISE)
         sqlglot.parse_one(result, read='databricks', error_level=ErrorLevel.RAISE)
