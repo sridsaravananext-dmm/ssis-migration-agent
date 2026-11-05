@@ -66,6 +66,12 @@ class SSISExecutableParser:
 
                 properties[property_name] = value
 
+            for binding in child:
+                kind = local_name(binding.tag).lower()
+                if kind in {"parameterbinding", "resultbinding"}:
+                    key = "parameter_bindings" if kind == "parameterbinding" else "result_bindings"
+                    properties.setdefault(key, []).append({local_name(k): v for k, v in binding.attrib.items()})
+
         return properties
 
     # =========================================================

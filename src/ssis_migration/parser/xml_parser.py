@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import xml.etree.ElementTree as ET
+import re
 
 from .namespace import extract_namespaces, local_name
 
@@ -30,12 +31,14 @@ class SSISXMLParser:
                 f"Unsupported file type: {self.file_path.suffix}"
             )
 
-        self.xml_text = self.file_path.read_text(
-            encoding="utf-8",
-            errors="replace",
-        )
-
-        self.root = ET.fromstring(self.xml_text)
+        raw = self.file_path.read_bytes()
+        if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+            encoding = "utf-16"
+        else:
+            declared = re.search(br'<\?xml[^>]*encoding=[\'"]([^\'"]+)', raw[:256], re.I)
+            encoding = declared.group(1).decode("ascii") if declared else "utf-8-sig"
+        self.xml_text = raw.decode(encoding)
+        self.root = ET.fromstring(raw)
 
         self.namespaces = extract_namespaces(
             self.xml_text

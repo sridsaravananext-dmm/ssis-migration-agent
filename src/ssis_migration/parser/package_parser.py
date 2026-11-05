@@ -31,6 +31,8 @@ class SSISPackageParser:
     def parse(self) -> dict[str, Any]:
         return {
             "source": self._parse_source(),
+            "connection_aliases": self._connection_aliases(),
+            "package_expressions": ["".join(c.itertext()) for c in self.root if local_name(c.tag).lower() == 'propertyexpression'],
             "package": self._parse_package(),
             "executables": self._parse_executables(),
             "precedence_constraints": self._parse_precedence_constraints(),
@@ -40,6 +42,24 @@ class SSISPackageParser:
             "data_flow_tasks": self._parse_data_flow_tasks(),
             "statistics": self._build_statistics(),
         }
+
+    def _connection_aliases(self):
+        aliases = {}
+        for element in self.root.iter():
+            attrs = self._attributes(element)
+            ref = attrs.get('connectionManagerRefId') or attrs.get('ConnectionManagerRefId')
+            identity = attrs.get('connectionManagerID') or attrs.get('ConnectionManagerID')
+            if local_name(element.tag).lower() == 'connectionmanager':
+                ref = ref or attrs.get('refId')
+                identity = identity or attrs.get('DTSID')
+            if ref:
+                aliases[ref] = ref
+                if identity:
+                    for key in (identity, identity.strip('{}').casefold()):
+                        if key in aliases and aliases[key] != ref:
+                            raise ValueError(f'Ambiguous connection identity: {key}')
+                        aliases[key] = ref
+        return aliases
 
     # =========================================================
     # SOURCE
@@ -69,10 +89,28 @@ class SSISPackageParser:
     def _parse_executables(self) -> list[dict[str, Any]]:
         results = []
 
+        parents = {child: parent for parent in self.root.iter() for child in parent}
         for element in self.xml.find_all("Executable"):
-            results.append(
-                self._parse_executable(element)
-            )
+            parsed = self._parse_executable(element)
+            attrs = parsed["attributes"]
+            parsed["properties"]["_attributes"] = attrs
+            ancestor = parents.get(element)
+            parent_ref = None
+            event_scope = False
+            while ancestor is not None:
+                if local_name(ancestor.tag).lower() == "eventhandler":
+                    event_scope = True
+                if parent_ref is None and local_name(ancestor.tag).lower() == "executable":
+                    parent_ref = self._get_attribute(ancestor, "refId")
+                ancestor = parents.get(ancestor)
+            parsed["properties"]["_parent_ref_id"] = parent_ref
+            parsed["properties"]["_event_handler"] = event_scope
+            expressions = []
+            for child in element:
+                if local_name(child.tag).lower() == "propertyexpression":
+                    expressions.append({"name": self._get_attribute(child, "Name"), "expression": "".join(child.itertext())})
+            parsed["properties"]["_property_expressions"] = expressions
+            results.append(parsed)
 
         return results
 
@@ -147,6 +185,12 @@ class SSISPackageParser:
                 connection_id
             )
         )
+        aliases = self._connection_aliases()
+        resolved = aliases.get(connection_id) or aliases.get(str(connection_id).strip('{}').casefold())
+        if resolved:
+            properties['connection_manager_ref_id'] = resolved
+            return
+
 
         if not normalized_id:
             return

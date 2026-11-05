@@ -127,6 +127,8 @@ class SSISPipelineParser:
 
         }
 
+        component["properties"]["_attributes"] = self._attributes(element)
+        component["properties"]["_property_expressions"] = [self._attributes(c) for c in element if local_name(c.tag).lower() == 'propertyexpression']
         component["detected_type"] = (
             self._detect_component_type(component)
         )
@@ -156,11 +158,9 @@ class SSISPipelineParser:
             or ""
         ).lower()
 
-        combined = (
-            class_id
-            + " "
-            + description
-        )
+        combined = class_id + " " + description
+        component['properties']['_type_evidence'] = 'class_id' if class_id.startswith('microsoft.') else 'description'
+
 
         if "oledbdestination" in combined:
             return "OLE_DB_DESTINATION"
@@ -180,6 +180,12 @@ class SSISPipelineParser:
         if "conditional" in combined:
             return "CONDITIONAL_SPLIT"
 
+        if "multicast" in class_id:
+            return "MULTICAST"
+        if "mergejoin" in class_id:
+            return "MERGE_JOIN"
+        if "unionall" in class_id:
+            return "UNION_ALL"
         if "aggregate" in combined:
             return "AGGREGATE"
 
@@ -199,28 +205,17 @@ class SSISPipelineParser:
 
         properties = {}
 
-        for child in element.iter():
-
-            if (
-                local_name(child.tag).lower()
-                != "property"
-            ):
+        # Only properties owned by this node; nested column/output properties
+        # must not overwrite component settings with the same name.
+        for container in element:
+            if local_name(container.tag).lower() != "properties":
                 continue
-
-            name = self._get_attribute(
-                child,
-                "name",
-            )
-
-            if not name:
-                continue
-
-            value = "".join(
-                child.itertext()
-            ).strip()
-
-            properties[name] = value
-
+            for child in container:
+                if local_name(child.tag).lower() != "property":
+                    continue
+                name = self._get_attribute(child, "name")
+                if name:
+                    properties[name] = "".join(child.itertext()).strip()
         return properties
 
     # =========================================================
@@ -245,6 +240,11 @@ class SSISPipelineParser:
                     if value not in refs:
                         refs.append(value)
 
+        if not refs:
+            for child in element.iter():
+                if local_name(child.tag).lower() == 'connection':
+                    identity = self._get_attribute(child, 'connectionManagerID')
+                    if identity and identity not in refs: refs.append(identity)
         return refs
 
     # =========================================================
@@ -327,6 +327,7 @@ class SSISPipelineParser:
                     "attributes":
                         self._attributes(child),
 
+                    "properties": self._parse_properties(child),
                     "columns":
                         self._parse_output_columns(
                             child
@@ -357,6 +358,8 @@ class SSISPipelineParser:
 
             columns.append(
                 {
+                    "properties": self._parse_properties(child),
+                    "attributes": self._attributes(child),
                     "name":
                         self._get_attribute(
                             child,
@@ -454,6 +457,8 @@ class SSISPipelineParser:
                             "lineageId",
                         ),
 
+                    "properties": self._parse_properties(child),
+                    "attributes": self._attributes(child),
                     "data_type":
                         self._get_attribute(
                             child,
@@ -521,6 +526,8 @@ class SSISPipelineParser:
                             "refId",
                         ),
 
+                    "properties": self._parse_properties(child),
+                    "attributes": self._attributes(child),
                     "data_type":
                         self._get_attribute(
                             child,

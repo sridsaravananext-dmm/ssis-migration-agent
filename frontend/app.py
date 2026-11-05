@@ -31,12 +31,28 @@ with st.sidebar:
     layer = st.text_input('Custom layer') if selected_layer == 'Custom' else selected_layer.lower()
     target_schema = st.text_input('Target schema context (optional)')
     if target_schema or selected_layer == 'Multi-layer':
-        st.caption('Per-output schema mapping requires review. Source schema names are not rewritten automatically.')
+        st.caption('Supply explicit physical object mappings below. Destination writes still require defined load semantics.')
     description = st.text_area('Package context (optional)')
     default_schema = st.text_input('Default SQL Server schema', value='dbo')
-    ai = st.checkbox('Enable AI-assisted generation', value=False)
+    ai = st.checkbox('Enable AI-assisted legacy generation', value=False, help='The source-graph planner uses deterministic native translation. AI fallback is currently available in legacy warehouse mode.')
     strict = st.checkbox('Strict mode', value=False, help='Keep diagnostics and block notebook output when required checks fail.')
     dry_run = st.checkbox('Dry run', value=False, help='Parse, resolve, and preview the plan without generating a final notebook or calling AI.')
+    with st.expander('Physical mappings and dependency connections'):
+        planner_choice = st.selectbox('Planning engine', ['Source graph', 'Legacy warehouse rules'])
+        object_text = st.text_area('Physical object mappings (JSON)', value='{}',
+            help='Example: {"source|dbo.Customer": {"target": "catalog.bronze.customer", "layer": "bronze"}}. Unscoped keys apply across connections; scoped keys take precedence.')
+        scope_text = st.text_area('Dependency file connections (JSON)', value='{}',
+            help='Example: {"source_procs.sql": "Project.ConnectionManagers[Source]"}. Disambiguates same-named definitions in different databases.')
+    configuration_errors = []
+    try:
+        object_mappings = json.loads(object_text)
+        dependency_scopes = json.loads(scope_text)
+        if not isinstance(object_mappings, dict) or not isinstance(dependency_scopes, dict):
+            raise ValueError('Both settings must be JSON objects.')
+    except ValueError as exc:
+        object_mappings, dependency_scopes = {}, {}
+        configuration_errors.append(f'Mapping configuration: {exc}')
+
 
 upload_tab, results_tab, artifacts_tab, ddl_tab = st.tabs(['Inputs', 'Results', 'Artifacts', 'DDL preview'])
 with upload_tab:
@@ -45,7 +61,7 @@ with upload_tab:
     if mode == SAMPLE_MODE: st.info('Uses the WWI sample and its adjacent connection mapping.')
     deps = st.file_uploader('Supporting files (optional)', type=['sql', 'txt', 'json'], accept_multiple_files=True)
     procedures, ddls, mappings = [], [], []
-    errors = []
+    errors = list(configuration_errors)
     for upload in deps or []:
         raw = upload.getvalue()
         role = classify_dependency(upload.name, raw)
@@ -90,7 +106,9 @@ with upload_tab:
                     connection_mapping=mappings[0] if mappings else None, base_path=str(ROOT),
                     procedures_paths=procedures, ddl_paths=ddls, layer=layer.strip(),
                     target_schema=target_schema.strip() or None, description=description,
-                    default_schema=default_schema.strip(), ai=ai, strict_mode=strict, dry_run=dry_run)
+                    default_schema=default_schema.strip(), ai=ai, strict_mode=strict, dry_run=dry_run,
+                    planner_mode='graph' if planner_choice == 'Source graph' else 'legacy',
+                    object_mappings=object_mappings, dependency_scopes=dependency_scopes)
             st.session_state.result = report
             st.session_state.output = str(output)
             st.info(f"Assessment finished: {report['status']}. See Results for findings.")

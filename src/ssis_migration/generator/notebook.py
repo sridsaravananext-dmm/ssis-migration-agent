@@ -94,8 +94,13 @@ class NotebookAssembler:
             "_step_id = dbutils.widgets.get('step_id')\n"
             "_catalog = dbutils.widgets.get('catalog')\n"
             f"dbutils.widgets.text('schema', {plan_dict.get('metadata', {}).get('target_schema') or ''!r}, 'Target schema context')\n"
-            "if dbutils.widgets.get('schema'):\n"
-            "    raise RuntimeError('Target schema context requires explicit per-output mapping review before execution.')\n"
+            + (
+                f"if dbutils.widgets.get('schema') != {plan_dict.get('metadata', {}).get('target_schema') or ''!r} or _catalog != {plan_dict.get('metadata', {}).get('catalog', 'main')!r}:\n"
+                "    raise RuntimeError('Mapping configuration changed. Regenerate with explicit object mappings before execution.')\n"
+                if plan_dict.get('metadata', {}).get('planner') == 'source_graph' else
+                "if dbutils.widgets.get('schema'):\n"
+                "    raise RuntimeError('Target schema context requires explicit per-output mapping review before execution.')\n"
+            )
         ))
 
         # -------------------------------------------------

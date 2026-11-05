@@ -78,8 +78,8 @@ class JobGenerator:
         plan: dict[str, Any],
         notebook_path: str,
         *,
-        catalog: str = "main",
-        schema: str = "default",
+        catalog: str | None = None,
+        schema: str | None = None,
         cluster_spec: dict[str, Any] | None = None,
     ) -> JobDefinition:
         """
@@ -90,10 +90,24 @@ class JobGenerator:
         )
         job_name = f"{package_name} Migration"
 
-        steps = sorted(
-            plan.get("steps", []),
-            key=_step_sort_key,
-        )
+        graph_mode = plan.get('metadata', {}).get('planner') == 'source_graph'
+        if catalog is None:
+            catalog = plan.get('metadata', {}).get('catalog', 'main') if graph_mode else 'main'
+        if schema is None:
+            schema = (plan.get('metadata', {}).get('target_schema') or '') if graph_mode else 'default'
+        if graph_mode:
+            from ssis_migration.planner.task_graph import topological_order
+            index = {s['step_id']: s for s in plan.get('steps', [])}
+            if len(index) != len(plan.get('steps', [])):
+                raise ValueError('Duplicate task IDs cannot produce a job')
+            dependencies = {key: set(step.get('dependencies', [])) for key, step in index.items()}
+            if any(dep not in index for values in dependencies.values() for dep in values):
+                raise ValueError('Unresolved task dependency cannot produce a job')
+            order, cycle = topological_order(dependencies)
+            if cycle: raise ValueError('Cyclic task graph cannot produce a job')
+            steps = [index[key] for key in order]
+        else:
+            steps = sorted(plan.get('steps', []), key=_step_sort_key)
 
         if cluster_spec is None:
             cluster_spec = self._default_cluster(catalog)
@@ -123,7 +137,7 @@ class JobGenerator:
                 if d in step_keys
             ]
 
-            if not dep_keys and step.get("step_type") == "FACT_LOAD":
+            if not graph_mode and not dep_keys and step.get("step_type") == "FACT_LOAD":
                 dep_keys = [
                     step_keys[s["step_id"]]
                     for s in steps
@@ -135,7 +149,7 @@ class JobGenerator:
             # sequentially, matching sequential SSIS control flow and
             # serializing writes to control tables (Delta identity
             # columns do not support concurrent writers).
-            if prev_task_key and prev_task_key not in dep_keys:
+            if not graph_mode and prev_task_key and prev_task_key not in dep_keys:
                 dep_keys.append(prev_task_key)
 
             task: dict[str, Any] = {
@@ -186,10 +200,14 @@ class JobGenerator:
         plan: dict[str, Any],
         notebook_path: str,
         *,
-        catalog: str = "main",
-        schema: str = "default",
+        catalog: str | None = None,
+        schema: str | None = None,
     ) -> str:
         """Generate a Declarative Automation Bundle YAML."""
+        if catalog is None:
+            catalog = plan.get('metadata', {}).get('catalog', 'main') if plan.get('metadata', {}).get('planner') == 'source_graph' else 'main'
+        if schema is None:
+            schema = (plan.get('metadata', {}).get('target_schema') or '') if plan.get('metadata', {}).get('planner') == 'source_graph' else 'default'
         job = self.generate(
             plan,
             notebook_path,

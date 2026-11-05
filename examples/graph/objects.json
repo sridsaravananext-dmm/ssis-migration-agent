@@ -1,0 +1,4 @@
+{
+  "Package.ConnectionManagers[Legacy]|dbo.Customer": {"target": "dev_catalog.bronze.customer", "layer": "bronze"},
+  "Package.ConnectionManagers[Legacy]|dbo.CustomerCopy": {"target": "dev_catalog.silver.customer_copy", "layer": "silver"}
+}

@@ -72,50 +72,7 @@ def account_source(context, plan):
                 'Conditional, failure, completion, or OR precedence needs outcome-aware implementation.'))
     if not inventory:
         findings.append(finding('NO_SOURCE_WORK', package.package_name or 'package', 'No executable source work was extracted.'))
-    # No certificate of correctness is inferred from a graph being ordered.
-    for idx, database in enumerate(context.databases):
-        for obj in database.database_ir.objects:
-            if obj.definition and has_dynamic_call(obj.definition):
-                findings.append(finding('DYNAMIC_PROCEDURE_REFERENCE', f'{obj.schema}.{obj.name}', 'Dynamic SQL in procedure requires review.'))
-    definitions = defaultdict(list)
-    for db in context.databases:
-        for obj in db.database_ir.objects:
-            if obj.object_type.upper() in {'PROCEDURE', 'SQL_STORED_PROCEDURE'} and obj.definition:
-                definitions[normalize_name(f'{obj.schema}.{obj.name}', context.metadata['default_schema'])].append((db.connection_reference, obj.definition))
-    checked = set()
-    def check_sql(ref, sql, requires_text=False, connection=None):
-        if not isinstance(sql, str) or not sql.strip():
-            if requires_text: findings.append(finding('SQL_EXTRACTION_INCOMPLETE', ref, 'SQL text is absent or stored in a variable/file; dependency inspection is incomplete.'))
-            return
-        if has_dynamic_call(sql) or re.search(r'\bsp_executesql\b', sql, re.I):
-            findings.append(finding('DYNAMIC_PROCEDURE_REFERENCE', ref, 'Dynamic SQL/procedure identity cannot be resolved statically.'))
-        for call in procedure_calls(sql):
-            key = normalize_name(call, context.metadata['default_schema'])
-            candidates = definitions.get(key, [])
-            if connection and any(c == connection for c, _ in candidates):
-                candidates = [(c, body) for c, body in candidates if c == connection]
-            values = [body for _, body in candidates]
-            if not values:
-                findings.append(finding('MISSING_PROCEDURE_DEFINITION', ref, f'Provide the definition for {call}.', evidence=key))
-            elif len(candidates) > 1:
-                findings.append(finding('AMBIGUOUS_PROCEDURE_REFERENCE', ref, f'Resolve the database/schema identity of {call}.', evidence=key))
-            elif (connection, key) not in checked:
-                checked.add((connection, key))
-                check_sql(key, values[0], connection=connection)
-    for idx, exe in enumerate(package.executables):
-        if exe.executable_type == 'Microsoft.ExecuteSQLTask':
-            source_type = str(exe.properties.get('SqlStatementSourceType', 'DirectInput'))
-            sql = exe.properties.get('SqlStatementSource')
-            if source_type not in {'0', 'DirectInput'}: sql = None
-            check_sql(exe.ref_id or f'executable:{idx}', sql, True, exe.properties.get('connection_manager_ref_id') or exe.properties.get('Connection'))
-    for fidx, flow in enumerate(package.data_flows):
-        for cidx, comp in enumerate(flow.components):
-            if comp.detected_type == 'OLE_DB_SOURCE':
-                props = comp.properties
-                sql = props.get('SqlCommand')
-                if sql: check_sql(comp.ref_id or f'flow:{fidx}:component:{cidx}', sql, connection=next((r.connection_manager_ref_id for r in comp.connection_manager_refs if r.connection_manager_ref_id), None))
-                elif props.get('SqlCommandVariable') or not props.get('OpenRowset'):
-                    check_sql(comp.ref_id or f'flow:{fidx}:component:{cidx}', None, True)
+    findings.extend(dependency_findings(context))
     source_ids = [item['source_id'] for item in inventory]
     for source_id in set(source_ids):
         if source_ids.count(source_id) > 1:
@@ -124,6 +81,11 @@ def account_source(context, plan):
     plan.metadata['source_inventory'] = inventory
     plan.unresolved.extend(findings)
     return inventory, findings
+
+
+def dependency_findings(context):
+    from ssis_migration.dependencies import dependency_findings as inspect
+    return inspect(context)
 
 
 def assess_operations(operations_by_step, artifacts):
@@ -153,7 +115,8 @@ def assessment_summary(inventory, validations, findings, *, dry_run=False):
     valid = sum(v['status'] == 'PASS' for v in validations)
     return {'source_accounting': {'total_items': len(inventory),
                 'planned_candidates': sum(i['disposition'] == 'PLANNED_CANDIDATE' for i in inventory),
-                'review_only_items': sum(i['disposition'] == 'REVIEW_ONLY' for i in inventory)},
+                'review_only_items': sum(i['disposition'] == 'REVIEW_ONLY' for i in inventory),
+                'disabled_items': sum(i['disposition'] == 'DISABLED' for i in inventory)},
             'generation': {'operation_count': len(validations), 'statically_valid_operations': valid,
                 'operation_coverage_percent': round(100 * valid / len(validations), 1) if validations else None,
                 'basis': 'Operations passing native-code checks; not task coverage or behavioral accuracy.'},
