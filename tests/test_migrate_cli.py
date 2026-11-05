@@ -48,8 +48,8 @@ def test_validation_results_and_runtime_gate(conversion):
     entry = conversion['packages'][0]
     validations = json.loads(Path(entry['artifacts']['validation']).read_text())
     assert validations
-    assert any(v['status'] == 'REJECTED' for v in validations)
-    assert all(v['status'] in {'PASS', 'REJECTED'} for v in validations)
+    assert any(v['status'] == 'PENDING' for v in validations)
+    assert all(v['status'] in {'PASS', 'PENDING', 'REJECTED'} for v in validations)
     notebook = json.loads(Path(entry['artifacts']['notebook']).read_text())
     assert notebook['nbformat'] == 4
     for cell in notebook['cells']:

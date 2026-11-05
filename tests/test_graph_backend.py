@@ -78,8 +78,9 @@ def test_explicit_mapping_handles_join_cte_and_native_dml():
     sql, uses=translate_sql('WITH c AS (SELECT id FROM dbo.A) SELECT * FROM c','source',cfg)
     assert '`cat`.`bronze`.`orders`' in sql and 'FROM c' in sql
     assert len(uses)==1
-    with pytest.raises(ConversionGap,match='explicit target'):
-        translate_sql('SELECT * FROM dbo.A','other',cfg)
+    other_sql, other_uses = translate_sql('SELECT * FROM dbo.A','other',cfg)
+    assert 'orders' not in other_sql and '__pending_target_schema__' in other_sql
+    assert other_uses[0]['resolution'] == 'PLACEHOLDER'
     cfg=AssessmentConfig(object_mappings={'dbo.A':'cat.bronze.A','dbo.B':'cat.silver.B'})
     emitted,_=translate_sql('INSERT INTO dbo.B (id) SELECT id FROM dbo.A',None,cfg)
     assert emitted.startswith('INSERT INTO `cat`.`silver`.`B`')

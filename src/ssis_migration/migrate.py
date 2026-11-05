@@ -287,6 +287,14 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
     # Stable identities allow repeated runs to update the same finding rather than duplicate it.
     findings = list({f['finding_id']: f for f in plan.unresolved}.values())
     plan.unresolved = findings
+    pending_items = []
+    for sid, ops in plan.metadata.get('operations_by_step', operations_by_step).items():
+        for op in ops:
+            if op.get('pending_item'):
+                pending_items.append({**op['pending_item'], 'step_id':sid})
+    plan.metadata['pending_items'] = pending_items
+    for step in plan.steps:
+        step.metadata['pending_ids'] = [p['pending_id'] for p in pending_items if p['step_id'] == step.step_id]
     inventory = plan.metadata['source_inventory']
     summary = assessment_summary(inventory, validations, findings, dry_run=config.dry_run)
     summary['generation']['method'] = plan.metadata['generation_method']
@@ -295,7 +303,7 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
     notebook = None
     if not config.dry_run:
         # Never embed rejected operation bodies in a deliverable, even in normal mode.
-        failures = {(v['step_id'], v['operation_id']) for v in validations if v['status'] != 'PASS'}
+        failures = {(v['step_id'], v['operation_id']) for v in validations if v['status'] not in {'PASS','PENDING'}}
         safe_operations = {}
         for sid, ops in operations_by_step.items():
             safe_operations[sid] = [dict(op, code="raise RuntimeError('Operation requires manual implementation; see assessment.json.')", error=None)
@@ -330,9 +338,14 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
                 for c in assembled['cells']):
             assembled['cells'].insert(2, assembler._code_cell(
                 "raise RuntimeError('Conversion has unresolved findings. Resolve assessment.json findings and regenerate before execution.')"))
-        if not (config.strict_mode and any(f['severity'] == 'ERROR' for f in findings)):
+        # Graph drafts are review artifacts, including in strict mode. Strict CLI
+        # still returns nonzero for review-required runs; execution remains gated.
+        if plan.metadata.get('planner') == 'source_graph' or not (config.strict_mode and any(f['severity'] == 'ERROR' for f in findings)):
             notebook = package_output / f'{package_name or safe_name(package_ir.package_name or "package")}_Migration.ipynb'
+            assembled['metadata']['assessment']['execution_readiness'] = execution_readiness(findings)
             write_json(notebook, assembled)
+    summary['execution_readiness'] = execution_readiness(findings)
+    plan.metadata['execution_readiness'] = summary['execution_readiness']
     dependency_inventory = {'connections': [{'connection_reference': db.connection_reference, 'database': db.database_name,
         'role': db.role, 'procedures': [{'name': f'{obj.schema}.{obj.name}', 'definition_available': bool(obj.definition),
             'definition_sha256': hashlib.sha256((obj.definition or '').encode()).hexdigest(),
@@ -350,13 +363,21 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
                        ('validation_results', validations + ai_results), ('source_inventory', inventory), ('task_graph', plan.metadata.get('task_graph', {})),
                        ('dataflow_graphs', plan.metadata.get('dataflow_graphs', [])),
                        ('dependency_inventory', dependency_inventory), ('verification_plan', verification_plan),
+                       ('pending_items', pending_items),
                        ('assessment', {**summary, 'findings': findings}), ('operations', operations_by_step)]:
         write_json(package_output / f'{name}.json', data)
     review = package_output / f'{package_name or safe_name(package_ir.package_name or "package")}_review.md'
     review.write_text(_review_text(package_ir.package_name, summary, findings), encoding='utf-8')
     return {'notebook_file': str(notebook) if notebook else None, 'review_file': str(review),
             'artifact_count': len(artifacts), 'assessment': summary, 'findings': findings,
-            'notebook_status': 'DRY_RUN' if config.dry_run else ('BLOCKED' if notebook is None else 'GENERATED_FOR_REVIEW')}
+            'notebook_status': 'DRY_RUN' if config.dry_run else ('BLOCKED' if notebook is None else
+                'DRAFT_REQUIRES_REVIEW' if any(f['severity'] == 'ERROR' for f in findings) else 'GENERATED_FOR_REVIEW')}
+
+
+def execution_readiness(findings):
+    blockers = [f['finding_id'] for f in findings if f['severity'] == 'ERROR']
+    return {'status':'BLOCKED_BY_REVIEW' if blockers else 'STATIC_CHECKS_PASSED',
+        'blocking_finding_ids':blockers, 'runtime_verification':'NOT_MEASURED'}
 
 
 def _review_text(name, summary, findings):
@@ -365,6 +386,9 @@ def _review_text(name, summary, findings):
              'Legacy behavioral match: NOT MEASURED. No runtime equivalence percentage is claimed.', '',
              f"Source items: {summary['source_accounting']['total_items']}",
              f"Operations passing static checks: {generation['statically_valid_operations']} / {generation['operation_count']}",
+             f"Pending operations: {generation.get('pending_operations', 0)}",
+             f"Execution readiness: {summary['execution_readiness']['status']}",
+             'Read this review and the notebook draft first. JSON files are diagnostic records, not scripts to run.',
              'Operation coverage is a static generation metric, not legacy accuracy.', '', '## Human review findings', '']
     lines.extend(f"- **{f['code']}** (`{f['source_id']}`): {f['message']}" for f in findings)
     if not findings: lines.append('No static findings. Runtime comparison is still required.')
@@ -434,6 +458,7 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
                     stages={'parsing': 'SUCCEEDED', 'analysis': 'SUCCEEDED',
                         'generation': 'NOT_RUN' if dry_run else result['notebook_status'], 'runtime_verification': 'NOT_MEASURED'})
                 if result['notebook_file']: entry['artifacts']['notebook'] = result['notebook_file']
+                entry['artifacts']['pending_items'] = str(directory / 'pending_items.json')
                 manifest['artifacts'] = entry['artifacts']
                 write_json(directory / 'migration_manifest.json', manifest)
                 write_json(cache, entry)

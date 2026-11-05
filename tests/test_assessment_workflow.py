@@ -45,11 +45,11 @@ def test_standalone_work_is_retained_without_equivalence_claim(tmp_path):
     assert any('raise RuntimeError' in ''.join(c['source']) for c in notebook['cells'])
 
 
-def test_strict_blocks_notebook_and_preserves_diagnostics(tmp_path):
+def test_strict_graph_keeps_blocked_draft_and_preserves_diagnostics(tmp_path):
     _, entry = run(tmp_path, sql='EXEC dbo.Missing', strict_mode=True)
-    assert entry['notebook_status'] == 'BLOCKED'
-    assert 'notebook' not in entry['artifacts']
-    assert not list((tmp_path / 'out').rglob('*.ipynb'))
+    assert entry['notebook_status'] == 'DRAFT_REQUIRES_REVIEW'
+    assert Path(entry['artifacts']['notebook']).is_file()
+    assert entry['assessment']['execution_readiness']['status'] == 'BLOCKED_BY_REVIEW'
     assert Path(entry['artifacts']['assessment']).is_file()
 
 
@@ -161,7 +161,8 @@ def test_layer_context_is_recorded_without_silent_schema_rewrite(tmp_path):
     manifest = json.loads(Path(entry['artifacts']['manifest']).read_text())
     assert manifest['configuration']['layer'] == 'multi-layer'
     codes = {f['code'] for f in entry['findings']}
-    assert {'LAYER_MAPPING_REQUIRED','TARGET_MAPPING_REVIEW_REQUIRED'} <= codes
+    assert 'LAYER_MAPPING_REQUIRED' in codes
+    assert 'TARGET_MAPPING_REVIEW_REQUIRED' not in codes
 
 
 def test_multiple_ddl_files_enrich_package_context(tmp_path):

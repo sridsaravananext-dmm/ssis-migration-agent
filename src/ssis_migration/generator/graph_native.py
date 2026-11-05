@@ -5,7 +5,8 @@ import re
 from dataclasses import asdict
 import sqlglot
 from sqlglot import exp, ErrorLevel
-from ssis_migration.mapping import ConversionGap, resolve_mapping, translate_sql
+from ssis_migration.mapping import ConversionGap, resolve_target, translate_sql
+from ssis_migration.drafts import pending_operation
 
 
 def variable(ref):
@@ -130,18 +131,21 @@ def dataflow_operations(flow, config, connection_aliases=None):
                 owned_attributes.extend(c.get('attributes', {}) for c in port.get('columns', []))
             for attrs in owned_attributes:
                 for key, value in attrs.items():
-                    if key.casefold() in {'errorrowdisposition','truncationrowdisposition'} and value not in {'RD_FailComponent','RD_NotUsed','0'}:
+                    if key.casefold() in {'errorrowdisposition','truncationrowdisposition'} and str(value).casefold() not in {'rd_failcomponent','failcomponent','rd_notused','notused','0'}:
                         raise ConversionGap('ERROR_DISPOSITION_UNSUPPORTED', 'Ignore/redirect/unknown row-error behavior needs explicit translation.')
             ports = [p for p in comp.outputs if not truth(p.get('attributes', {}).get('isErrorOut', False))]
             if comp.detected_type == 'OLE_DB_DESTINATION':
                 table = comp.properties.get('OpenRowset')
                 if not table or str(comp.properties.get('AccessMode','')) not in {'','0','3'}:
                     raise ConversionGap('TARGET_MAPPING_REVIEW_REQUIRED', 'Destination table must be a static OpenRowset.')
-                mapped, key = resolve_mapping(table, canonical(comp), config.object_mappings, config.default_schema)
-                mapping_uses.append({'source': table, 'mapping_key': key, 'target': mapped.sql(dialect='databricks'), 'role':'destination'})
+                mapped, use = resolve_target(table, canonical(comp), config, role='destination')
+                mapping_uses.append({**use, 'source_id':ref})
                 findings.append(finding('LOAD_STRATEGY_REQUIRED', ref,
                     'Destination is mapped. Define target write/load semantics before generating a write.', evidence=mapped.sql(dialect='databricks')))
-                operations.append({'operation_id': ref + ':write', 'operation_type':'WRITE_PENDING', 'order':len(operations), 'code':'# REVIEW_REQUIRED: destination write semantics pending'})
+                pending = pending_operation(ref, ['LOAD_STRATEGY_REQUIRED'], connection=canonical(comp),
+                    properties=comp.properties, kind='TARGET_WRITE', operation_id=ref + ':write')
+                pending.update(operation_type='WRITE_PENDING', order=len(operations))
+                operations.append(pending)
 
             linked = [state[inbound[p['ref_id']]] for p in comp.inputs if p.get('ref_id') in inbound and inbound[p['ref_id']] in state]
             actual_inputs = [p for p in comp.inputs if p.get('ref_id') in inbound]
@@ -160,7 +164,9 @@ def dataflow_operations(flow, config, connection_aliases=None):
                     if not table: raise ConversionGap('SQL_EXTRACTION_INCOMPLETE', 'Source has no static query or table.')
                     query = 'SELECT * FROM ' + table
                 sql, uses = translate_sql(query, connection, config, query_only=True)
-                mapping_uses.extend(uses)
+                mapping_uses.extend({**use, 'source_id':ref} for use in uses)
+                if any(use['resolution'] == 'PLACEHOLDER' for use in uses):
+                    raise ConversionGap('TARGET_LOCATION_UNRESOLVED', 'Supply a target schema or object override to replace the target placeholder.')
                 name = variable(port['ref_id'])
                 cols = [c['name'] for c in port.get('columns', []) if c.get('name')]
                 if not cols or len(set(cols)) != len(cols): raise ConversionGap('COLUMN_LINEAGE_UNRESOLVED', 'Source requires unique captured output columns.')
@@ -253,7 +259,11 @@ def dataflow_operations(flow, config, connection_aliases=None):
             findings.append(finding(gap.code, ref, str(gap), evidence=gap.evidence))
             # Failed outputs cannot be reused by downstream components.
             for port in comp.outputs: state.pop(port.get('ref_id'), None)
-            operations.append({'operation_id': ref, 'operation_type':'REVIEW_ONLY','order':len(operations), 'code':'# REVIEW_REQUIRED: ' + gap.code})
+            pending = pending_operation(ref, [gap.code], connection=canonical(comp),
+                sql=comp.properties.get('SqlCommand'), properties={**comp.properties,
+                    '_target_proposals':[use for use in mapping_uses if use.get('source_id') == ref]})
+            pending['order'] = len(operations)
+            operations.append(pending)
     graph = {'components':[{'source_id':ref,'type':components[ref].detected_type} for ref in components],
              'edges':edges,'order':ordered,'cycles':cycles,'mapping_uses':mapping_uses}
     return operations, findings, graph

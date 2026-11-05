@@ -100,6 +100,13 @@ def assess_operations(operations_by_step, artifacts):
         for op in ops:
             ref = f'{step_id}:{op["operation_id"]}'
             checked = validate_native_spark(op.get('code', ''))
+            if op.get('pending_item') and op.get('operation_type') in {'REVIEW_ONLY','WRITE_PENDING'}:
+                # Preserve the named draft section, but never count it as implemented.
+                issues = [i for i in checked['issues'] if i['code'] != 'INCOMPLETE_IMPLEMENTATION']
+                if not issues and not op.get('error'):
+                    results.append({'step_id':step_id, 'operation_id':op['operation_id'],
+                        'status':'PENDING', 'issues':[], 'pending_id':op['pending_item']['pending_id']})
+                    continue
             if op.get('error'):
                 checked = {'status': 'REJECTED', 'issues': [{'code': 'OPERATION_GENERATION_FAILED', 'severity': 'ERROR', 'message': op['error'], 'line': None}]}
             # Comments and metadata-only assignments cannot establish a data operation.
@@ -118,6 +125,7 @@ def assessment_summary(inventory, validations, findings, *, dry_run=False):
                 'review_only_items': sum(i['disposition'] == 'REVIEW_ONLY' for i in inventory),
                 'disabled_items': sum(i['disposition'] == 'DISABLED' for i in inventory)},
             'generation': {'operation_count': len(validations), 'statically_valid_operations': valid,
+                'pending_operations': sum(v['status'] == 'PENDING' for v in validations),
                 'operation_coverage_percent': round(100 * valid / len(validations), 1) if validations else None,
                 'basis': 'Operations passing native-code checks; not task coverage or behavioral accuracy.'},
             'verification': {'status': 'NOT_MEASURED', 'legacy_match_percent': None},
