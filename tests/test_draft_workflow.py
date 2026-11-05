@@ -78,6 +78,21 @@ def test_strict_mode_writes_draft_and_preflight_stops_before_any_spark_call(tmp_
     assert not calls
 
 
+def test_dry_run_counts_planned_pending_sections_without_claiming_code_checks(tmp_path):
+    report = run_migration(str(xml_package(tmp_path)), str(tmp_path/'out'), dry_run=True, strict_mode=True)
+    item = report['packages'][0]
+    assert item['notebook_status'] == 'DRY_RUN'
+    assert 'notebook' not in item['artifacts']
+    assert item['assessment']['generation']['status'] == 'NOT_RUN'
+    assert item['assessment']['generation']['operation_count'] == 0
+    assert item['assessment']['generation']['pending_operations'] == 0
+    assert item['assessment']['planning']['pending_section_count'] == 1
+    assert len(json.loads(Path(item['artifacts']['pending_items']).read_text())) == 1
+    review = Path(item['artifacts']['review']).read_text()
+    assert 'Static code checks: NOT RUN (dry run).' in review
+    assert 'Pending implementation sections: 1' in review
+
+
 def test_definition_arrival_replaces_supported_procedure_placeholder(tmp_path):
     source = xml_package(tmp_path)
     before = run_migration(str(source), str(tmp_path/'out'), strict_mode=True)['packages'][0]

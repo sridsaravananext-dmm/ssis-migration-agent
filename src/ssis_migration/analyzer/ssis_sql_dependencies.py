@@ -79,10 +79,11 @@ def extract_ssis_sql_dependencies(
                 # Objects may be dicts (from analyze_sql_dependency);
                 # convert to a hashable string key.
                 obj_key = (
-                    f"{obj.get('schema', '')}.{obj.get('name', '')}"
+                    obj.get('object') or f"{obj.get('schema', '')}.{obj.get('name', '')}"
                     if isinstance(obj, dict)
                     else str(obj)
                 )
+                if not obj_key.strip('.'): continue
 
                 database_objects.add(obj_key)
 

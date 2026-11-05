@@ -1,6 +1,7 @@
 """Connection-aware procedure resolution and reachable dependency findings."""
 from ssis_migration.sql_text import normalize_name, procedure_calls, has_dynamic_call, mask_sql
 from ssis_migration.mapping import ConversionGap
+from ssis_migration.source_context import source_selection, active_source_sql
 import re
 
 
@@ -79,6 +80,9 @@ def dependency_findings(context):
             if component.detected_type!='OLE_DB_SOURCE':continue
             props=component.properties
             connection=next((r.connection_manager_ref_id for r in component.connection_manager_refs if r.connection_manager_ref_id),None)
-            if props.get('SqlCommand'):inspect(component.ref_id,props['SqlCommand'],connection)
-            elif props.get('SqlCommandVariable') or not props.get('OpenRowset'):inspect(component.ref_id,None,connection,True)
+            selected=source_selection(props)
+            if selected['kind'].startswith('VARIABLE'):
+                findings.append(finding('VARIABLE_SQL_REVIEW_REQUIRED', component.ref_id,
+                    'Active source variable requires runtime review; inactive captured SQL is not dependency evidence.'))
+            else: inspect(component.ref_id,active_source_sql(props),connection,True)
     return findings

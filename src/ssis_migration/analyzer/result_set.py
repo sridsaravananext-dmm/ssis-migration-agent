@@ -91,6 +91,9 @@ def analyze_result_set(
     properties = component.get("properties") or {}
 
     sql = properties.get("SqlCommand")
+    if component.get('detected_type') == 'OLE_DB_SOURCE':
+        from ssis_migration.source_context import active_source_sql
+        sql = active_source_sql(properties)
 
     if not sql:
         return {

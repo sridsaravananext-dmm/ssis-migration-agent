@@ -19,10 +19,11 @@ def pending_operation(source_id, reason_codes, *, connection=None, sql=None,
         'parameter_bindings': properties.get('parameter_bindings', []),
         'result_bindings': properties.get('result_bindings', []),
         'result_type': properties.get('ResultType'),
-        'source_variable': properties.get('SqlCommandVariable'),
+        'source_variable': (properties.get('_source_variable_context') or {}).get('reference') or properties.get('SqlCommandVariable'),
         'source_access_mode': properties.get('AccessMode'),
         'target_object': properties.get('OpenRowset'),
         'target_proposals': properties.get('_target_proposals', []),
+        'source_variable_context': properties.get('_source_variable_context'),
         'replacement': 'Supply missing inputs and regenerate this source step; review bindings before implementing it.'}
     lines = [f'# BEGIN PENDING {pending_id}']
     for label, value in [('Source', source_id), ('Connection', connection),
@@ -33,7 +34,8 @@ def pending_operation(source_id, reason_codes, *, connection=None, sql=None,
                          ('Source variable', item['source_variable']),
                          ('Source access mode', item['source_access_mode']),
                          ('Target object', item['target_object']),
-                         ('Target proposals', item['target_proposals'])]:
+                         ('Target proposals', item['target_proposals']),
+                         ('Source variable context', item['source_variable_context'])]:
         if value is not None and value != []:
             lines.append('# ' + label + ': ' + json.dumps(value, ensure_ascii=True))
     if sql:
