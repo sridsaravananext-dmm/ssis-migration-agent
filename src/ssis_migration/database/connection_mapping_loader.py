@@ -22,6 +22,8 @@ def load_connection_mapping(
 
         data = json.load(file)
 
+    validate_connection_mapping(data)
+
     mappings = []
 
     for item in data.get(
@@ -53,3 +55,17 @@ def load_connection_mapping(
     return ConnectionMappingSet(
         mappings=mappings
     )
+
+def validate_connection_mapping(data):
+    if not isinstance(data, dict) or not isinstance(data.get("mappings"), list):
+        raise ValueError("Connection mapping must be an object with a mappings list")
+    seen = set()
+    for item in data["mappings"]:
+        if not isinstance(item, dict):
+            raise ValueError("Each mapping must be an object")
+        for key in ("connection_reference", "metadata_file"):
+            if not isinstance(item.get(key), str) or not item[key].strip():
+                raise ValueError(f"Mapping requires non-empty {key}")
+        if item["connection_reference"] in seen:
+            raise ValueError("Duplicate connection reference in mapping")
+        seen.add(item["connection_reference"])

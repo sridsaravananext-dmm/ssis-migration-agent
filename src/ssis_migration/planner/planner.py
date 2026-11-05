@@ -53,6 +53,8 @@ class MigrationPlanner:
             plan,
         )
 
+        from ssis_migration.assessment import account_source
+        account_source(context, plan)
         return plan
 
     # =========================================================

@@ -131,38 +131,8 @@ def extract_referenced_objects(sql: str) -> list[str]:
     return sorted(references)
 
 def extract_stored_procedures(sql: str) -> list[str]:
-    if not sql:
-        return []
-
-    pattern = r"""
-        \bEXEC(?:UTE)?\s+
-        (?:
-            \[([A-Za-z_][^\]]*)\]
-            |
-            ([A-Za-z_][A-Za-z0-9_$#@]*)
-        )
-        \s*\.\s*
-        (?:
-            \[([A-Za-z_][^\]]*)\]
-            |
-            ([A-Za-z_][A-Za-z0-9_$#@]*)
-        )
-    """
-
-    procedures: set[str] = set()
-
-    for match in re.finditer(
-        pattern,
-        sql,
-        flags=re.IGNORECASE | re.VERBOSE,
-    ):
-        schema = match.group(1) or match.group(2)
-        procedure = match.group(3) or match.group(4)
-
-        if schema and procedure:
-            procedures.add(f"{schema}.{procedure}")
-
-    return sorted(procedures)
+    from ssis_migration.sql_text import procedure_calls
+    return procedure_calls(sql)
 
 
 def analyze_sql(sql: str | None) -> dict[str, Any]:

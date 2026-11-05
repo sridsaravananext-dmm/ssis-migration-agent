@@ -201,7 +201,7 @@ def test_assemble_includes_title_cell(
     assert first_cell["cell_type"] == "markdown"
     source = "".join(first_cell["source"])
     assert "TestPackage" in source
-    assert "Databricks Migration" in source
+    assert "Databricks Conversion Review" in source
 
 
 def test_assemble_includes_ai_contract_for_ai_assisted_steps(

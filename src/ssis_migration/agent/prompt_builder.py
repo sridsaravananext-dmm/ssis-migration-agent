@@ -251,6 +251,7 @@ MIGRATION BOUNDARIES — MANDATORY
 
 27. When translating FOR SYSTEM_TIME AS OF, require evidence of a compatible historical-data model, including the source row keys, effective/system validity boundaries, and historical versions needed to reconstruct each related table at the requested timestamp. If temporal_context is supplied with has_temporal_queries=True, the ValidFrom/ValidTo columns and archive table pattern provided there constitute the required evidence.
 
+29. Never generate Spark UDFs, pandas UDFs, UDTFs, custom row APIs, toPandas, or unbounded collect. Use native Spark SQL/DataFrame expressions. Return REVIEW_REQUIRED if native translation is unavailable.
 28. If compatible row history is not present in the supplied context (temporal_context is absent or has_temporal_queries is False), do not invent it and do not substitute current-state data or Delta time travel. Return REVIEW_REQUIRED or UNRESOLVED and identify the exact missing historical-data prerequisite.
 
 29. Do not claim that the City Dimension migration is complete until the translated source result has been compared with the original procedure for identical cutoff parameters, including row values, duplicate behavior, and Valid To intervals.

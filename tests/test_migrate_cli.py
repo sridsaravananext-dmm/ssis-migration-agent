@@ -1,163 +1,72 @@
-from __future__ import annotations
-
+"""End-to-end fixture checks for the assessment output contract."""
 import json
 from pathlib import Path
-
 import pytest
-
 from ssis_migration.migrate import run_migration
 
-
-# ---------------------------------------------------------
-# Path fixtures
-# ---------------------------------------------------------
+ROOT = Path(__file__).resolve().parent.parent
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DTSX_PATH = PROJECT_ROOT / "examples" / "wwi" / "DailyETLMain.dtsx"
-MAPPING_PATH = (
-    PROJECT_ROOT / "examples" / "wwi" / "connection_mapping.json"
-)
+@pytest.fixture(scope='module')
+def conversion(tmp_path_factory):
+    output = tmp_path_factory.mktemp('wwi-assessment')
+    return run_migration(str(ROOT / 'examples/wwi/DailyETLMain.dtsx'), str(output),
+        connection_mapping=str(ROOT / 'examples/wwi/connection_mapping.json'), base_path=str(ROOT))
 
 
-@pytest.fixture
-def migration_result(tmp_path: Path) -> dict:
-    """Run the full migration pipeline on DailyETLMain.dtsx."""
-    return run_migration(
-        source=str(DTSX_PATH),
-        output=str(tmp_path),
-        catalog=None,
-        connection_mapping=str(MAPPING_PATH),
-        base_path=str(PROJECT_ROOT),
-        execute=False,
-    )
+def test_wwi_generation_is_not_certified_as_migrated(conversion):
+    assert conversion['status'] == 'REVIEW_REQUIRED'
+    assert conversion['analyzed_package_count'] == 1
+    assert conversion['generated_package_count'] == 1
+    assert conversion['failed_package_count'] == 0
+    assert conversion['verification'] == {'status': 'NOT_MEASURED', 'legacy_match_percent': None}
 
 
-@pytest.fixture
-def package_output(
-    migration_result: dict, tmp_path: Path
-) -> Path:
-    """Return the per-package output directory."""
-    pkg = migration_result["packages"][0]
-    return Path(pkg["artifacts"]["manifest"]).parent
+def test_output_contract_and_manifest(conversion):
+    package = conversion['packages'][0]
+    assert {'notebook', 'review', 'manifest', 'ir', 'analysis', 'plan', 'validation', 'assessment', 'source_inventory'} <= set(package['artifacts'])
+    for path in package['artifacts'].values(): assert Path(path).is_file()
+    manifest = json.loads(Path(package['artifacts']['manifest']).read_text())
+    assert len(manifest['fingerprint']) == 64
+    assert manifest['artifacts']['notebook'] == package['artifacts']['notebook']
+    assert len(manifest['database_metadata']) == 2
 
 
-# ---------------------------------------------------------
-# Tests
-# ---------------------------------------------------------
+def test_source_inventory_contains_every_task_and_component(conversion):
+    artifacts = conversion['packages'][0]['artifacts']
+    ir = json.loads(Path(artifacts['ir']).read_text())
+    inventory = json.loads(Path(artifacts['source_inventory']).read_text())
+    expected = len(ir['executables']) + sum(len(f['components']) for f in ir['data_flows'])
+    assert len(inventory) == expected
+    assert all(i['disposition'] in {'PLANNED_CANDIDATE', 'REVIEW_ONLY'} for i in inventory)
+    plan = json.loads(Path(artifacts['plan']).read_text())
+    assert plan['unresolved']
+    assert any(s['step_type'] == 'REVIEW_ONLY' for s in plan['steps'])
 
 
-def test_migration_report_status(migration_result: dict):
-    """The full pipeline should complete with MIGRATION_COMPLETE."""
-    assert migration_result["status"] == (
-        "MIGRATION_COMPLETE_DEPLOYMENT_PENDING"
-    )
-    assert migration_result["migrated_package_count"] == 1
-    assert migration_result["failed_package_count"] == 0
+def test_validation_results_and_runtime_gate(conversion):
+    entry = conversion['packages'][0]
+    validations = json.loads(Path(entry['artifacts']['validation']).read_text())
+    assert validations
+    assert any(v['status'] == 'REJECTED' for v in validations)
+    assert all(v['status'] in {'PASS', 'REJECTED'} for v in validations)
+    notebook = json.loads(Path(entry['artifacts']['notebook']).read_text())
+    assert notebook['nbformat'] == 4
+    for cell in notebook['cells']:
+        if cell['cell_type'] == 'code': compile(''.join(cell['source']), '<cell>', 'exec')
+    assert 'raise RuntimeError' in ''.join(notebook['cells'][2]['source'])
+    assert notebook['metadata']['assessment']['verification'] == 'NOT_MEASURED'
 
 
-def test_package_status_is_migrated(migration_result: dict):
-    """The package should be marked MIGRATED, not just ANALYZED."""
-    pkg = migration_result["packages"][0]
-    assert pkg["status"] == "MIGRATED"
+def test_report_metrics_are_explicitly_static(conversion):
+    summary = conversion['packages'][0]['assessment']
+    assert summary['verification']['legacy_match_percent'] is None
+    assert summary['human_review_item_count'] > 0
+    generation = summary['generation']
+    assert generation['statically_valid_operations'] < generation['operation_count']
+    assert 'not task coverage or behavioral accuracy' in generation['basis']
 
 
-def test_all_stages_succeeded(migration_result: dict):
-    """All connected stages should report SUCCEEDED."""
-    pkg = migration_result["packages"][0]
-    stages = pkg["stages"]
-    assert stages["package_discovery"] == "SUCCEEDED"
-    assert stages["parsing"] == "SUCCEEDED"
-    assert stages["ir_build"] == "SUCCEEDED"
-    assert stages["analysis"] == "SUCCEEDED"
-    assert stages["target_metadata_discovery"] == "SUCCEEDED"
-    assert stages["transformation_generation"] == "SUCCEEDED"
-    assert stages["data_validation"] == "SUCCEEDED"
-
-
-def test_all_expected_files_exist(package_output: Path):
-    """All expected output files should be present."""
-    expected_files = [
-        "package_ir.json",
-        "analysis.json",
-        "migration_manifest.json",
-        "migration_plan.json",
-        "validation_results.json",
-        "DailyETLMain_Migration.ipynb",
-    ]
-    for filename in expected_files:
-        filepath = package_output / filename
-        assert filepath.exists(), (
-            f"Missing expected file: {filename}"
-        )
-
-
-def test_generated_artifacts_directory_has_files(
-    package_output: Path,
-):
-    """The generated_artifacts directory should contain files."""
-    artifacts_dir = package_output / "generated_artifacts"
-    assert artifacts_dir.exists()
-    assert artifacts_dir.is_dir()
-    files = list(artifacts_dir.iterdir())
-    assert len(files) > 0
-
-
-def test_notebook_is_valid_ipynb(package_output: Path):
-    """The notebook should be valid Jupyter .ipynb format."""
-    notebook_path = (
-        package_output / "DailyETLMain_Migration.ipynb"
-    )
-    content = notebook_path.read_text(encoding="utf-8")
-    nb = json.loads(content)
-
-    assert nb["nbformat"] == 4
-    assert "cells" in nb
-    assert len(nb["cells"]) > 0
-
-    # Should have both markdown and code cells
-    cell_types = {c["cell_type"] for c in nb["cells"]}
-    assert "markdown" in cell_types
-    assert "code" in cell_types
-
-
-def test_migration_plan_has_steps(package_output: Path):
-    """The migration plan should contain migration steps."""
-    plan_path = package_output / "migration_plan.json"
-    plan = json.loads(plan_path.read_text())
-
-    assert plan["package_name"] == "DailyETLMain"
-    assert len(plan["steps"]) > 0
-    assert plan["unresolved"] == []
-
-
-def test_validation_results_exist(package_output: Path):
-    """Validation results should be present and non-empty."""
-    val_path = package_output / "validation_results.json"
-    validations = json.loads(val_path.read_text())
-
-    assert len(validations) > 0
-    # All validations should be PASS or REVIEW_REQUIRED
-    for v in validations:
-        assert v["status"] in (
-            "PASS",
-            "REVIEW_REQUIRED",
-        ), (
-            f"Unexpected status {v['status']} "
-            f"for {v['step_name']}"
-        )
-
-
-def test_manifest_includes_notebook_path(
-    package_output: Path,
-):
-    """The manifest should include the notebook artifact path."""
-    manifest_path = (
-        package_output / "migration_manifest.json"
-    )
-    manifest = json.loads(manifest_path.read_text())
-
-    assert "notebook" in manifest["artifacts"]
-    notebook_path = Path(manifest["artifacts"]["notebook"])
-    assert notebook_path.exists()
-    assert notebook_path.suffix == ".ipynb"
+def test_execute_is_rejected_by_api(tmp_path):
+    with pytest.raises(ValueError, match='not implemented'):
+        run_migration(str(ROOT / 'examples/wwi/DailyETLMain.dtsx'), str(tmp_path), execute=True)

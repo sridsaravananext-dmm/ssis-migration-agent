@@ -308,6 +308,10 @@ def validate_generated_code(
             seen.add(key)
             unique.append(issue)
 
+    from ssis_migration.validator.native_spark import validate_native_spark
+    native = validate_native_spark(code)
+    unique.extend(ValidationIssue(**item) for item in native["issues"])
+
     has_errors = any(issue.severity == "ERROR" for issue in unique)
 
     return {

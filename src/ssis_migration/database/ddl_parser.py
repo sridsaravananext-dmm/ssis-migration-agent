@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from ssis_migration.database.ir import DatabaseIR, SQLTableIR
+from ssis_migration.procedure_file_loader import read_sql_file
+from ssis_migration.sql_text import mask_sql
 from ssis_migration.database.dtsx_metadata_builder import (
     TSQL_TO_SPARK_MAP,
 )
@@ -26,10 +28,11 @@ from ssis_migration.database.dtsx_metadata_builder import (
 # CREATE TABLE [schema].[table] (
 _CREATE_TABLE_RE = re.compile(
     r"CREATE\s+TABLE\s+"
-    r"\[?(?P<schema>\w+)\]?\."
-    r"\[?(?P<table>\w+)\]?\s*\(",
+    r"(?:\[(?P<schema_b>[^\]]+)\]|(?P<schema>\w+))\s*\.\s*"
+    r"(?:\[(?P<table_b>[^\]]+)\]|(?P<table>\w+))\s*\(",
     re.IGNORECASE,
 )
+
 
 # Column definition: [Column] type(size) [NULL|NOT NULL] [IDENTITY]
 # Skips lines that are constraint definitions (PRIMARY KEY, FOREIGN KEY, etc.)
@@ -141,7 +144,7 @@ def parse_ddl_file(ddl_path: str | Path) -> DatabaseIR:
     Returns a DatabaseIR with tables, columns, nullability, and
     primary keys extracted from the DDL.
     """
-    text = Path(ddl_path).read_text(encoding="utf-8")
+    text = read_sql_file(ddl_path)
     return parse_ddl_text(text)
 
 
@@ -150,10 +153,11 @@ def parse_ddl_text(text: str) -> DatabaseIR:
     database_ir = DatabaseIR()
     schemas_seen: set[str] = set()
 
-    # Find all CREATE TABLE statements
-    for match in _CREATE_TABLE_RE.finditer(text):
-        schema = match.group("schema")
-        table = match.group("table")
+    # Preserve original offsets while excluding literals/comments from structure.
+    structural = mask_sql(text)
+    for match in _CREATE_TABLE_RE.finditer(structural):
+        schema = match.group("schema_b") or match.group("schema")
+        table = match.group("table_b") or match.group("table")
         schemas_seen.add(schema)
 
         # Find the matching closing parenthesis
@@ -161,9 +165,9 @@ def parse_ddl_text(text: str) -> DatabaseIR:
         depth = 1
         pos = start
         while pos < len(text) and depth > 0:
-            if text[pos] == "(":
+            if structural[pos] == "(":
                 depth += 1
-            elif text[pos] == ")":
+            elif structural[pos] == ")":
                 depth -= 1
             pos += 1
 
@@ -209,6 +213,9 @@ def parse_ddl_text(text: str) -> DatabaseIR:
             constraints = col_match.group("constraints") or ""
 
             nullable = _parse_nullability(constraints)
+            if re.search(r"\bPRIMARY\s+KEY\b", constraints, re.IGNORECASE):
+                pk_columns.append(col_name)
+                nullable = False
 
             base_type, max_length, scale = _strip_type_paren(tsql_type)
 
@@ -271,6 +278,9 @@ def merge_ddl_into_dtsx(
             table.columns = ddl_table.columns
             table.primary_keys = ddl_table.primary_keys
 
+    existing = {f"{t.schema}.{t.name}".casefold() for t in dtsx_ir.tables}
+    dtsx_ir.tables.extend(t for key, t in ddl_by_key.items() if key not in existing)
+    dtsx_ir.schemas = sorted(set(dtsx_ir.schemas) | set(ddl_ir.schemas))
     return dtsx_ir
 
 
@@ -283,14 +293,16 @@ def _split_body_lines(body: str) -> list[str]:
     current: list[str] = []
     depth = 0
 
-    for char in body:
-        if char == "(":
+    mask = mask_sql(body)
+    for index, char in enumerate(body):
+        structural_char = mask[index]
+        if structural_char == "(":
             depth += 1
             current.append(char)
-        elif char == ")":
+        elif structural_char == ")":
             depth -= 1
             current.append(char)
-        elif char == "," and depth == 0:
+        elif structural_char == "," and depth == 0:
             lines.append("".join(current))
             current = []
         else:
