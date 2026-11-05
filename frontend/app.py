@@ -132,6 +132,8 @@ with results_tab:
                 st.markdown(f"**{entry['name']} — {entry['status']}**")
                 if entry.get('error'): st.error(entry['error'])
                 if entry.get('message'): st.info(entry['message'])
+                if entry.get('protection_reason'):
+                    st.write(f"Preserved notebook: **{entry['protection_reason']}**. Execution readiness: **REVALIDATION_REQUIRED**")
                 pending_items = []
                 pending_path = entry.get('artifacts', {}).get('pending_items')
                 if pending_path and Path(pending_path).is_file():
@@ -146,6 +148,7 @@ with results_tab:
                         st.write(f"Operations passing static checks: {generation['statically_valid_operations']} / {generation['operation_count']}")
                         if percent is not None: st.write(f'Static operation coverage: {percent}%')
                         st.caption(generation['basis'])
+                        st.caption(f"Container/control bookkeeping operations excluded: {generation.get('structural_operation_count', 0)}")
                         st.write(f"Pending operations: {generation.get('pending_operations', 0)}")
                     pending_count = assessment.get('planning', {}).get('pending_section_count', len(pending_items))
                     st.write(f'Pending implementation sections: {pending_count}')
@@ -162,6 +165,17 @@ with results_tab:
                             names = ', '.join(p['name'] for p in pending.get('procedures', []))
                             st.write(f"**{names or pending['kind']}** — {pending['source_id']}")
                             st.caption(f"{pending['pending_id']} · {', '.join(pending['reason_codes'])}")
+                            context = pending.get('source_variable_context')
+                            if context:
+                                st.write(f"Source variable: **{context['reference']}** — {context['status']}")
+                                if context.get('expression'):
+                                    st.caption('Declared SSIS expression; runtime evaluation and bindings require review.')
+                                    st.code(context['expression'], language='text')
+                                if context.get('active_value_kind') == 'VALUE' and context.get('value') is not None:
+                                    st.caption('Captured variable value; runtime changes and overrides require review.')
+                                    st.code(str(context['value']), language='text')
+                                if context.get('references'):
+                                    st.caption('Runtime references: ' + ', '.join(ref['reference'] for ref in context['references']))
                 for item in entry.get('findings', []):
                     st.write(f"**{item['code']}** — {item['message']}")
                     st.caption(f"Source: {item['source_id']} · Finding: {item['finding_id']}")

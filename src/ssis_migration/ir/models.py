@@ -73,6 +73,9 @@ class VariableIR:
     value: Any = None
     expression: str | None = None
     ref_id: str | None = None
+    scope_ref_id: str | None = None
+    evaluate_as_expression: bool | None = None
+    sensitive: bool = False
 
 
 @dataclass

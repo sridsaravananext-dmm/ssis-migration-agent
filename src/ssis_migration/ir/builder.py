@@ -482,4 +482,7 @@ class IRBuilder:
             ref_id=variable.get(
                 "ref_id"
             ),
+            scope_ref_id=variable.get('scope_ref_id'),
+            evaluate_as_expression=variable.get('evaluate_as_expression'),
+            sensitive=variable.get('sensitive', False),
         )

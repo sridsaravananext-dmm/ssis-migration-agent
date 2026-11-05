@@ -7,6 +7,7 @@ import sqlglot
 from sqlglot import exp, ErrorLevel
 from ssis_migration.mapping import ConversionGap, resolve_target, translate_sql
 from ssis_migration.drafts import pending_operation
+from ssis_migration.source_context import source_selection, active_source_sql, describe_variable
 
 
 def variable(ref):
@@ -101,7 +102,7 @@ def ports_graph(flow):
     return components, edges, inbound, outbound
 
 
-def dataflow_operations(flow, config, connection_aliases=None):
+def dataflow_operations(flow, config, connection_aliases=None, *, package=None):
     from ssis_migration.assessment import finding
     findings, operations, mapping_uses = [], [], []
     aliases = connection_aliases or {}
@@ -120,6 +121,12 @@ def dataflow_operations(flow, config, connection_aliases=None):
     for ref in ordered:
         comp = components[ref]
         code = []
+        source_context = None
+        if comp.detected_type == 'OLE_DB_SOURCE':
+            selected = source_selection(comp.properties)
+            if selected['kind'].startswith('VARIABLE'):
+                source_context = describe_variable(selected['value'], flow.ref_id, package) if package else {
+                    'reference':selected['value'], 'status':'PACKAGE_CONTEXT_UNAVAILABLE'}
         try:
             if comp.properties.get('_type_evidence') == 'description':
                 raise ConversionGap('COMPONENT_TYPE_UNRESOLVED', 'A description-based type hint is not sufficient for native generation.')
@@ -154,15 +161,14 @@ def dataflow_operations(flow, config, connection_aliases=None):
             if comp.detected_type == 'OLE_DB_SOURCE':
                 if comp.inputs or len(ports) != 1: raise ConversionGap('DATAFLOW_SOURCE_UNSUPPORTED', 'Source must have one normal output and no inputs.')
                 port = ports[0]
-                query = comp.properties.get('SqlCommand')
-                access = str(comp.properties.get('AccessMode', ''))
-                if comp.properties.get('SqlCommandVariable') or access not in {'','0','2'}:
-                    raise ConversionGap('SQL_EXTRACTION_INCOMPLETE', 'Variable-backed source SQL/table cannot be inferred.')
+                if selected['kind'].startswith('VARIABLE'):
+                    raise ConversionGap('VARIABLE_SQL_REVIEW_REQUIRED', 'Active source uses an SSIS variable. Its declaration and runtime references are retained in the pending section.')
+                if selected['kind'] == 'UNSUPPORTED':
+                    raise ConversionGap('SQL_EXTRACTION_INCOMPLETE', 'Source access mode is unsupported.')
+                query = active_source_sql(comp.properties)
                 connection = canonical(comp)
                 if not query:
-                    table = comp.properties.get('OpenRowset')
-                    if not table: raise ConversionGap('SQL_EXTRACTION_INCOMPLETE', 'Source has no static query or table.')
-                    query = 'SELECT * FROM ' + table
+                    raise ConversionGap('SQL_EXTRACTION_INCOMPLETE', 'Source has no active static query or table.')
                 sql, uses = translate_sql(query, connection, config, query_only=True)
                 mapping_uses.extend({**use, 'source_id':ref} for use in uses)
                 if any(use['resolution'] == 'PLACEHOLDER' for use in uses):
@@ -261,6 +267,7 @@ def dataflow_operations(flow, config, connection_aliases=None):
             for port in comp.outputs: state.pop(port.get('ref_id'), None)
             pending = pending_operation(ref, [gap.code], connection=canonical(comp),
                 sql=comp.properties.get('SqlCommand'), properties={**comp.properties,
+                    '_source_variable_context':source_context,
                     '_target_proposals':[use for use in mapping_uses if use.get('source_id') == ref]})
             pending['order'] = len(operations)
             operations.append(pending)

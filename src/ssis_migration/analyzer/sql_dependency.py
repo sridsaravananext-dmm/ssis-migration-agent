@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from ssis_migration.sql_text import mask_sql
 
 
 # Supports:
@@ -97,7 +98,7 @@ def _extract_sql_objects(
 ) -> list[dict[str, str]]:
     objects: list[dict[str, str]] = []
 
-    for match in SQL_OBJECT_PATTERN.finditer(sql):
+    for match in SQL_OBJECT_PATTERN.finditer(mask_sql(sql)):
         object_name = match.group("object")
 
         if not object_name:
@@ -139,7 +140,7 @@ def _extract_executed_objects(
 ) -> list[str]:
     objects: list[str] = []
 
-    for match in EXEC_PATTERN.finditer(sql):
+    for match in EXEC_PATTERN.finditer(mask_sql(sql)):
         object_name = match.group("object")
 
         if object_name:
@@ -167,8 +168,15 @@ def analyze_sql_dependency(
             sql_fragments.append(str(value))
 
     sql = "\n".join(sql_fragments)
+    if component.get('detected_type') == 'OLE_DB_SOURCE':
+        from ssis_migration.source_context import active_source_sql
+        sql = active_source_sql(properties) or ''
 
     open_rowset = properties.get("OpenRowset")
+    if component.get('detected_type') == 'OLE_DB_SOURCE':
+        from ssis_migration.source_context import source_selection
+        selected = source_selection(properties)
+        open_rowset = selected['value'] if selected['kind'] == 'TABLE' else None
 
     result = {
         "component": component.get("name"),

@@ -45,3 +45,22 @@ def test_pending_results_render_without_nested_expanders_and_show_run_state(dry_
         assert item['assessment']['generation']['pending_operations'] > 0
         assert 'Download notebook draft' in labels
         assert not any('static code checks were not run' in message.value for message in app.info)
+
+
+def test_manually_edited_draft_is_preserved_and_remains_downloadable():
+    app=AppTest.from_file(str(ROOT/'frontend/app.py'),default_timeout=30).run()
+    app.radio[0].set_value('Use WWI sample package').run()
+    next(w for w in app.button if w.label=='Analyze & generate').click().run()
+    assert not app.exception
+    path=Path(app.session_state['result']['packages'][0]['artifacts']['notebook'])
+    notebook=json.loads(path.read_text())
+    notebook['cells'].append({'cell_type':'markdown','metadata':{},'source':['My manual implementation notes.']})
+    path.write_text(json.dumps(notebook))
+    edited=path.read_bytes()
+    next(w for w in app.button if w.label=='Analyze & generate').click().run()
+    assert not app.exception
+    report=app.session_state['result']
+    assert report['preserved_package_count']==1 and report['generated_package_count']==0
+    assert path.read_bytes()==edited
+    assert any('NOTEBOOK_CONTENT_CHANGED' in m.value and 'REVALIDATION_REQUIRED' in m.value for m in app.markdown)
+    assert 'Download notebook draft' in [b.proto.label for b in app.get('download_button')]

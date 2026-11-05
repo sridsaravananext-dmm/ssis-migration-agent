@@ -6,7 +6,7 @@ The first change established the backend/application foundation from the compara
 
 Source inventory contains one entry per parsed executable and data-flow component. `PLANNED_CANDIDATE` means associated with a plan step, not implemented or verified. `REVIEW_ONLY` means retained for manual work. Missing sequence-based planning no longer removes tasks from the output plan.
 
-`operation_coverage_percent` counts operations passing static native-code checks. The denominator includes missing/rejected implementations. AI replaces an operation group only when the orchestrator returns accepted generated code; assumptions, provider errors, and unresolved items remain findings. No task-equivalence or legacy-accuracy percentage is produced.
+`operation_coverage_percent` counts non-structural operations passing static native-code checks. Container/control bookkeeping stays validated but is excluded from the numerator and denominator; `structural_operation_count` reports it separately. The denominator includes missing/rejected implementations. AI replaces an operation group only when the orchestrator returns accepted generated code; assumptions, provider errors, and unresolved items remain findings. No task-equivalence or legacy-accuracy percentage is produced.
 
 `generation.status = NOT_RUN` identifies a dry run; its zero operation counts mean checks were not performed. `planning.pending_section_count` counts pending sections discovered during planning, including dry runs. The UI and Markdown review show that count separately rather than implying that zero validated pending operations means no unfinished work. Result cards support the declared Streamlit 1.38 minimum without nested expanders.
 
@@ -30,7 +30,7 @@ Definitions enrich both the DTSX-derived and external-metadata context before pl
 
 Version directories use source/dependency/configuration/engine content identity. Referenced connection metadata participates in the fingerprint. Different same-named batch packages receive distinct directory names. Input filenames and connections are retained in provenance. Timestamps and run IDs do not form finding identities.
 
-An explicit reviewed marker protects output; unreadable existing notebooks are protected conservatively. Changed inputs create a new version. Deterministic versions are reassessed rather than trusting cached validation results. This provides predictable artifacts, not a promise that rerunning the generated data workload is idempotent.
+A generated notebook hash is stored in the manifest. Content changes protect unmarked manual edits; explicit reviewed markers, unreadable notebooks/manifests, and untracked outputs are also protected conservatively. Preserved outputs remain downloadable with REVALIDATION_REQUIRED and do not count as newly analyzed/generated packages. Changed inputs create a new version. Deterministic versions are reassessed rather than trusting cached validation results. This provides predictable artifacts, not a promise that rerunning the generated data workload is idempotent.
 
 The legacy Jobs generator now forwards its existing `schema` argument consistently in job and notebook parameters. Legacy-mode notebooks treat it as context and block execution when it is supplied. Source-graph notebooks accept only the configuration used to generate target naming and overrides; changing runtime hints requires regeneration. Job generation remains separate from deployment and from pipeline/load-strategy decisions.
 

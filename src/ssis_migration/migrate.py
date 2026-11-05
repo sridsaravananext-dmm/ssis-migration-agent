@@ -389,6 +389,7 @@ def _review_text(name, summary, findings):
              'Legacy behavioral match: NOT MEASURED. No runtime equivalence percentage is claimed.', '',
              f"Source items: {summary['source_accounting']['total_items']}",
              checks,
+             f"Container/control bookkeeping operations (excluded): {generation.get('structural_operation_count', 0)}",
              f"Pending implementation sections: {summary['planning']['pending_section_count']}",
              f"Execution readiness: {summary['execution_readiness']['status']}",
              'Read this review and the notebook draft first. JSON files are diagnostic records, not scripts to run.',
@@ -402,7 +403,7 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
         ai=False, ai_provider='databricks', ddl_path=None, procedures_path=None, ddl_paths=(), procedures_paths=(),
         layer='unspecified', target_schema=None, description='', default_schema='dbo', strict_mode=False,
         dry_run=False, respect_human_edits=True, planner_mode='graph', object_mappings=None, dependency_scopes=None):
-    from ssis_migration.lifecycle import input_manifest, reviewed_output
+    from ssis_migration.lifecycle import input_manifest, notebook_protection_reason, file_record
     if execute: raise ValueError('Deployment and data execution are not implemented; use conversion/assessment only')
     config = AssessmentConfig(catalog=catalog or 'main', layer=layer, target_schema=target_schema,
         description=description, default_schema=default_schema, strict_mode=strict_mode, dry_run=dry_run,
@@ -436,10 +437,16 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
             directory = output_path / name / manifest['fingerprint'][:20]
             directory.mkdir(parents=True, exist_ok=True)
             cache = directory / 'package_result.json'
-            if respect_human_edits and reviewed_output(directory):
+            protection = notebook_protection_reason(directory) if respect_human_edits else None
+            if protection:
                 entry.update(status='REVIEW_REQUIRED', notebook_status='SKIPPED_HUMAN_REVIEWED',
-                    message='Existing reviewed or unreadable notebook was preserved. Inspect its recorded assessment.',
-                    artifacts={'manifest': str(directory / 'migration_manifest.json')})
+                    message='Existing edited, reviewed, or untracked notebook was preserved. Revalidation is required before execution.',
+                    protection_reason=protection, execution_readiness={'status':'REVALIDATION_REQUIRED','runtime_verification':'NOT_MEASURED'},
+                    stages={'parsing':'NOT_RUN','analysis':'NOT_RUN','generation':'SKIPPED_HUMAN_REVIEWED','runtime_verification':'NOT_MEASURED'})
+                for key, filename in [('manifest','migration_manifest.json'), ('notebook',f'{name}_Migration.ipynb'),
+                        ('review',f'{name}_review.md'), ('pending_items','pending_items.json')]:
+                    path = directory / filename
+                    if path.is_file(): entry['artifacts'][key] = str(path)
             else:
                 # Reassess deterministic input versions; avoid trusting stale/edited validation caches.
                 # Remove only the prior generated notebook for this exact input version.
@@ -463,14 +470,16 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
                 if result['notebook_file']: entry['artifacts']['notebook'] = result['notebook_file']
                 entry['artifacts']['pending_items'] = str(directory / 'pending_items.json')
                 manifest['artifacts'] = entry['artifacts']
+                manifest['generated_notebooks'] = {Path(result['notebook_file']).name:file_record(result['notebook_file'])['sha256']} if result['notebook_file'] else {}
                 write_json(directory / 'migration_manifest.json', manifest)
                 write_json(cache, entry)
         except Exception as exc:
             write_json(directory / 'error.json', {'error': str(exc), 'traceback': traceback.format_exc()})
             entry.update(error=str(exc), error_file=str(directory / 'error.json'))
         report['packages'].append(entry)
-    report['analyzed_package_count'] = sum(p['status'] != 'FAILED' for p in report['packages'])
-    report['generated_package_count'] = sum('notebook' in p['artifacts'] for p in report['packages'])
+    report['analyzed_package_count'] = sum(p.get('stages', {}).get('analysis') == 'SUCCEEDED' for p in report['packages'])
+    report['generated_package_count'] = sum('notebook' in p['artifacts'] and p.get('notebook_status') != 'SKIPPED_HUMAN_REVIEWED' for p in report['packages'])
+    report['preserved_package_count'] = sum(p.get('notebook_status') == 'SKIPPED_HUMAN_REVIEWED' for p in report['packages'])
     report['review_required_package_count'] = sum(p['status'] == 'REVIEW_REQUIRED' for p in report['packages'])
     report['failed_package_count'] = sum(p['status'] == 'FAILED' for p in report['packages'])
     report['verification'] = {'status': 'NOT_MEASURED', 'legacy_match_percent': None}

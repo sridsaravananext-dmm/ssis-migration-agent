@@ -105,6 +105,7 @@ def assess_operations(operations_by_step, artifacts):
                 issues = [i for i in checked['issues'] if i['code'] != 'INCOMPLETE_IMPLEMENTATION']
                 if not issues and not op.get('error'):
                     results.append({'step_id':step_id, 'operation_id':op['operation_id'],
+                        'operation_type':op.get('operation_type'),
                         'status':'PENDING', 'issues':[], 'pending_id':op['pending_item']['pending_id']})
                     continue
             if op.get('error'):
@@ -112,23 +113,25 @@ def assess_operations(operations_by_step, artifacts):
             # Comments and metadata-only assignments cannot establish a data operation.
             if checked['status'] == 'PASS' and op.get('operation_type') == 'LOOKUP_UPDATE':
                 checked = {'status': 'REJECTED', 'issues': [{'code': 'LOOKUP_IMPLEMENTATION_MISSING', 'severity': 'ERROR', 'message': 'Lookup metadata does not implement dimension key resolution.', 'line': None}]}
-            results.append({'step_id': step_id, 'operation_id': op['operation_id'], **checked})
+            results.append({'step_id': step_id, 'operation_id': op['operation_id'], 'operation_type':op.get('operation_type'), **checked})
             for item in checked['issues']:
                 findings.append(finding(item['code'], ref, item['message'], evidence=item.get('line')))
     return results, findings
 
 
 def assessment_summary(inventory, validations, findings, *, dry_run=False):
-    valid = sum(v['status'] == 'PASS' for v in validations)
+    business = [v for v in validations if v.get('operation_type') != 'STRUCTURAL']
+    valid = sum(v['status'] == 'PASS' for v in business)
     return {'source_accounting': {'total_items': len(inventory),
                 'planned_candidates': sum(i['disposition'] == 'PLANNED_CANDIDATE' for i in inventory),
                 'review_only_items': sum(i['disposition'] == 'REVIEW_ONLY' for i in inventory),
                 'disabled_items': sum(i['disposition'] == 'DISABLED' for i in inventory)},
             'generation': {'status':'NOT_RUN' if dry_run else 'ASSESSED',
-                'operation_count': len(validations), 'statically_valid_operations': valid,
-                'pending_operations': sum(v['status'] == 'PENDING' for v in validations),
-                'operation_coverage_percent': round(100 * valid / len(validations), 1) if validations else None,
-                'basis': 'Operations passing native-code checks; not task coverage or behavioral accuracy.'},
+                'operation_count': len(business), 'statically_valid_operations': valid,
+                'structural_operation_count': len(validations) - len(business),
+                'pending_operations': sum(v['status'] == 'PENDING' for v in business),
+                'operation_coverage_percent': round(100 * valid / len(business), 1) if business else None,
+                'basis': 'Operations passing native-code checks; not task coverage or behavioral accuracy. Container bookkeeping is excluded.'},
             'verification': {'status': 'NOT_MEASURED', 'legacy_match_percent': None},
             'human_review_item_count': len(findings),
             'status': 'REVIEW_REQUIRED' if findings else ('ANALYZED' if dry_run else 'ARTIFACTS_GENERATED')}

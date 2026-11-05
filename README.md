@@ -61,15 +61,17 @@ Incomplete graph notebooks have `notebook_status = DRAFT_REQUIRES_REVIEW` and `e
 
 Statuses include `REVIEW_REQUIRED`, `ARTIFACTS_GENERATED`, `ANALYZED`, `PARTIAL_FAILURE`, and `FAILED`. There is no unconditional `MIGRATED` result.
 
-Operation coverage is the percentage of generated operations passing native-code static checks. It is **not** task coverage, runtime validation, or behavioral accuracy. All source tasks/components have a disposition; unsupported standalone work is retained as a review step rather than disappearing.
+Operation coverage is the percentage of generated non-structural operations passing native-code static checks. Container entry/completion bookkeeping is validated and counted separately. It is **not** task coverage, runtime validation, or behavioral accuracy. All source tasks/components have a disposition; unsupported standalone work is retained as a review step rather than disappearing.
 
-Content-addressed output versions change with source/dependencies, referenced metadata, configuration, and engine code. Same-input findings retain stable IDs. A notebook with `metadata.human_reviewed = true` or a cell containing `# HUMAN_REVIEWED: true` is preserved; unreadable existing notebooks are also protected. Unmarked edits are not automatically recognized. These policies concern generated artifacts, not data-pipeline rerun safety.
+Content-addressed output versions change with source/dependencies, referenced metadata, configuration, and engine code. Same-input findings retain stable IDs. Generated notebook hashes are recorded in the manifest. A changed notebook is preserved even without a review marker; explicitly reviewed, unreadable, and untracked notebooks are also protected. Preserved outputs stay downloadable and require revalidation. They do not count as newly analyzed or generated packages. These policies concern generated artifacts, not data-pipeline rerun safety.
 
 ## Current boundary
 
 The source-graph planner supports standalone relational SQL, explicit table overrides or visible default naming, sequence boundaries, success-AND precedence, static mapped OLE DB sources, Multicast, a restricted Derived Column expression subset, and ordered Conditional Split outputs. It uses exact port IDs and never flattens a multi-source graph into the first source.
 
 Data-flow destination projections are previews. Their writes remain blocked by `LOAD_STRATEGY_REQUIRED` until load semantics are agreed. Explicit single-statement DML already present in an Execute SQL Task can be translated; that preserves supplied source behavior rather than choosing a new load strategy.
+
+Source access modes select the active table, SQL command, or variable. Inactive captured SQL is not used as dependency evidence. Variable-backed pending sections retain lexical scope, declaration/value, expression-evaluation flags, and runtime variable/parameter references; expressions are not evaluated or interpolated into executable SQL.
 
 Missing procedures produce named draft sections. Supplying a definition regenerates the source step in a new input version; a parameterless call to a single supported relational statement can become native Spark SQL. Other procedure bodies and argument/result bindings remain pending with their available definitions recorded.
 

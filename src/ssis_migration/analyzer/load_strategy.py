@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 
-def _collect_sql(properties: dict[str, Any]) -> list[str]:
+def _collect_sql(properties: dict[str, Any], *, source=False) -> list[str]:
+    if source:
+        from ssis_migration.source_context import active_source_sql
+        sql = active_source_sql(properties)
+        return [sql] if sql else []
     sql_values = []
 
     for key in ("SqlCommand", "SqlCommandVariable"):
@@ -45,7 +49,7 @@ def detect_load_strategy(data_flow: dict[str, Any]) -> dict[str, Any]:
     for source in sources:
         properties = source.get("properties", {})
 
-        for sql in _collect_sql(properties):
+        for sql in _collect_sql(properties, source=True):
             source_sql.append(sql)
 
             result["evidence"].append(
