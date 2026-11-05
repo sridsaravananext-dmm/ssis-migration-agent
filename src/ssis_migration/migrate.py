@@ -344,6 +344,7 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
             notebook = package_output / f'{package_name or safe_name(package_ir.package_name or "package")}_Migration.ipynb'
             assembled['metadata']['assessment']['execution_readiness'] = execution_readiness(findings)
             write_json(notebook, assembled)
+    summary['planning'] = {'pending_section_count':len(pending_items)}
     summary['execution_readiness'] = execution_readiness(findings)
     plan.metadata['execution_readiness'] = summary['execution_readiness']
     dependency_inventory = {'connections': [{'connection_reference': db.connection_reference, 'database': db.database_name,
@@ -382,11 +383,13 @@ def execution_readiness(findings):
 
 def _review_text(name, summary, findings):
     generation = summary['generation']
+    checks = ('Static code checks: NOT RUN (dry run).' if generation.get('status') == 'NOT_RUN' else
+        f"Operations passing static checks: {generation['statically_valid_operations']} / {generation['operation_count']}")
     lines = [f'# Conversion assessment: {name}', '', f"Status: {summary['status']}",
              'Legacy behavioral match: NOT MEASURED. No runtime equivalence percentage is claimed.', '',
              f"Source items: {summary['source_accounting']['total_items']}",
-             f"Operations passing static checks: {generation['statically_valid_operations']} / {generation['operation_count']}",
-             f"Pending operations: {generation.get('pending_operations', 0)}",
+             checks,
+             f"Pending implementation sections: {summary['planning']['pending_section_count']}",
              f"Execution readiness: {summary['execution_readiness']['status']}",
              'Read this review and the notebook draft first. JSON files are diagnostic records, not scripts to run.',
              'Operation coverage is a static generation metric, not legacy accuracy.', '', '## Human review findings', '']

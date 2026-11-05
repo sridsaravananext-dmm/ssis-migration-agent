@@ -8,6 +8,8 @@ Source inventory contains one entry per parsed executable and data-flow componen
 
 `operation_coverage_percent` counts operations passing static native-code checks. The denominator includes missing/rejected implementations. AI replaces an operation group only when the orchestrator returns accepted generated code; assumptions, provider errors, and unresolved items remain findings. No task-equivalence or legacy-accuracy percentage is produced.
 
+`generation.status = NOT_RUN` identifies a dry run; its zero operation counts mean checks were not performed. `planning.pending_section_count` counts pending sections discovered during planning, including dry runs. The UI and Markdown review show that count separately rather than implying that zero validated pending operations means no unfinished work. Result cards support the declared Streamlit 1.38 minimum without nested expanders.
+
 `verification.status = NOT_MEASURED` and `legacy_match_percent = null` until a future comparison harness supplies runtime evidence. Passing syntax checks cannot change these fields.
 
 ## Findings and status
