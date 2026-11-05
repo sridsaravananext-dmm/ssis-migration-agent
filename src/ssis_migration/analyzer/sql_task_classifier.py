@@ -127,6 +127,7 @@ def classify_sql_task(
 def classify_execute_sql_tasks(
     executables: list[dict[str, Any]],
     procedure_bodies: dict[str, str] | None = None,
+    *, procedure_contexts=None, connection_aliases=None,
 ) -> dict[str, Any]:
     """
     Classify all Execute SQL tasks in the package.
@@ -146,11 +147,19 @@ def classify_execute_sql_tasks(
         task_name = exe.get("name", "")
         sql = (exe.get("properties") or {}).get("SqlStatementSource", "")
 
+        bodies = procedure_bodies
+        if procedure_contexts is not None:
+            connection = (exe.get('properties') or {}).get('connection_manager_ref_id') or (exe.get('properties') or {}).get('Connection')
+            connection = (connection_aliases or {}).get(connection, (connection_aliases or {}).get(str(connection).strip('{}').casefold(), connection))
+            bodies = procedure_contexts.get(connection, {})
+            if not bodies and len(procedure_contexts) == 1 and 'dtsx_derived' in procedure_contexts:
+                bodies = procedure_contexts['dtsx_derived']
         result = classify_sql_task(
             task_name=task_name,
             sql=sql,
-            procedure_bodies=procedure_bodies,
+            procedure_bodies=bodies,
         )
+        result['source_ref_id'] = exe.get('ref_id')
         tasks.append(result)
 
         cls = result["classification"]

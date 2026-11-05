@@ -38,6 +38,13 @@ class MigrationPlanner:
         context: MigrationContext,
     ) -> MigrationPlan:
 
+        if context.metadata.get('planner_mode', 'graph') == 'graph':
+            from ssis_migration.config import AssessmentConfig
+            from ssis_migration.planner.task_graph import build_graph_plan
+            fields = AssessmentConfig.__dataclass_fields__
+            config = AssessmentConfig(**{k:v for k,v in context.metadata.items() if k in fields})
+            return build_graph_plan(context, config)
+
         plan = MigrationPlan(
             package_name=(
                 context.package_ir.package_name

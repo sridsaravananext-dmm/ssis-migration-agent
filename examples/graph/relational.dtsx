@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" DTS:refId="Package" DTS:ObjectName="NativeRelationalExample" DTS:ExecutableType="Microsoft.Package">
+  <DTS:ConnectionManagers><DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[Legacy]" DTS:DTSID="{11111111-1111-1111-1111-111111111111}"/></DTS:ConnectionManagers>
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\Copy" DTS:ObjectName="Copy explicitly defined rows" DTS:ExecutableType="Microsoft.ExecuteSQLTask">
+      <DTS:ObjectData><SQLTask:SqlTaskData SQLTask:Connection="{11111111-1111-1111-1111-111111111111}" SQLTask:SqlStatementSource="INSERT INTO dbo.CustomerCopy (id, status) SELECT id, status FROM dbo.Customer WHERE status = N'A'" SQLTask:ResultType="ResultSetType_None"/></DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\Inspect" DTS:ObjectName="Independent of naming conventions" DTS:ExecutableType="Microsoft.ExecuteSQLTask">
+      <DTS:ObjectData><SQLTask:SqlTaskData SQLTask:Connection="{11111111-1111-1111-1111-111111111111}" SQLTask:SqlStatementSource="SELECT COUNT(*) FROM dbo.CustomerCopy" SQLTask:ResultType="ResultSetType_None"/></DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints><DTS:PrecedenceConstraint DTS:refId="CopyToInspect" DTS:From="Package\Copy" DTS:To="Package\Inspect" DTS:Value="0" DTS:EvalOp="0" DTS:LogicalAnd="True"/></DTS:PrecedenceConstraints>
+</DTS:Executable>

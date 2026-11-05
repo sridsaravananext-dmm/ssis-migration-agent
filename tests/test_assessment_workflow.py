@@ -33,9 +33,9 @@ def run(tmp_path, **kwargs):
 
 def test_standalone_work_is_retained_without_equivalence_claim(tmp_path):
     result, entry = run(tmp_path, catalog='test_catalog')
-    assert result['status'] == 'REVIEW_REQUIRED'
+    assert result['status'] == 'ARTIFACTS_GENERATED'
     assert result['verification']['legacy_match_percent'] is None
-    assert any(f['code'] == 'UNPLANNED_SOURCE_WORK' for f in entry['findings'])
+    assert not entry['findings']
     inventory = json.loads(Path(entry['artifacts']['source_inventory']).read_text())
     assert any(i['source_id'] == 'Package\\Task' for i in inventory)
     notebook = json.loads(Path(entry['artifacts']['notebook']).read_text())
@@ -46,7 +46,7 @@ def test_standalone_work_is_retained_without_equivalence_claim(tmp_path):
 
 
 def test_strict_blocks_notebook_and_preserves_diagnostics(tmp_path):
-    _, entry = run(tmp_path, strict_mode=True)
+    _, entry = run(tmp_path, sql='EXEC dbo.Missing', strict_mode=True)
     assert entry['notebook_status'] == 'BLOCKED'
     assert 'notebook' not in entry['artifacts']
     assert not list((tmp_path / 'out').rglob('*.ipynb'))
@@ -274,7 +274,7 @@ def test_missing_nested_procedure_is_identified(tmp_path):
 
 def test_cli_strict_exit_status_and_dry_run_artifacts(tmp_path):
     import subprocess, sys
-    p = package(tmp_path)
+    p = package(tmp_path, sql='EXEC dbo.Missing')
     result = subprocess.run([sys.executable, '-m', 'ssis_migration.migrate', '--source', str(p),
         '--output', str(tmp_path/'cli-out'), '--dry-run', '--strict-mode'], text=True, capture_output=True)
     assert result.returncode == 1, result.stderr

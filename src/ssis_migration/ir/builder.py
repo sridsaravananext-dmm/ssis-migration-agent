@@ -41,7 +41,10 @@ class IRBuilder:
             ),
             metadata={
                 "parser": "ssis_migration",
-                "model_version": "1.0",
+                "model_version": "2.1",
+                "package_attributes": package_attributes,
+                "package_expressions": parsed.get('package_expressions', []),
+                "connection_aliases": parsed.get('connection_aliases', {}),
             },
         )
 

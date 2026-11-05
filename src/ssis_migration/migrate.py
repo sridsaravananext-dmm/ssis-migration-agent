@@ -44,12 +44,13 @@ def discover_packages(source):
     return packages
 
 
-def analyze_one_package(package_path, procedures_path=None, *, procedures_paths=(), default_schema='dbo'):
+def analyze_one_package(package_path, procedures_path=None, *, procedures_paths=(), default_schema='dbo', dependency_scopes=None):
     from ssis_migration.parser.package_parser import SSISPackageParser
     from ssis_migration.ir.builder import IRBuilder
     from ssis_migration.analyzer import analyze_package
-    from ssis_migration.procedure_file_loader import load_procedure_files
-    definitions, _ = load_procedure_files(dependency_paths(procedures_path, procedures_paths), default_schema)
+    from ssis_migration.procedure_file_loader import load_scoped_procedure_files
+    definitions, _ = load_scoped_procedure_files(dependency_paths(procedures_path, procedures_paths), dependency_scopes, default_schema)
+    definitions = {k:v for k,v in definitions.items() if '|' not in k}
     parsed = SSISPackageParser(package_path).parse()
     ir = IRBuilder().build(parsed)
     return {'parsed': parsed, 'package_ir': ir,
@@ -203,7 +204,7 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
         procedures_path=None, ddl_paths=(), procedures_paths=(), config=None):
     from ssis_migration.context.builder import build_migration_context
     from ssis_migration.database.connection_mapping_loader import load_connection_mapping
-    from ssis_migration.procedure_file_loader import load_procedure_files
+    from ssis_migration.procedure_file_loader import load_scoped_procedure_files
     from ssis_migration.planner.planner import MigrationPlanner
     from ssis_migration.generator.dispatcher import GeneratorDispatcher
     from ssis_migration.generator.operations import MigrationOperationBuilder
@@ -216,33 +217,43 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
     config = config or AssessmentConfig(catalog=catalog or 'main')
     package_output = Path(package_output)
     package_output.mkdir(parents=True, exist_ok=True)
-    definitions, origins = load_procedure_files(dependency_paths(procedures_path, procedures_paths), config.default_schema)
+    definitions, origins = load_scoped_procedure_files(dependency_paths(procedures_path, procedures_paths), config.dependency_scopes, config.default_schema)
     ddls = dependency_paths(ddl_path, ddl_paths)
     context = build_migration_context(package_ir, analysis,
         load_connection_mapping(connection_mapping_path) if connection_mapping_path else None,
         base_path, ddl_paths=ddls, procedure_definitions=definitions,
-        procedure_origins=origins, default_schema=config.default_schema)
-    # Classify against the same definitions that the planner will see, including metadata.
+        procedure_origins=origins, default_schema=config.default_schema, dependency_scopes=config.dependency_scopes)
+    context.metadata.update(config.to_dict())
+    # Classification must not choose the first same-named procedure across databases.
+    from ssis_migration.analyzer.sql_task_classifier import classify_execute_sql_tasks
+    procedure_contexts = {}
     for db in context.databases:
-        for obj in db.database_ir.objects:
-            if obj.definition: definitions.setdefault(f'{obj.schema}.{obj.name}', obj.definition)
-    context.ssis_analysis = analyze_package(package_ir.to_dict(), procedure_bodies=definitions)
+        procedure_contexts[db.connection_reference] = {f'{obj.schema}.{obj.name}': obj.definition
+            for obj in db.database_ir.objects if obj.definition and 'PROCEDURE' in obj.object_type.upper()}
+    unique = next(iter(procedure_contexts.values())) if len(procedure_contexts) == 1 else {}
+    context.ssis_analysis = analyze_package(package_ir.to_dict(), procedure_bodies=unique)
+    context.ssis_analysis['sql_tasks'] = classify_execute_sql_tasks(package_ir.to_dict()['executables'],
+        procedure_contexts=procedure_contexts, connection_aliases=context.metadata.get('connection_aliases', {}))
     analysis = context.ssis_analysis
     plan = MigrationPlanner().build_plan(context)
     plan.metadata.update(config.to_dict())
-    plan.metadata['uses_legacy_controls'] = any(s.step_type != 'REVIEW_ONLY' for s in plan.steps)
-    if config.target_schema:
-        plan.unresolved.append(finding('TARGET_MAPPING_REVIEW_REQUIRED', 'target_schema',
-            'Target schema is recorded as context. Verify per-output mappings before execution; source schemas are not rewritten automatically.', evidence=config.target_schema))
-    if config.layer.casefold() in {'multi-layer', 'multilayer'}:
-        plan.unresolved.append(finding('LAYER_MAPPING_REQUIRED', 'target_layer',
-            'Assign individual outputs to physical schemas for a multi-layer package.'))
+    plan.metadata['generation_method'] = 'DETERMINISTIC_GRAPH' if plan.metadata.get('planner') == 'source_graph' else 'LEGACY_WITH_OPTIONAL_AI'
+    if plan.metadata.get('planner') != 'source_graph':
+        plan.metadata['uses_legacy_controls'] = any(s.step_type != 'REVIEW_ONLY' for s in plan.steps)
+        if config.target_schema:
+            plan.unresolved.append(finding('TARGET_MAPPING_REVIEW_REQUIRED', 'target_schema',
+                'Legacy generation does not apply physical per-output mappings. Use graph planning.', evidence=config.target_schema))
+        if config.layer.casefold() in {'multi-layer','multilayer'}:
+            plan.unresolved.append(finding('LAYER_MAPPING_REQUIRED', 'target_layer', 'Legacy generation requires per-output layer review.'))
     plan_dict = plan.to_dict()
     artifacts, operations_by_step, ai_results = [], {}, []
     if not config.dry_run:
         dispatcher, builder, generator = GeneratorDispatcher(), MigrationOperationBuilder(), DatabricksOperationGenerator()
         for step in plan_dict['steps']:
             sid = step['step_id']
+            if plan.metadata.get('planner') == 'source_graph':
+                operations_by_step[sid] = plan.metadata['operations_by_step'][sid]
+                continue
             if step['step_type'] == 'REVIEW_ONLY':
                 operations_by_step[sid] = [{'operation_id': 'manual_implementation', 'code': '# REVIEW_REQUIRED: unsupported source work', 'order': 0}]
                 continue
@@ -278,6 +289,9 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
     plan.unresolved = findings
     inventory = plan.metadata['source_inventory']
     summary = assessment_summary(inventory, validations, findings, dry_run=config.dry_run)
+    summary['generation']['method'] = plan.metadata['generation_method']
+    summary['generation']['ai_requested'] = ai
+    summary['generation']['ai_result_count'] = len(ai_results)
     notebook = None
     if not config.dry_run:
         # Never embed rejected operation bodies in a deliverable, even in normal mode.
@@ -309,6 +323,7 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
                         "raise RuntimeError('Notebook cell did not pass static validation; inspect assessment.json.')")
         if len(findings) != summary['human_review_item_count']:
             summary = assessment_summary(inventory, validations, findings)
+            summary['generation'].update(method=plan.metadata['generation_method'], ai_requested=ai, ai_result_count=len(ai_results))
         assembled['metadata']['assessment']['status'] = summary['status']
         if any(f['severity'] == 'ERROR' for f in findings) and not any(
                 "raise RuntimeError('Conversion has unresolved findings." in ''.join(c.get('source', []))
@@ -318,8 +333,23 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
         if not (config.strict_mode and any(f['severity'] == 'ERROR' for f in findings)):
             notebook = package_output / f'{package_name or safe_name(package_ir.package_name or "package")}_Migration.ipynb'
             write_json(notebook, assembled)
+    dependency_inventory = {'connections': [{'connection_reference': db.connection_reference, 'database': db.database_name,
+        'role': db.role, 'procedures': [{'name': f'{obj.schema}.{obj.name}', 'definition_available': bool(obj.definition),
+            'definition_sha256': hashlib.sha256((obj.definition or '').encode()).hexdigest(),
+            'definition_files': obj.metadata.get('definition_files', []), 'dependencies': obj.dependencies}
+            for obj in db.database_ir.objects if 'PROCEDURE' in obj.object_type.upper()]} for db in context.databases],
+        'connection_aliases': context.metadata.get('connection_aliases', {})}
+    verification_plan = {'status': 'NOT_EXECUTED', 'legacy_match_percent': None,
+        'task_graph_reference': 'task_graph.json', 'dataflow_graph_reference': 'dataflow_graphs.json',
+        'physical_objects': plan.metadata.get('mapping_uses', []),
+        'required_checks': ['schema_and_types', 'keyed_rows_and_duplicates', 'null_and_error_behavior',
+                            'conditional_output_routing', 'numeric_and_timestamp_boundaries',
+                            'target_write_semantics', 'failure_and_rerun_behavior'],
+        'note': 'Requirements only. No dataset comparison, legacy execution, or Spark execution has been performed.'}
     for name, data in [('package_ir', package_ir.to_dict()), ('analysis', analysis), ('migration_plan', plan.to_dict()),
-                       ('validation_results', validations + ai_results), ('source_inventory', inventory),
+                       ('validation_results', validations + ai_results), ('source_inventory', inventory), ('task_graph', plan.metadata.get('task_graph', {})),
+                       ('dataflow_graphs', plan.metadata.get('dataflow_graphs', [])),
+                       ('dependency_inventory', dependency_inventory), ('verification_plan', verification_plan),
                        ('assessment', {**summary, 'findings': findings}), ('operations', operations_by_step)]:
         write_json(package_output / f'{name}.json', data)
     review = package_output / f'{package_name or safe_name(package_ir.package_name or "package")}_review.md'
@@ -344,14 +374,18 @@ def _review_text(name, summary, findings):
 def run_migration(source, output, *, catalog=None, connection_mapping=None, base_path=None, execute=False,
         ai=False, ai_provider='databricks', ddl_path=None, procedures_path=None, ddl_paths=(), procedures_paths=(),
         layer='unspecified', target_schema=None, description='', default_schema='dbo', strict_mode=False,
-        dry_run=False, respect_human_edits=True):
+        dry_run=False, respect_human_edits=True, planner_mode='graph', object_mappings=None, dependency_scopes=None):
     from ssis_migration.lifecycle import input_manifest, reviewed_output
     if execute: raise ValueError('Deployment and data execution are not implemented; use conversion/assessment only')
     config = AssessmentConfig(catalog=catalog or 'main', layer=layer, target_schema=target_schema,
         description=description, default_schema=default_schema, strict_mode=strict_mode, dry_run=dry_run,
-        respect_human_edits=respect_human_edits)
+        respect_human_edits=respect_human_edits, planner_mode=planner_mode,
+        object_mappings=object_mappings or {}, dependency_scopes=dependency_scopes or {})
     procedures = dependency_paths(procedures_path, procedures_paths)
     ddls = dependency_paths(ddl_path, ddl_paths)
+    known_dependency_files = {str(p) for p in procedures + ddls} | {p.name for p in procedures + ddls}
+    if any(key not in known_dependency_files for key in config.dependency_scopes):
+        raise ValueError('Dependency scopes must reference supplied procedure/DDL files')
     source_path, output_path = Path(source).expanduser().resolve(), Path(output).expanduser().resolve()
     packages = discover_packages(source_path)
     resolved_base = Path(base_path).resolve() if base_path else Path.cwd()
@@ -385,7 +419,7 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
                 # Reviewed/unreadable outputs took the protection branch above.
                 previous = directory / f'{name}_Migration.ipynb'
                 if previous.exists(): previous.unlink()
-                analyzed = analyze_one_package(package, procedures_paths=procedures, default_schema=default_schema)
+                analyzed = analyze_one_package(package, procedures_paths=procedures, default_schema=default_schema, dependency_scopes=config.dependency_scopes)
                 result = generate_migration_artifacts(analyzed['package_ir'], analyzed['analysis'], mapping,
                     resolved_base, directory, ai=ai and not dry_run, ai_provider=ai_provider, catalog=catalog,
                     package_name=name, ddl_paths=ddls, procedures_paths=procedures, config=config)
@@ -394,7 +428,9 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
                     artifacts={'review': result['review_file'], 'manifest': str(directory / 'migration_manifest.json'),
                         'ir': str(directory / 'package_ir.json'), 'analysis': str(directory / 'analysis.json'),
                         'plan': str(directory / 'migration_plan.json'), 'validation': str(directory / 'validation_results.json'),
-                        'assessment': str(directory / 'assessment.json'), 'source_inventory': str(directory / 'source_inventory.json')},
+                        'assessment': str(directory / 'assessment.json'), 'source_inventory': str(directory / 'source_inventory.json'),
+                        'task_graph': str(directory / 'task_graph.json'), 'dataflow_graphs': str(directory / 'dataflow_graphs.json'),
+                        'dependency_inventory': str(directory / 'dependency_inventory.json'), 'verification_plan': str(directory / 'verification_plan.json')},
                     stages={'parsing': 'SUCCEEDED', 'analysis': 'SUCCEEDED',
                         'generation': 'NOT_RUN' if dry_run else result['notebook_status'], 'runtime_verification': 'NOT_MEASURED'})
                 if result['notebook_file']: entry['artifacts']['notebook'] = result['notebook_file']
@@ -427,6 +463,9 @@ def main():
     parser.add_argument('--procedure', dest='procedures_paths', action='append', default=[], help='Repeat for each procedure file')
     parser.add_argument('--ddl', dest='ddl_paths', action='append', default=[], help='Repeat for each DDL file')
     parser.add_argument('--layer', default='unspecified')
+    parser.add_argument('--planner-mode', choices=['graph','legacy'], default='graph')
+    parser.add_argument('--object-mappings', help='JSON file mapping source objects to fully qualified target objects')
+    parser.add_argument('--dependency-scopes', help='JSON file mapping dependency file names to connection references')
     parser.add_argument('--target-schema')
     parser.add_argument('--description', default='')
     parser.add_argument('--default-schema', default='dbo')
@@ -437,7 +476,10 @@ def main():
     parser.add_argument('--execute', action='store_true')
     args = parser.parse_args()
     if args.execute: parser.error('--execute is not available: deployment and execution are not implemented')
-    result = run_migration(**vars(args))
+    values = vars(args).copy()
+    for key in ('object_mappings','dependency_scopes'):
+        values[key] = json.loads(Path(values[key]).read_text(encoding='utf-8-sig')) if values[key] else {}
+    result = run_migration(**values)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     if result['failed_package_count'] or (args.strict_mode and result['review_required_package_count']):
         raise SystemExit(1)

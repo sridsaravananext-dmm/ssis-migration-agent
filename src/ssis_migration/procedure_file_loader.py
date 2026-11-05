@@ -55,3 +55,19 @@ def load_procedure_files(paths, default_schema='dbo'):
 
 def list_procedures(source):
     return sorted(load_procedures(source))
+
+
+def load_scoped_procedure_files(paths, scopes=None, default_schema='dbo'):
+    """Keep same-named procedures separate when files have explicit connection scopes."""
+    scopes = scopes or {}
+    definitions, origins = {}, {}
+    for path in paths:
+        path = Path(path)
+        scope = scopes.get(str(path)) or scopes.get(path.name)
+        for name, body in load_procedures(path, default_schema).items():
+            key = f'{scope}|{name}' if scope else name
+            if key in definitions and definitions[key] != body:
+                raise ValueError(f'Conflicting procedure definitions for {key}: {origins[key]} and {path}')
+            definitions[key] = body
+            origins.setdefault(key, []).append(str(path))
+    return definitions, origins

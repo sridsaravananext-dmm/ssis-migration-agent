@@ -41,12 +41,8 @@ def extract_referenced_objects(sql: str) -> list[str]:
     if not sql:
         return []
 
-    cleaned_sql = re.sub(
-        r"--.*?$|/\*.*?\*/",
-        "",
-        sql,
-        flags=re.MULTILINE | re.DOTALL,
-    )
+    from ssis_migration.sql_text import mask_sql
+    cleaned_sql = mask_sql(sql)
 
     qualified_pattern = r"""
         (?:

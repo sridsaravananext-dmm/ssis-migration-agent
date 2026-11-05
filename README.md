@@ -9,7 +9,7 @@ python -m pip install -e '.[dev]'
 streamlit run frontend/app.py
 ```
 
-For AI-assisted generation, install `.[ai]` and configure the selected provider. AI is disabled by default. No Databricks workloads are executed or deployed by this tool.
+For AI-assisted **legacy-mode** generation, install `.[ai]` and configure the selected provider. AI is disabled by default. The source-graph planner uses deterministic native translation and explicit blockers for unsupported work. No Databricks workloads are executed or deployed by this tool.
 
 ```sh
 python -m ssis_migration.migrate \
@@ -33,7 +33,10 @@ CLI exit status is nonzero for technical failures and, in strict mode, packages 
 - Multiple optional procedure files (`--procedure`, repeatable), and DDL files (`--ddl`, repeatable).
 - Optional connection mapping JSON with a `mappings` list. Referenced metadata files are resolved against `--base-path`.
 - Logical layer: Bronze, Silver, Gold, Multi-layer, unspecified, or custom text. No LLM is used to select it.
-- Optional target-schema context and business description. **Physical schema rewriting and per-output multi-layer mapping remain review requirements.**
+- Explicit `--object-mappings objects.json` maps legacy objects to fully qualified Databricks objects. Scoped keys use `connection_reference|schema.object`; unscoped keys deliberately apply across connections.
+- Optional `--dependency-scopes scopes.json` assigns procedure/DDL file names to connection references. Ambiguous definitions are retained as findings rather than broadcast to every database.
+- Optional target-schema context and business description. Context never silently rewrites object names. Multi-layer output mappings include their own `layer`.
+- The default `--planner-mode graph` follows source task/port identities. `--planner-mode legacy` retains the previous warehouse-specific rules for comparison.
 
 The existing `procedures_path=` and `ddl_path=` API arguments are retained; new callers can use `procedures_paths=[...]` and `ddl_paths=[...]`.
 
@@ -45,6 +48,8 @@ All supporting files are consumed. A mixed procedure/DDL file can contribute to 
 
 - `migration_manifest.json`: content hashes, engine/configuration identity, and artifact paths.
 - `package_ir.json`, `analysis.json`, `migration_plan.json`, `source_inventory.json`.
+- `task_graph.json`, `dataflow_graphs.json`, and `dependency_inventory.json` preserve identities, scopes, graph edges, and definition provenance.
+- `verification_plan.json` lists required comparisons. It contains no executed comparison results.
 - `operations.json`: original generation output for diagnosis, including rejected content.
 - `validation_results.json`, `assessment.json`, and a Markdown review report.
 - A `_Migration.ipynb` notebook when output is permitted. The filename suffix is retained for compatibility; it does not indicate certified migration.
@@ -57,7 +62,13 @@ Content-addressed output versions change with source/dependencies, referenced me
 
 ## Current boundary
 
-Existing warehouse logical-load rules still use sequence/task-name conventions and WWI control tables. They now produce explicit review findings. Complex routing, failure/completion semantics, generic standalone translation, and per-output schema mapping are **not** silently claimed as implemented. Full graph-aware translation, runtime comparisons, Volume browsing, and optional reference guidance are subsequent work; pipeline and load strategies are not selected by this change.
+The source-graph planner supports standalone relational SQL, explicit table mappings, sequence boundaries, success-AND precedence, static mapped OLE DB sources, Multicast, a restricted Derived Column expression subset, and ordered Conditional Split outputs. It uses exact port IDs and never flattens a multi-source graph into the first source.
+
+Data-flow destination projections are previews. Their writes remain blocked by `LOAD_STRATEGY_REQUIRED` until load semantics are agreed. Explicit single-statement DML already present in an Execute SQL Task can be translated; that preserves supplied source behavior rather than choosing a new load strategy.
+
+Loops, Script Tasks, joins/lookups/aggregates, procedural SQL, parameter/result bindings, row-error redirection, event handlers, checkpoints, forced results, cycles, and conditional/failure/completion/OR task constraints remain explicit blockers. Independent task branches require a concurrency/failure-isolation decision before executable notebook acceptance. The optional legacy planner still uses warehouse/name/control-table conventions and reports those assumptions.
+
+No deployment, runtime equivalence measurement, Volume browsing, or new pipeline/load strategy is implied. See [the source-graph guide](docs/source-graph.md) for mapping examples, supported subsets, and validation steps.
 
 Static validation rejects visible Spark UDF/Pandas UDF/UDTF definitions and registration, selected custom row APIs, dynamic Python execution, unresolved SQL parameters, legacy EXEC passthrough, incomplete bodies, and unbounded driver collections. Ordinary Python helpers and explicitly bounded one-row retrieval remain supported. This is a conversion-quality check, not a sandbox for arbitrary Python.
 
