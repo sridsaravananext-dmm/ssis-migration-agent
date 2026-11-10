@@ -239,7 +239,8 @@ def build_database_ir_from_dtsx(package_ir: PackageIR) -> DatabaseIR:
         result_set_types: dict[str, str] = {}
         for component in data_flow.components:
             if component.detected_type == "OLE_DB_SOURCE":
-                sql = (component.properties or {}).get("SqlCommand", "")
+                from ssis_migration.source_context import active_source_sql
+                sql = active_source_sql(component.properties or {})
                 if sql:
                     result_set_types = _parse_result_sets(sql)
                     break

@@ -81,21 +81,22 @@ def _base_result(
 
 
 def _analyze_source(component: dict[str, Any]) -> dict[str, Any]:
+    from ssis_migration.source_context import source_selection, active_source_sql
     result = _base_result(
         component,
         "SOURCE",
     )
 
     properties = _properties(component)
+    selected = source_selection(properties)
 
     result["semantics"].update(
         {
             "access_mode": properties.get("AccessMode"),
-            "sql_command": properties.get("SqlCommand"),
-            "sql_command_variable": properties.get(
-                "SqlCommandVariable"
-            ),
-            "open_rowset": properties.get("OpenRowset"),
+            "sql_command": active_source_sql(properties),
+            "sql_command_variable": selected['value'] if selected['kind'] == 'VARIABLE_SQL' else None,
+            "open_rowset": selected['value'] if selected['kind'] == 'TABLE' else None,
+            "active_source_kind": selected['kind'],
             "parameter_mapping": properties.get(
                 "ParameterMapping"
             ),

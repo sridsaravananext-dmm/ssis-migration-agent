@@ -6,6 +6,7 @@ from ssis_migration.planner.models import MigrationPlan, MigrationStep
 from ssis_migration.mapping import ConversionGap, translate_sql
 from ssis_migration.drafts import pending_operation, procedure_references, translate_parameterless_procedure
 from ssis_migration.sql_text import normalize_name
+from ssis_migration.source_context import describe_variable
 
 
 def topological_order(dependencies):
@@ -152,7 +153,7 @@ def build_graph_plan(context, config):
             findings.append(finding('DYNAMIC_EXECUTABLE_PROPERTY',origin,'Executable property expressions require typed evaluation.'))
         elif origin in flows:
             represented_flows.add(origin)
-            ops, findings, graph = dataflow_operations(flows[origin],config,context.metadata.get("connection_aliases",{}))
+            ops, findings, graph = dataflow_operations(flows[origin],config,context.metadata.get("connection_aliases",{}), package=package)
             graph['task_id'] = sid
             plan.metadata['dataflow_graphs'].append(graph)
             mapping_uses = graph.get('mapping_uses',[])
@@ -186,8 +187,9 @@ def build_graph_plan(context, config):
             if not ops: task_type = 'REVIEW_ONLY'
             if not ops:
                 reasons = [f['code'] for f in findings] + [p['reason_code'] for p in procedures if p.get('reason_code')]
+                variable_context = describe_variable(sql_source, origin, package) if str(props.get('SqlStatementSourceType')) in {'2','Variable'} else None
                 ops = [pending_operation(origin, reasons, connection=connection, sql=sql_source,
-                    properties={**props, '_target_proposals':mapping_uses}, procedures=procedures,
+                    properties={**props, '_target_proposals':mapping_uses, '_source_variable_context':variable_context}, procedures=procedures,
                     kind='STORED_PROCEDURE' if procedures else 'IMPLEMENTATION')]
         plan.unresolved.extend(findings)
         metadata = {'source_ref_id':origin,'source_scope':parent[origin], 'mapping_uses':mapping_uses,

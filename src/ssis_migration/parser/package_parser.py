@@ -283,6 +283,7 @@ class SSISPackageParser:
 
     def _parse_variables(self) -> list[dict[str, Any]]:
         results = []
+        parents = {child: parent for parent in self.root.iter() for child in parent}
 
         for element in self.xml.find_all("Variable"):
 
@@ -308,6 +309,12 @@ class SSISPackageParser:
                         value = text.strip()
                     break
 
+            owner = parents.get(element)
+            while owner is not None and local_name(owner.tag).lower() not in {'executable','eventhandler'}:
+                owner = parents.get(owner)
+            scope = self._get_attribute(owner, 'refId') if owner is not None else None
+            evaluate = self._get_attribute(element, 'EvaluateAsExpression')
+
             results.append(
                 {
                     "tag": local_name(element.tag),
@@ -330,6 +337,9 @@ class SSISPackageParser:
                         element,
                         "DTSID",
                     ),
+                    "scope_ref_id": scope,
+                    "evaluate_as_expression": None if evaluate is None else evaluate.casefold() in {'true','1','-1'},
+                    "sensitive": str(self._get_attribute(element, 'Sensitive')).casefold() in {'true','1','-1'},
                 }
             )
 

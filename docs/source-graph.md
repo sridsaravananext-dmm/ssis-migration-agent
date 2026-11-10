@@ -73,6 +73,14 @@ Success-AND dependencies are supported. A sequence's outgoing dependency begins 
 
 Independent branches are preserved in the graph. A single notebook would serialize them and alter failure isolation, so PARALLEL_CONTROL_REVIEW_REQUIRED blocks executable acceptance until pipeline concurrency/error semantics are agreed. The Jobs generator respects graph dependencies and rejects missing/cyclic dependencies; it does not implicitly chain graph tasks or deploy anything.
 
+## Active SQL and variable provenance
+
+OLE DB source AccessMode selects the evidence used by generation and analysis: 0 = OpenRowset, 1 = OpenRowsetVariable, 2 = SqlCommand, 3 = SqlCommandVariable. Unused properties can contain old designer text; that text is retained in the raw IR/pending reference comments but cannot supply active dependencies, result-set types, or load-strategy evidence.
+
+Variable-backed SQL/table sources remain pending. Their draft sections include the closest lexical variable declaration when available, scope, captured value, expression, EvaluateAsExpression flag, and referenced runtime variables/package/project parameters. Sensitive declarations are redacted in this added context. Missing scope in older IR is identified as SCOPE_UNAVAILABLE; duplicate declarations are AMBIGUOUS. Expressions and captured values are never executed or substituted as proof of a static query. Declared expressions with evaluation disabled do not create runtime-reference requirements.
+
+Same-named variables in unrelated containers are not visible. References inside quoted expression literals are not treated as variable bindings. Variable-based Execute SQL Tasks also retain declaration context. Parameter typing and runtime expression translation remain future work.
+
 ## Native data-flow subset
 
 - Static mapped OLE DB sources with captured unique output columns.
@@ -97,6 +105,6 @@ The verification plan is a requirements artifact. No Spark, legacy workload, dat
 
 ## Compatibility
 
-Existing single-file dependency arguments, artifact review protection, and the no-UDF policy remain supported. Graph strict mode now writes blocked review drafts; normal assessment statuses remain separate from notebook and execution-readiness status. The default graph engine may generate fewer legacy warehouse-specific operations while identifying unsupported semantics more precisely. Use legacy mode for controlled comparison, not as evidence of equivalence.
+Existing single-file dependency arguments and the no-UDF policy remain supported. Manifest hashes now protect unmarked notebook edits in addition to explicit review markers; unreadable/untracked outputs are preserved for revalidation. Graph strict mode now writes blocked review drafts; normal assessment statuses remain separate from notebook and execution-readiness status. The default graph engine may generate fewer legacy warehouse-specific operations while identifying unsupported semantics more precisely. Use legacy mode for controlled comparison, not as evidence of equivalence.
 
 Further work: decide pipeline concurrency/failure handling and data-flow write/load strategies with the user; add typed bindings, more native transforms, optional reference guidance, authorized Volume intake, review-state management, and actual comparison evidence.

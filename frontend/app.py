@@ -126,17 +126,32 @@ with results_tab:
         st.write(f"Status: **{report['status']}**")
         st.info('Legacy behavioral match: not measured. Static generation coverage is not an accuracy score.')
         for entry in report['packages']:
-            with st.expander(f"{entry['name']} — {entry['status']}", expanded=True):
+            # Streamlit 1.38 (the supported minimum) rejects nested expanders.
+            # A package card can safely contain the pending-sections expander.
+            with st.container(border=True):
+                st.markdown(f"**{entry['name']} — {entry['status']}**")
                 if entry.get('error'): st.error(entry['error'])
                 if entry.get('message'): st.info(entry['message'])
+                if entry.get('protection_reason'):
+                    st.write(f"Preserved notebook: **{entry['protection_reason']}**. Execution readiness: **REVALIDATION_REQUIRED**")
+                pending_items = []
+                pending_path = entry.get('artifacts', {}).get('pending_items')
+                if pending_path and Path(pending_path).is_file():
+                    pending_items = json.loads(Path(pending_path).read_text())
                 assessment = entry.get('assessment')
                 if assessment:
                     generation = assessment['generation']
                     percent = generation['operation_coverage_percent']
-                    st.write(f"Operations passing static checks: {generation['statically_valid_operations']} / {generation['operation_count']}")
-                    if percent is not None: st.write(f'Static operation coverage: {percent}%')
-                    st.caption(generation['basis'])
-                    st.write(f"Pending operations: {generation.get('pending_operations', 0)}")
+                    if generation.get('status') == 'NOT_RUN' or entry.get('notebook_status') == 'DRY_RUN' or report.get('mode') == 'DRY_RUN':
+                        st.info('Dry run: notebook generation and static code checks were not run. Turn off Dry run to generate a review draft.')
+                    else:
+                        st.write(f"Operations passing static checks: {generation['statically_valid_operations']} / {generation['operation_count']}")
+                        if percent is not None: st.write(f'Static operation coverage: {percent}%')
+                        st.caption(generation['basis'])
+                        st.caption(f"Container/control bookkeeping operations excluded: {generation.get('structural_operation_count', 0)}")
+                        st.write(f"Pending operations: {generation.get('pending_operations', 0)}")
+                    pending_count = assessment.get('planning', {}).get('pending_section_count', len(pending_items))
+                    st.write(f'Pending implementation sections: {pending_count}')
                     st.write(f"Execution readiness: **{assessment.get('execution_readiness', {}).get('status', 'NOT_ASSESSED')}**")
                     st.json(assessment['source_accounting'])
                 for key, label in [('notebook','Download notebook draft'), ('review','Download review summary')]:
@@ -144,15 +159,23 @@ with results_tab:
                     if artifact and Path(artifact).is_file():
                         st.download_button(label, Path(artifact).read_bytes(), file_name=Path(artifact).name,
                             key=key + '_' + hashlib.sha256(artifact.encode()).hexdigest())
-                pending_path = entry.get('artifacts', {}).get('pending_items')
-                if pending_path and Path(pending_path).is_file():
-                    pending_items = json.loads(Path(pending_path).read_text())
-                    if pending_items:
-                        with st.expander(f'Pending implementation sections ({len(pending_items)})'):
-                            for pending in pending_items:
-                                names = ', '.join(p['name'] for p in pending.get('procedures', []))
-                                st.write(f"**{names or pending['kind']}** — {pending['source_id']}")
-                                st.caption(f"{pending['pending_id']} · {', '.join(pending['reason_codes'])}")
+                if pending_items:
+                    with st.expander(f'Pending implementation sections ({len(pending_items)})'):
+                        for pending in pending_items:
+                            names = ', '.join(p['name'] for p in pending.get('procedures', []))
+                            st.write(f"**{names or pending['kind']}** — {pending['source_id']}")
+                            st.caption(f"{pending['pending_id']} · {', '.join(pending['reason_codes'])}")
+                            context = pending.get('source_variable_context')
+                            if context:
+                                st.write(f"Source variable: **{context['reference']}** — {context['status']}")
+                                if context.get('expression'):
+                                    st.caption('Declared SSIS expression; runtime evaluation and bindings require review.')
+                                    st.code(context['expression'], language='text')
+                                if context.get('active_value_kind') == 'VALUE' and context.get('value') is not None:
+                                    st.caption('Captured variable value; runtime changes and overrides require review.')
+                                    st.code(str(context['value']), language='text')
+                                if context.get('references'):
+                                    st.caption('Runtime references: ' + ', '.join(ref['reference'] for ref in context['references']))
                 for item in entry.get('findings', []):
                     st.write(f"**{item['code']}** — {item['message']}")
                     st.caption(f"Source: {item['source_id']} · Finding: {item['finding_id']}")

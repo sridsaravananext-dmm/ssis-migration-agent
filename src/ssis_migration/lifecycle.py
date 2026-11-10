@@ -36,13 +36,29 @@ def engine_hash():
     return digest.hexdigest()
 
 
-def reviewed_output(directory):
-    for path in Path(directory).glob('*.ipynb'):
+def notebook_protection_reason(directory):
+    directory = Path(directory)
+    paths = sorted(directory.glob('*.ipynb'))
+    if not paths: return None
+    manifest = directory / 'migration_manifest.json'
+    try:
+        baseline = json.loads(manifest.read_text()).get('generated_notebooks', {}) if manifest.is_file() else {}
+        if not isinstance(baseline, dict): return 'INVALID_GENERATED_BASELINE'
+    except (ValueError, OSError, AttributeError):
+        return 'UNREADABLE_MANIFEST'
+    for path in paths:
         try:
             notebook = json.loads(path.read_text())
-            if notebook.get('metadata', {}).get('human_reviewed') is True: return True
-            if any('# HUMAN_REVIEWED: true' in ''.join(c.get('source', [])) for c in notebook.get('cells', [])): return True
-        except (ValueError, OSError):
+            if notebook.get('metadata', {}).get('human_reviewed') is True: return 'HUMAN_REVIEWED'
+            if any('# HUMAN_REVIEWED: true' in ''.join(c.get('source', [])) for c in notebook.get('cells', [])): return 'HUMAN_REVIEWED'
+            expected = baseline.get(path.name)
+            if not isinstance(expected, str): return 'UNTRACKED_NOTEBOOK'
+            if file_record(path)['sha256'] != expected: return 'NOTEBOOK_CONTENT_CHANGED'
+        except (ValueError, OSError, AttributeError, TypeError):
             # An unreadable existing output must not be overwritten implicitly.
-            return True
-    return False
+            return 'UNREADABLE_NOTEBOOK'
+    return None
+
+
+def reviewed_output(directory):
+    return notebook_protection_reason(directory) is not None
