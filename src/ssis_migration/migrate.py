@@ -345,6 +345,10 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
             assembled['metadata']['assessment']['execution_readiness'] = execution_readiness(findings)
             write_json(notebook, assembled)
     summary['planning'] = {'pending_section_count':len(pending_items)}
+    if plan.metadata.get('requires_shared_runtime_state'):
+        summary['runtime_bindings'] = {'variables':plan.metadata['runtime_variables'],
+            'widget':'ssis_runtime_values', 'execution_mode':'SINGLE_NOTEBOOK',
+            'minimum_runtime':plan.metadata['minimum_binding_runtime']}
     summary['execution_readiness'] = execution_readiness(findings)
     plan.metadata['execution_readiness'] = summary['execution_readiness']
     dependency_inventory = {'connections': [{'connection_reference': db.connection_reference, 'database': db.database_name,

@@ -91,6 +91,8 @@ class JobGenerator:
         job_name = f"{package_name} Migration"
 
         graph_mode = plan.get('metadata', {}).get('planner') == 'source_graph'
+        if graph_mode and plan.get('metadata', {}).get('requires_shared_runtime_state'):
+            raise ValueError('Bound SSIS variables require one shared notebook run; per-step Jobs need an explicit state-transfer design.')
         if catalog is None:
             catalog = plan.get('metadata', {}).get('catalog', 'main') if graph_mode else 'main'
         if schema is None:

@@ -154,6 +154,10 @@ with results_tab:
                     st.write(f'Pending implementation sections: {pending_count}')
                     st.write(f"Execution readiness: **{assessment.get('execution_readiness', {}).get('status', 'NOT_ASSESSED')}**")
                     st.json(assessment['source_accounting'])
+                    if assessment.get('runtime_bindings'):
+                        with st.expander('Native runtime bindings'):
+                            st.caption('External values use the notebook ssis_runtime_values JSON widget. Bound variables require step_id=all.')
+                            st.json(assessment['runtime_bindings'])
                 for key, label in [('notebook','Download notebook draft'), ('review','Download review summary')]:
                     artifact = entry.get('artifacts', {}).get(key)
                     if artifact and Path(artifact).is_file():

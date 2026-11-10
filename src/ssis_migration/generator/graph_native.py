@@ -8,6 +8,7 @@ from sqlglot import exp, ErrorLevel
 from ssis_migration.mapping import ConversionGap, resolve_target, translate_sql
 from ssis_migration.drafts import pending_operation
 from ssis_migration.source_context import source_selection, active_source_sql, describe_variable
+from ssis_migration.bound_sql import variable_query
 
 
 def variable(ref):
@@ -102,9 +103,9 @@ def ports_graph(flow):
     return components, edges, inbound, outbound
 
 
-def dataflow_operations(flow, config, connection_aliases=None, *, package=None):
+def dataflow_operations(flow, config, connection_aliases=None, *, package=None, runtime=None):
     from ssis_migration.assessment import finding
-    findings, operations, mapping_uses = [], [], []
+    findings, operations, mapping_uses, compiled_sources, variable_contexts = [], [], [], [], {}
     aliases = connection_aliases or {}
     def canonical(component):
         ref = connection_of(component)
@@ -127,6 +128,7 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None):
             if selected['kind'].startswith('VARIABLE'):
                 source_context = describe_variable(selected['value'], flow.ref_id, package) if package else {
                     'reference':selected['value'], 'status':'PACKAGE_CONTEXT_UNAVAILABLE'}
+                variable_contexts[ref] = source_context
         try:
             if comp.properties.get('_type_evidence') == 'description':
                 raise ConversionGap('COMPONENT_TYPE_UNRESOLVED', 'A description-based type hint is not sufficient for native generation.')
@@ -162,14 +164,21 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None):
                 if comp.inputs or len(ports) != 1: raise ConversionGap('DATAFLOW_SOURCE_UNSUPPORTED', 'Source must have one normal output and no inputs.')
                 port = ports[0]
                 if selected['kind'].startswith('VARIABLE'):
-                    raise ConversionGap('VARIABLE_SQL_REVIEW_REQUIRED', 'Active source uses an SSIS variable. Its declaration and runtime references are retained in the pending section.')
+                    if selected['kind'] != 'VARIABLE_SQL' or runtime is None:
+                        raise ConversionGap('VARIABLE_SQL_REVIEW_REQUIRED', 'Variable-backed source requires an explicit supported SQL expression.')
+                    call, uses = variable_query(source_context, flow.ref_id, canonical(comp), config, runtime)
+                    compiled_sources.append(ref)
+                    findings.append(finding('VARIABLE_BINDING_REVIEW_REQUIRED',ref,
+                        'SQL expression is bound with native numeric arguments. Supply runtime references and verify source type/conversion behavior.', severity='WARNING'))
                 if selected['kind'] == 'UNSUPPORTED':
                     raise ConversionGap('SQL_EXTRACTION_INCOMPLETE', 'Source access mode is unsupported.')
-                query = active_source_sql(comp.properties)
-                connection = canonical(comp)
-                if not query:
-                    raise ConversionGap('SQL_EXTRACTION_INCOMPLETE', 'Source has no active static query or table.')
-                sql, uses = translate_sql(query, connection, config, query_only=True)
+                if not selected['kind'].startswith('VARIABLE'):
+                    query = active_source_sql(comp.properties)
+                    connection = canonical(comp)
+                    if not query:
+                        raise ConversionGap('SQL_EXTRACTION_INCOMPLETE', 'Source has no active static query or table.')
+                    sql, uses = translate_sql(query, connection, config, query_only=True)
+                    call = f'spark.sql({sql!r})'
                 mapping_uses.extend({**use, 'source_id':ref} for use in uses)
                 if any(use['resolution'] == 'PLACEHOLDER' for use in uses):
                     raise ConversionGap('TARGET_LOCATION_UNRESOLVED', 'Supply a target schema or object override to replace the target placeholder.')
@@ -178,7 +187,7 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None):
                 if not cols or len(set(cols)) != len(cols): raise ConversionGap('COLUMN_LINEAGE_UNRESOLVED', 'Source requires unique captured output columns.')
                 lineage = {str(c.get('lineage_id')): c['name'] for c in port['columns'] if c.get('lineage_id')}
                 lineage.update({'#' + k: v for k, v in list(lineage.items()) if k.isdigit()})
-                code.append(f'{name} = spark.sql({sql!r})')
+                code.append(f'{name} = {call}')
                 code.append(f'{name} = {name}.select(*[F.col("`" + c.replace("`", "``") + "`") for c in {cols!r}])')
                 state[port['ref_id']] = (name, cols, lineage)
             elif comp.detected_type == 'MULTICAST':
@@ -261,6 +270,7 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None):
             operations.append({'operation_id': ref, 'operation_type':'NATIVE_DATAFRAME', 'order':len(operations),
                                'code':'from pyspark.sql import functions as F\n' + '\n'.join(code)})
         except (ConversionGap, KeyError, ValueError) as exc:
+            if ref in compiled_sources: compiled_sources.remove(ref)
             gap = exc if isinstance(exc, ConversionGap) else ConversionGap('DATAFLOW_METADATA_INCOMPLETE', str(exc))
             findings.append(finding(gap.code, ref, str(gap), evidence=gap.evidence))
             # Failed outputs cannot be reused by downstream components.
@@ -272,5 +282,6 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None):
             pending['order'] = len(operations)
             operations.append(pending)
     graph = {'components':[{'source_id':ref,'type':components[ref].detected_type} for ref in components],
-             'edges':edges,'order':ordered,'cycles':cycles,'mapping_uses':mapping_uses}
+             'edges':edges,'order':ordered,'cycles':cycles,'mapping_uses':mapping_uses,
+             'compiled_variable_sources':compiled_sources, 'variable_contexts':variable_contexts}
     return operations, findings, graph

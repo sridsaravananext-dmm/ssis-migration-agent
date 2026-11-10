@@ -50,3 +50,7 @@ The default planner now builds identity-based task and data-flow graphs, emits s
 6. Decide pipeline strategy and load strategy with the user. Artifact generation, deployment, and data execution remain separate operations.
 
 No broad workload-accuracy, memory, performance, or production-readiness claim is made by this implementation.
+
+## Native binding implementation
+
+Supported named inputs, ordinal single-row results, bounded relational batches, and literal/reference SQL templates generate executable native bodies. Runtime requirements remain separate from generation status. Missing procedures and unsupported handlers retain named pending sections. Identity allocation, statement atomicity, and source/target conversions retain explicit review findings. See [source-graph.md](source-graph.md) for the supported forms and shared-notebook restriction.

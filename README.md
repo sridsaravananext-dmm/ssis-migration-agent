@@ -71,17 +71,25 @@ The source-graph planner supports standalone relational SQL, explicit table over
 
 Data-flow destination projections are previews. Their writes remain blocked by `LOAD_STRATEGY_REQUIRED` until load semantics are agreed. Explicit single-statement DML already present in an Execute SQL Task can be translated; that preserves supplied source behavior rather than choosing a new load strategy.
 
-Source access modes select the active table, SQL command, or variable. Inactive captured SQL is not used as dependency evidence. Variable-backed pending sections retain lexical scope, declaration/value, expression-evaluation flags, and runtime variable/parameter references; expressions are not evaluated or interpolated into executable SQL.
+Source access modes select the active table, SQL command, or variable. Inactive captured SQL is not used as dependency evidence. Variable-backed sections retain lexical scope and declarations. Supported SQL expressions made of literal strings plus numeric value references become native named SQL arguments; source expressions are never run through Python eval or runtime SQL string concatenation. Other expressions remain pending.
 
 Missing procedures produce named draft sections. Supplying a definition regenerates the source step in a new input version; a parameterless call to a single supported relational statement can become native Spark SQL. Other procedure bodies and argument/result bindings remain pending with their available definitions recorded.
 
-Loops, Script Tasks, joins/lookups/aggregates, general procedural SQL, parameter/result bindings, row-error redirection, event handlers, checkpoints, forced results, cycles, and conditional/failure/completion/OR task constraints remain explicit blockers. Independent task branches require a concurrency/failure-isolation decision before executable notebook acceptance. The optional legacy planner still uses warehouse/name/control-table conventions and reports those assumptions.
+Loops, Script Tasks, joins/lookups/aggregates, general procedural SQL, unsupported parameter/result bindings, row-error redirection, event handlers, checkpoints, forced results, cycles, and conditional/failure/completion/OR task constraints remain explicit blockers. Independent task branches require a concurrency/failure-isolation decision before executable notebook acceptance. The optional legacy planner still uses warehouse/name/control-table conventions and reports those assumptions.
 
 No deployment, runtime equivalence measurement, Volume browsing, or new pipeline/load strategy is implied. See [the source-graph guide](docs/source-graph.md) for mapping examples, supported subsets, and validation steps.
 
-Static validation rejects visible Spark UDF/Pandas UDF/UDTF definitions and registration, selected custom row APIs, dynamic Python execution, unresolved SQL parameters, legacy EXEC passthrough, incomplete bodies, and unbounded driver collections. Ordinary Python helpers and explicitly bounded one-row retrieval remain supported. This is a conversion-quality check, not a sandbox for arbitrary Python.
+Static validation rejects visible Spark UDF/Pandas UDF/UDTF definitions and registration, selected custom row APIs, dynamic Python execution, unresolved SQL parameters, legacy EXEC passthrough, incomplete bodies, and unbounded driver collections. Ordinary Python helpers and bounded retrieval of up to two rows for single-row cardinality checks remain supported. This is a conversion-quality check, not a sandbox for arbitrary Python.
 
 See [the assessment contract](docs/assessment-contract.md) for details and follow-on acceptance criteria.
+
+## Native runtime bindings
+
+Named input parameters, ordinal single-row results, and bounded relational batches can generate native Spark SQL code. The notebook `ssis_runtime_values` JSON widget supplies external values, using the keys listed in the generated Native runtime bindings section. Captured literal variable defaults are retained; supported result bindings update shared notebook state. Missing inputs, unsupported NULL conversions, integer overflow, and incompatible scalar types fail explicitly.
+
+This subset requires Spark 3.4+ native named SQL arguments and one shared notebook run (`step_id=all`). Per-step Jobs are blocked until a state-transfer design is supplied. Input/provider conversions and timestamp policy remain review items. INSERT followed by MAX receives an identity/concurrency blocker; separate calls receive an atomicity review warning. The tool does not invent identity columns or a load strategy.
+
+Recognized `EXEC('SELECT COUNT(*) FROM ' + @TableName)` uses a captured non-expression table declaration mapped at generation time. A runtime change to that table name requires regeneration. Arbitrary dynamic SQL remains pending.
 
 ## Tests
 
@@ -90,3 +98,12 @@ pytest -q --ignore=tests/agent/test_live_llm_integration.py
 ```
 
 The live integration module requires a separately configured Databricks endpoint; do not use it for offline validation. Source code and examples in this repository are the only inputs used by automated tests. Confidential third-party tool archives are not included.
+
+Optional real-Spark checks use synthetic local tables only:
+
+```sh
+python -m pip install pyspark
+SPARK_LOCAL_IP=127.0.0.1 pytest tests/test_bound_sql_spark.py -q
+```
+
+These checks validate native argument/result mechanics, not SSIS equivalence or Databricks Delta execution.

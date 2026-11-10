@@ -77,9 +77,25 @@ Independent branches are preserved in the graph. A single notebook would seriali
 
 OLE DB source AccessMode selects the evidence used by generation and analysis: 0 = OpenRowset, 1 = OpenRowsetVariable, 2 = SqlCommand, 3 = SqlCommandVariable. Unused properties can contain old designer text; that text is retained in the raw IR/pending reference comments but cannot supply active dependencies, result-set types, or load-strategy evidence.
 
-Variable-backed SQL/table sources remain pending. Their draft sections include the closest lexical variable declaration when available, scope, captured value, expression, EvaluateAsExpression flag, and referenced runtime variables/package/project parameters. Sensitive declarations are redacted in this added context. Missing scope in older IR is identified as SCOPE_UNAVAILABLE; duplicate declarations are AMBIGUOUS. Expressions and captured values are never executed or substituted as proof of a static query. Declared expressions with evaluation disabled do not create runtime-reference requirements.
+Variable-backed table sources and unsupported SQL expressions remain pending. A SQL expression made only of literal-string concatenation and scalar references can be compiled when its scoped declaration has EvaluateAsExpression enabled. Each reference must occupy a SQL value position; quoted strings, comments, and dynamic identifiers are rejected. Bare numeric fragments accept only numeric runtime values and are bound through Spark SQL arguments. Their draft sections include the closest lexical variable declaration when available, scope, captured value, expression, EvaluateAsExpression flag, and referenced runtime variables/package/project parameters. Sensitive declarations are redacted in this added context. Missing scope in older IR is identified as SCOPE_UNAVAILABLE; duplicate declarations are AMBIGUOUS. Captured snapshots are not substituted for runtime expressions. The supported template is parsed and mapped before runtime; unsupported expressions are not executed. Declared expressions with evaluation disabled do not create runtime-reference requirements.
 
-Same-named variables in unrelated containers are not visible. References inside quoted expression literals are not treated as variable bindings. Variable-based Execute SQL Tasks also retain declaration context. Parameter typing and runtime expression translation remain future work.
+Same-named variables in unrelated containers are not visible. References inside quoted expression literals are not treated as variable bindings. Variable-based Execute SQL Tasks also retain declaration context. Arbitrary expressions, provider-specific conversions, full result sets, procedure output parameters, and state transfer across separate Job tasks remain future work.
+
+## Native input and result bindings
+
+Execute SQL Tasks support unique named input bindings, input direction only, and ordinal single-row results. A bounded batch contains at most eight supported relational statements; only its final query may supply a result. The specific INSERT VALUES followed by SELECT shape can be recovered when SQL Server omits the separating semicolon. DECLARE, general EXEC, output/input-output parameters, and ambiguous result ordering remain pending.
+
+Generated `spark.sql(literal_sql, args={...})` calls bind values without inserting them into SQL text. Result collection is limited to two rows so zero/multiple-row responses fail before assignment. Ordinal bounds and scalar conversions are checked. SSIS variable types are used where captured; provider, NULL, precision, and naive-datetime timezone behavior still need review. Package/project and environment-specific system inputs must be supplied explicitly, rather than inferred from stale designer values or the developer's machine.
+
+Use the notebook `ssis_runtime_values` JSON widget. Keys and types are listed in the notebook, assessment, and UI. Example for a synthetic package using these declared inputs:
+
+```json
+{"$Package::BatchKey": 20261110, "System::UserName": "test-user", "System::MachineName": "test-runner"}
+```
+
+All bound operations share one notebook process (`step_id=all`). Separate per-step Job generation is rejected because Python variable state does not transfer between notebook runs. This does not choose a deployment or orchestration strategy.
+
+For the recognized row-count dynamic SQL shape, a captured table declaration is parsed and mapped at generation time, and its runtime value must remain unchanged. Other dynamic SQL remains pending. An INSERT/SELECT batch emits separate SQL calls with an atomicity warning. INSERT followed by MAX receives RESULT_KEY_GENERATION_REVIEW_REQUIRED because target-generated keys and concurrent writers must be designed explicitly. No identity or key-allocation implementation is invented.
 
 ## Native data-flow subset
 
@@ -107,4 +123,4 @@ The verification plan is a requirements artifact. No Spark, legacy workload, dat
 
 Existing single-file dependency arguments and the no-UDF policy remain supported. Manifest hashes now protect unmarked notebook edits in addition to explicit review markers; unreadable/untracked outputs are preserved for revalidation. Graph strict mode now writes blocked review drafts; normal assessment statuses remain separate from notebook and execution-readiness status. The default graph engine may generate fewer legacy warehouse-specific operations while identifying unsupported semantics more precisely. Use legacy mode for controlled comparison, not as evidence of equivalence.
 
-Further work: decide pipeline concurrency/failure handling and data-flow write/load strategies with the user; add typed bindings, more native transforms, optional reference guidance, authorized Volume intake, review-state management, and actual comparison evidence.
+Further work: decide pipeline concurrency/failure handling and data-flow write/load strategies with the user; extend binding/provider coverage and native transforms, optional reference guidance, authorized Volume intake, review-state management, and actual comparison evidence.

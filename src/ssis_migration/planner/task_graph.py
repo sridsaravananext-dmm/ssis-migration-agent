@@ -7,6 +7,7 @@ from ssis_migration.mapping import ConversionGap, translate_sql
 from ssis_migration.drafts import pending_operation, procedure_references, translate_parameterless_procedure
 from ssis_migration.sql_text import normalize_name
 from ssis_migration.source_context import describe_variable
+from ssis_migration.bound_sql import BindingContext, bound_task
 
 
 def topological_order(dependencies):
@@ -30,6 +31,7 @@ def build_graph_plan(context, config):
     from ssis_migration.assessment import finding, dependency_findings
     from ssis_migration.generator.graph_native import dataflow_operations, truth
     package = context.package_ir
+    runtime = BindingContext(package)
     plan = MigrationPlan(package_name=package.package_name, metadata={
         'planner':'source_graph', 'model_version':'2.1', 'uses_legacy_controls':False,
         'operations_by_step':{}, 'source_inventory':[], 'dataflow_graphs':[], **config.to_dict()})
@@ -153,10 +155,11 @@ def build_graph_plan(context, config):
             findings.append(finding('DYNAMIC_EXECUTABLE_PROPERTY',origin,'Executable property expressions require typed evaluation.'))
         elif origin in flows:
             represented_flows.add(origin)
-            ops, findings, graph = dataflow_operations(flows[origin],config,context.metadata.get("connection_aliases",{}), package=package)
+            ops, findings, graph = dataflow_operations(flows[origin],config,context.metadata.get("connection_aliases",{}), package=package, runtime=runtime)
             graph['task_id'] = sid
             plan.metadata['dataflow_graphs'].append(graph)
             mapping_uses = graph.get('mapping_uses',[])
+            context.metadata.setdefault('compiled_variable_sources', set()).update(graph.get('compiled_variable_sources', []))
             task_type = 'NATIVE_DATA_FLOW'
         elif 'executesqltask' in kind:
             task_type = 'NATIVE_SQL_TASK'
@@ -168,12 +171,23 @@ def build_graph_plan(context, config):
                         raise ConversionGap('PROCEDURE_IMPLEMENTATION_PENDING', 'Retain this procedure call until its definition and call semantics are available.')
                     sql, mapping_uses = translate_parameterless_procedure(sql_source, bodies[procedures[0]['name']], connection, config, props)
                 elif props.get('parameter_bindings') or props.get('result_bindings') or str(props.get('ResultType','ResultSetType_None')) not in {'0','ResultSetType_None','None',''}:
-                    raise ConversionGap('SQL_BINDINGS_UNSUPPORTED','SQL parameter/result bindings must be translated explicitly.')
+                    code, mapping_uses, evidence = bound_task(props, origin, connection, config, runtime)
+                    ops = [{'operation_id':origin, 'operation_type':'NATIVE_BOUND_SQL', 'order':0, 'code':code}]
+                    findings.append(finding('BINDING_TYPE_REVIEW_REQUIRED',origin,
+                        'Review source variable/provider types, timestamp timezone, and NULL behavior for native runtime bindings.', severity='WARNING'))
+                    if evidence['dynamic_row_count']: context.metadata.setdefault('compiled_dynamic_sql_sources', set()).add(origin)
+                    if evidence['batch']:
+                        findings.append(finding('BATCH_ATOMICITY_REVIEW_REQUIRED',origin,
+                            'Source statements are emitted in order as separate Spark SQL calls; confirm commit/failure behavior.', severity='WARNING'))
+                    if evidence['identity_review']:
+                        findings.append(finding('RESULT_KEY_GENERATION_REVIEW_REQUIRED',origin,
+                            'INSERT followed by MAX must be reviewed for target identity generation and concurrent writers. Source SQL is retained; no key strategy is invented.'))
                 else:
                     sql, mapping_uses = translate_sql(sql_source, connection, config)
                 if any(u['resolution'] == 'PLACEHOLDER' for u in mapping_uses):
                     raise ConversionGap('TARGET_LOCATION_UNRESOLVED', 'Target schema is unknown; retain a draft section until a schema or override is supplied.')
-                ops = [{'operation_id':origin, 'operation_type':'NATIVE_SQL','order':0,'code':f'_result_{sid} = spark.sql({sql!r})'}]
+                if not ops:
+                    ops = [{'operation_id':origin, 'operation_type':'NATIVE_SQL','order':0,'code':f'_result_{sid} = spark.sql({sql!r})'}]
             except ConversionGap as exc: findings.append(finding(exc.code,origin,str(exc),evidence=exc.evidence))
         else:
             findings.append(finding('TASK_TRANSLATION_UNSUPPORTED',origin,f'No native implementation for task type {exe.executable_type or exe.creation_name}.'))
@@ -243,6 +257,10 @@ def build_graph_plan(context, config):
         if use.get('layer') and config.layer.casefold() not in {'unspecified','multi-layer','multilayer',use['layer'].casefold()}:
             plan.unresolved.append(finding('LAYER_CONTEXT_CONFLICT',use['mapping_key'],'Mapped output layer conflicts with package layer context.'))
     plan.metadata['execution_model'] = 'serialized_topological'
+    plan.metadata['runtime_variables'] = list(runtime.inputs.values())
+    plan.metadata['runtime_defaults'] = runtime.defaults
+    plan.metadata['requires_shared_runtime_state'] = bool(runtime.inputs)
+    if runtime.inputs: plan.metadata['minimum_binding_runtime'] = 'Spark 3.4+ / Databricks native named SQL arguments'
     plan.metadata['mapping_uses'] = uses
     plan.metadata['mapping_review_complete'] = not any(f['code'] in {'CONVENTION_TARGET_REVIEW','TARGET_LOCATION_UNRESOLVED','TARGET_NAME_COLLISION','LAYER_MAPPING_REQUIRED','TARGET_SCHEMA_CONTEXT_CONFLICT','LAYER_CONTEXT_CONFLICT'} for f in plan.unresolved)
     plan.metadata['unused_object_mappings'] = sorted(set(config.object_mappings) - {u['mapping_key'] for u in uses})

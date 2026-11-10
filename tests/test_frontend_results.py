@@ -64,3 +64,26 @@ def test_manually_edited_draft_is_preserved_and_remains_downloadable():
     assert path.read_bytes()==edited
     assert any('NOTEBOOK_CONTENT_CHANGED' in m.value and 'REVALIDATION_REQUIRED' in m.value for m in app.markdown)
     assert 'Download notebook draft' in [b.proto.label for b in app.get('download_button')]
+
+
+def test_native_binding_requirements_render_on_the_results_card(tmp_path):
+    import tempfile
+    from ssis_migration.migrate import run_migration
+    source=tmp_path/'native.dtsx'
+    source.write_text('''<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts"
+      xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" DTS:refId="Package" DTS:ObjectName="Native">
+      <DTS:Variables><DTS:Variable DTS:ObjectName="Result" DTS:Namespace="User"><DTS:VariableValue DTS:DataType="8"/></DTS:Variable></DTS:Variables>
+      <DTS:Executables><DTS:Executable DTS:refId="Package\\T" DTS:ExecutableType="Microsoft.ExecuteSQLTask"><DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:SqlStatementSource="SELECT @name AS name" SQLTask:ResultType="ResultSetType_SingleRow">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="@name" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input"/>
+          <SQLTask:ResultBinding SQLTask:ResultName="0" SQLTask:DtsVariableName="User::Result"/>
+        </SQLTask:SqlTaskData></DTS:ObjectData></DTS:Executable></DTS:Executables></DTS:Executable>''')
+    report=run_migration(str(source),str(tmp_path/'out'))
+    assert report['packages'][0]['assessment']['runtime_bindings']['execution_mode']=='SINGLE_NOTEBOOK'
+    app=AppTest.from_file(str(ROOT/'frontend/app.py'),default_timeout=30).run()
+    (Path(tempfile.gettempdir())/'ssis_conversion_app'/app.session_state['session_id']).mkdir(parents=True,exist_ok=True)
+    app.session_state['result']=report
+    app.session_state['output']=str(tmp_path/'out')
+    app.run()
+    assert not app.exception
+    assert any(e.label=='Native runtime bindings' for e in app.expander)
