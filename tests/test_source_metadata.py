@@ -57,3 +57,11 @@ def test_corrupt_script_encoding_remains_a_source_gap(tmp_path):
     </DTS:ObjectData></DTS:Executable></DTS:Executables>''')
     source=ir.executables[0].properties['script_sources'][0]
     assert source['status']=='ENCODING_REVIEW_REQUIRED' and source['text'] is None
+
+
+def test_script_project_access_metadata_is_captured(tmp_path):
+    ir=parse(tmp_path,'''<DTS:Executables><DTS:Executable DTS:refId="Script" DTS:ExecutableType="Microsoft.ScriptTask"><DTS:ObjectData>
+      <ScriptProject Name="Synthetic" Language="CSharp" ReadOnlyVariables="User::A" ReadWriteVariables="User::B"/>
+    </DTS:ObjectData></DTS:Executable></DTS:Executables>''')
+    props=ir.executables[0].properties
+    assert props['ReadOnlyVariables']=='User::A' and props['ReadWriteVariables']=='User::B'

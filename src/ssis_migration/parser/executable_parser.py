@@ -43,6 +43,10 @@ class SSISExecutableParser:
                     element
                 )
             )
+        elif any('expressiontask' in value.casefold() for value in (executable_type,creation_name)):
+            for child in element.iter():
+                if local_name(child.tag).casefold()=='expressiontask':
+                    result['properties'].update({local_name(k):v for k,v in child.attrib.items()})
         elif any('sendmailtask' in value.casefold() for value in (executable_type,creation_name)):
             for child in element.iter():
                 if local_name(child.tag).casefold()=='sendmailtaskdata':
@@ -53,6 +57,9 @@ class SSISExecutableParser:
                 attrs={local_name(k):v for k,v in child.attrib.items()}
                 tag=local_name(child.tag).casefold()
                 if tag=='scripttaskdata':result['properties'].update(attrs)
+                if tag=='scriptproject':
+                    result['properties'].update({k:v for k,v in attrs.items() if k in {
+                        'Name','Language','VSTAMajorVersion','VSTAMinorVersion','ReadOnlyVariables','ReadWriteVariables'}})
                 name=attrs.get('Name') or attrs.get('name') or attrs.get('FileName') or ''
                 if name.casefold().endswith(('.cs','.vb')):
                     text=''.join(child.itertext()).strip()

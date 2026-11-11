@@ -4,6 +4,21 @@ import re
 from ssis_migration.mapping import ConversionGap
 
 
+def assignment_code(expression,owner,runtime):
+    match=re.fullmatch(r'\s*@\[([^\]]+)\]\s*=(?!=)\s*([\s\S]+)',expression or '')
+    if not match or not match[1].startswith('User::'):
+        raise ConversionGap('EXPRESSION_TASK_REVIEW_REQUIRED','Expected one assignment to a declared User variable.')
+    candidate=runtime.fork()
+    key,kind=candidate.variable(match[1],owner,write=True)
+    def resolve(ref):
+        code=candidate.read(ref,owner)
+        dependency,_=candidate.variable(ref,owner)
+        return code,candidate.inputs[dependency]['kind']
+    code,_=compile_scalar(match[2],resolve)
+    runtime.adopt(candidate)
+    return f'_ssis_values[{key!r}] = _ssis_coerce({code}, {kind!r})'
+
+
 def compile_scalar(text,resolve):
     token=re.compile(r'\s*(?P<cast>\(\s*DT_[A-Za-z0-9_]+\s*\))|\s*(?P<string>"(?:[^"\\]|\\.)*")|\s*(?P<ref>@\[[^\]]+\])|\s*(?P<number>\d+(?:\.\d+)?)|\s*(?P<name>[A-Za-z_]\w*)|\s*(?P<op>[+(),-])')
     tokens=[];pos=0

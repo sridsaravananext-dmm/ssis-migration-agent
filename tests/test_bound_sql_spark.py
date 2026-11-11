@@ -46,6 +46,20 @@ def test_real_spark_named_query_and_single_row_result_binding(spark):
     assert data['_ssis_values']['User::Result']==1
 
 
+def test_expression_task_updates_values_used_by_later_native_sql(spark):
+    from ssis_migration.scalar_expressions import assignment_code
+    runtime=BindingContext(PackageIR(variables=[VariableIR(name='Key',namespace='User',scope_ref_id='Package',data_type='3',value='10'),
+        VariableIR(name='Result',namespace='User',scope_ref_id='Package',data_type='3')]))
+    assignment=assignment_code('@[User::Key] = 20','Package',runtime)
+    code,_,_=bound_task({'SqlStatementSource':'SELECT id FROM dbo.Orders WHERE batch_key=@key',
+        'parameter_bindings':[{'ParameterName':'key','DtsVariableName':'User::Key'}],
+        'ResultType':'ResultSetType_SingleRow','result_bindings':[{'ResultName':'0','DtsVariableName':'User::Result'}]},
+        'Package','Legacy',cfg(),runtime)
+    data=env(runtime,spark,{})
+    exec(assignment,data);exec(code,data)
+    assert data['_ssis_values']['User::Result']==2
+
+
 def test_real_spark_variable_expression_uses_bound_numeric_values(spark):
     runtime=BindingContext(PackageIR())
     call,_=variable_query({'status':'DECLARED_REQUIRES_RUNTIME_REVIEW','evaluate_as_expression':True,

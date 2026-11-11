@@ -63,3 +63,28 @@ def test_sensitive_literals_require_supplied_values_instead_of_compiling_redacte
     runtime=BindingContext(PackageIR(variables=[VariableIR(name='Sensitive',namespace='User',scope_ref_id='Package',data_type='8',sensitive=True,value='not-exported')]))
     code=runtime.read('User::Sensitive','Package')
     assert runtime.defaults=={} and 'not-exported' not in code
+
+
+def test_expression_tasks_assign_shared_state_without_row_udfs(tmp_path):
+    from ssis_migration.parser.package_parser import SSISPackageParser
+    from ssis_migration.ir.builder import IRBuilder
+    from ssis_migration.scalar_expressions import assignment_code
+    p=tmp_path/'expression.dtsx'
+    p.write_text('''<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" DTS:refId="Package"><DTS:Variables>
+      <DTS:Variable DTS:ObjectName="Table" DTS:Namespace="User"><DTS:VariableValue DTS:DataType="8">Old</DTS:VariableValue></DTS:Variable>
+    </DTS:Variables><DTS:Executables><DTS:Executable DTS:refId="Assign" DTS:ExecutableType="Microsoft.ExpressionTask"><DTS:ObjectData>
+      <ExpressionTask Expression="@[User::Table] = &quot;New&quot;"/>
+    </DTS:ObjectData></DTS:Executable></DTS:Executables></DTS:Executable>''')
+    ir=IRBuilder().build(SSISPackageParser(p).parse());runtime=BindingContext(ir)
+    code=assignment_code(ir.executables[0].properties['Expression'],'Assign',runtime)
+    env={'dbutils':SimpleNamespace(widgets=SimpleNamespace(get=lambda key:'{}'))}
+    exec(runtime_setup(runtime.defaults),env);exec(code,env)
+    assert env['_ssis_values']['User::Table']=='New'
+    assert validate_native_spark(code)['status']=='PASS'
+
+
+def test_unsupported_expression_assignment_preserves_no_partial_runtime_state():
+    from ssis_migration.scalar_expressions import assignment_code
+    runtime=BindingContext(PackageIR(variables=[VariableIR(name='Date',namespace='User',scope_ref_id='Package',data_type='7')]))
+    with pytest.raises(ConversionGap):assignment_code('@[User::Date] = GETDATE()','Package',runtime)
+    assert not runtime.inputs
