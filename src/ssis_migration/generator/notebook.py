@@ -102,6 +102,11 @@ class NotebookAssembler:
                 "    raise RuntimeError('Target schema context requires explicit per-output mapping review before execution.')\n"
             )
         ))
+        if plan_dict.get('metadata', {}).get('requires_shared_runtime_state'):
+            cells[-1]['source'] = self._split_source(''.join(cells[-1]['source']) +
+                "\ndbutils.widgets.text('ssis_runtime_values', '{}', 'SSIS runtime values (JSON)')\n"
+                "if _step_id != 'all':\n"
+                "    raise RuntimeError('Bound SSIS variables require one shared notebook run; use step_id=all.')\n")
 
         # -------------------------------------------------
         # Setup cell: ETL control-table helpers
@@ -112,6 +117,17 @@ class NotebookAssembler:
             cells.append(self._code_cell(
                 "raise RuntimeError('Conversion has unresolved findings. Resolve assessment.json findings and regenerate before execution.')"
             ))
+        if plan_dict.get('metadata', {}).get('requires_shared_runtime_state'):
+            from ssis_migration.bound_sql import runtime_setup
+            cells.append(self._code_cell(runtime_setup(plan_dict['metadata'].get('runtime_defaults', {}))))
+            defaults = plan_dict['metadata'].get('runtime_defaults', {})
+            rows = []
+            for item in plan_dict['metadata'].get('runtime_variables', []):
+                origin = 'captured default' if item['key'] in defaults else 'result/runtime state' if item.get('write') else 'required runtime input'
+                rows.append(f"- `{item['key']}` — {item['kind']}; {origin}")
+            cells.append(self._markdown_cell('## Native runtime bindings\n\n'
+                'Use the `ssis_runtime_values` JSON widget for external inputs. Bound variables share one notebook run '
+                '(`step_id=all`). Source NULL, timezone, and provider conversions still require review.\n\n' + '\n'.join(rows)))
         if plan_dict.get("metadata", {}).get("uses_legacy_controls", False):
             cells.append(self._code_cell(self._setup_helpers_code()))
 

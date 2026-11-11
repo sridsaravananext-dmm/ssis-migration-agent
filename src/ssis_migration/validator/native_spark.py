@@ -13,11 +13,12 @@ def validate_native_spark(code: str, *, language='python'):
     def issue(code, message, line=None):
         item = {'code': code, 'severity': 'ERROR', 'message': message, 'line': line}
         if item not in issues: issues.append(item)
-    def sql_checks(sql, line=None):
+    def sql_checks(sql, line=None, bound=()):
         clean = mask_sql(sql)
         if re.search(r'\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?FUNCTION\b', clean, re.I):
             issue('UDF_POLICY_VIOLATION', 'Generate native Spark expressions instead of defining a function.', line)
-        if re.search(r'(?<!:):[A-Za-z_]\w*|@[A-Za-z_]\w*|\?', clean):
+        names = set(re.findall(r'(?<!:):([A-Za-z_]\w*)', clean))
+        if re.search(r'@[A-Za-z_]\w*|\?', clean) or names != set(bound):
             issue('RUNTIME_PARAMETER_UNBOUND', 'SQL contains unresolved runtime parameter tokens.', line)
         if re.search(r'\b(?:EXEC(?:UTE)?|sp_executesql)\b', clean, re.I):
             issue('LEGACY_SQL_EXECUTION', 'Legacy procedure execution must be translated, not passed to Spark.', line)
@@ -85,18 +86,25 @@ def validate_native_spark(code: str, *, language='python'):
                 receiver = node.func.value if isinstance(node.func, ast.Attribute) else None
                 bounded = (isinstance(receiver, ast.Call) and name(receiver.func).endswith('.limit')
                            and receiver.args and isinstance(receiver.args[0], ast.Constant)
-                           and receiver.args[0].value == 1)
+                           and receiver.args[0].value in {1, 2})
                 if isinstance(receiver, ast.Call) and name(receiver.func).endswith('.sql') and receiver.args:
                     arg = receiver.args[0]
                     value = sql_value(arg)
                     if value is not None:
-                        bounded = bool(re.search(r'\bLIMIT\s+1\s*;?\s*$', mask_sql(value), re.I))
+                        bounded = bool(re.search(r'\bLIMIT\s+[12]\s*;?\s*$', mask_sql(value), re.I))
                 if not bounded:
                     issue('UNBOUNDED_DRIVER_COLLECTION', 'Bulk driver collection requires a verified bound; use distributed operations.', node.lineno)
             if target.endswith('.sql') and node.args:
                 arg = node.args[0]
                 value = sql_value(arg)
-                if value is not None: sql_checks(value, node.lineno)
+                bound = []
+                for keyword in node.keywords:
+                    if keyword.arg == 'args':
+                        if isinstance(keyword.value, ast.Dict) and all(isinstance(k, ast.Constant) and isinstance(k.value,str) for k in keyword.value.keys):
+                            bound = [k.value for k in keyword.value.keys]
+                            if len(bound) != len(set(bound)): issue('RUNTIME_PARAMETER_UNBOUND', 'Duplicate SQL argument keys.', node.lineno)
+                        else: issue('RUNTIME_PARAMETER_UNBOUND', 'SQL arguments require explicit static key names.', node.lineno)
+                if value is not None: sql_checks(value, node.lineno, bound)
                 else: issue('SQL_TEXT_NOT_STATIC', 'SQL source cannot be inspected statically; verify it before execution.', node.lineno)
     if re.search(r'\b(?:AI_REQUIRED|REVIEW_REQUIRED|TODO|placeholder|NotImplementedError)\b', code, re.I):
         issue('INCOMPLETE_IMPLEMENTATION', 'Generated content contains unresolved implementation markers.')

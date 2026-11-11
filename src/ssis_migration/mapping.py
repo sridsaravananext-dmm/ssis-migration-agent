@@ -76,11 +76,14 @@ def resolve_target(name, connection, config, *, role):
         'target': mapped.sql(dialect='databricks'), 'role': role, 'resolution': resolution, 'layer': layer}
 
 
-def translate_sql(sql, connection, config, *, query_only=False):
+def translate_sql(sql, connection, config, *, query_only=False, parameter_names=()):
     """Translate a bounded relational subset and map every physical table."""
     from ssis_migration.sql_text import mask_sql
     import re
     clean = mask_sql(sql)
+    for parameter in parameter_names:
+        if not re.fullmatch(r'ssis_p\d+', parameter): raise ValueError('Invalid generated parameter name')
+        clean = re.sub(r'(?<!:):' + re.escape(parameter) + r'\b', ' ', clean)
     if re.search(r'@[\w@]|\?|(?<!:):[A-Za-z_]|\b(?:EXEC(?:UTE)?|DECLARE|CURSOR|WHILE|BEGIN|COMMIT|ROLLBACK|TRY|CATCH)\b', clean, re.I):
         raise ConversionGap('SQL_SEMANTICS_UNSUPPORTED', 'Procedural SQL, parameters, and dynamic execution require explicit translation.')
     try:
@@ -94,6 +97,10 @@ def translate_sql(sql, connection, config, *, query_only=False):
     if not isinstance(expression, allowed):
         raise ConversionGap('SQL_SEMANTICS_UNSUPPORTED', f'Unsupported statement: {type(expression).__name__}')
     for node in expression.walk():
+        if isinstance(node, exp.Placeholder) and node.name in parameter_names:
+            if isinstance(node.parent, (exp.Table, exp.Column, exp.Identifier)):
+                raise ConversionGap('SQL_BINDINGS_UNSUPPORTED', 'A value binding cannot supply an identifier.')
+            continue
         if isinstance(node, (exp.Command, exp.Anonymous, exp.Into, exp.Parameter, exp.Placeholder)):
             raise ConversionGap('SQL_SEMANTICS_UNSUPPORTED', f'Unsupported SQL construct: {type(node).__name__}')
         if isinstance(node, exp.CTE) and node.parent and node.parent.args.get('recursive'):

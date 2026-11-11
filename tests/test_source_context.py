@@ -51,15 +51,15 @@ def test_variable_mode_retains_actual_expression_and_ignores_inactive_sql():
     cfg=AssessmentConfig(target_schema='silver')
     ctx.metadata.update(cfg.to_dict())
     plan=build_graph_plan(ctx,cfg)
-    op=next(o for ops in plan.metadata['operations_by_step'].values() for o in ops if o.get('pending_item'))
-    assert 'VARIABLE_SQL_REVIEW_REQUIRED' in op['pending_item']['reason_codes']
-    assert 'dbo.ActiveTable' in op['pending_item']['source_variable_context']['expression']
+    op=next(o for ops in plan.metadata['operations_by_step'].values() for o in ops if o['operation_type']=='NATIVE_DATAFRAME')
+    assert 'args=' in op['code'] and '_ssis_numeric' in op['code']
+    assert 'dbo.ActiveTable' in plan.metadata['dataflow_graphs'][0]['variable_contexts'][comp.ref_id]['expression']
     assert not any(f['code']=='MISSING_PROCEDURE_DEFINITION' for f in plan.unresolved)
-    assert plan.metadata['mapping_uses']==[]
+    assert plan.metadata['mapping_uses'][0]['source']=='dbo.ActiveTable'
     dependency=analyze_sql_dependency(asdict(comp))
     assert dependency['sql'] is None and not dependency['objects'] and dependency['target_object'] is None
     assert not analyze_result_set(asdict(comp))['has_result_set']
-    assert 'spark.sql(' not in op['code']
+    assert 'spark.sql(' in op['code'] and 'InactiveProcedure' not in op['code']
 
 
 @pytest.mark.parametrize('mode,expected', [('0','ActualTable'),('2','ActualQuery')])

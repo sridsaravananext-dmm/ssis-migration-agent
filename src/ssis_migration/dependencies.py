@@ -44,7 +44,7 @@ def dependency_findings(context):
         if not isinstance(sql,str) or not sql.strip():
             if required: findings.append(finding('SQL_EXTRACTION_INCOMPLETE',ref,'Static SQL text was not extracted.'))
             return
-        if has_dynamic_call(sql) or re.search(r'\bsp_executesql\b',mask_sql(sql),re.I):
+        if (has_dynamic_call(sql) or re.search(r'\bsp_executesql\b',mask_sql(sql),re.I)) and ref not in context.metadata.get('compiled_dynamic_sql_sources', set()):
             findings.append(finding('DYNAMIC_PROCEDURE_REFERENCE',ref,'Dynamic procedure/SQL identity requires review.'))
         for call in procedure_calls(sql):
             try: body,scope,key=resolver.resolve(call,connection)
@@ -82,7 +82,8 @@ def dependency_findings(context):
             connection=next((r.connection_manager_ref_id for r in component.connection_manager_refs if r.connection_manager_ref_id),None)
             selected=source_selection(props)
             if selected['kind'].startswith('VARIABLE'):
-                findings.append(finding('VARIABLE_SQL_REVIEW_REQUIRED', component.ref_id,
-                    'Active source variable requires runtime review; inactive captured SQL is not dependency evidence.'))
+                if component.ref_id not in context.metadata.get('compiled_variable_sources', set()):
+                    findings.append(finding('VARIABLE_SQL_REVIEW_REQUIRED', component.ref_id,
+                        'Active source variable requires runtime review; inactive captured SQL is not dependency evidence.'))
             else: inspect(component.ref_id,active_source_sql(props),connection,True)
     return findings
