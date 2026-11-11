@@ -201,7 +201,7 @@ def _run_ai_assisted_generation(
 
 def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, base_path, package_output,
         *, ai=False, ai_provider='databricks', catalog=None, package_name='', ddl_path=None,
-        procedures_path=None, ddl_paths=(), procedures_paths=(), config=None):
+        procedures_path=None, ddl_paths=(), procedures_paths=(), references_paths=(), config=None):
     from ssis_migration.context.builder import build_migration_context
     from ssis_migration.database.connection_mapping_loader import load_connection_mapping
     from ssis_migration.procedure_file_loader import load_scoped_procedure_files
@@ -237,6 +237,17 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
     analysis = context.ssis_analysis
     plan = MigrationPlanner().build_plan(context)
     plan.metadata.update(config.to_dict())
+    reference_inventory=None
+    if references_paths:
+        from ssis_migration.references import inspect_references,review_text
+        reference_inventory=inspect_references(references_paths)
+        plan.metadata['supporting_references']=reference_inventory['summary']
+        write_json(package_output/'reference_inventory.json',reference_inventory)
+        (package_output/'reference_review.md').write_text(review_text(reference_inventory),encoding='utf-8')
+        for item in reference_inventory['findings']:
+            plan.unresolved.append(finding(item['code'],'reference:'+item['reference_id'],
+                'Supporting-file contract requires review; reference code has not been applied. See reference_review.md.',
+                severity='WARNING',evidence=item))
     plan.metadata['generation_method'] = 'DETERMINISTIC_GRAPH' if plan.metadata.get('planner') == 'source_graph' else 'LEGACY_WITH_OPTIONAL_AI'
     if plan.metadata.get('planner') != 'source_graph':
         plan.metadata['uses_legacy_controls'] = any(s.step_type != 'REVIEW_ONLY' for s in plan.steps)
@@ -345,6 +356,13 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
             assembled['metadata']['assessment']['execution_readiness'] = execution_readiness(findings)
             write_json(notebook, assembled)
     summary['planning'] = {'pending_section_count':len(pending_items)}
+    if plan.metadata.get('target_audit'):
+        audit=plan.metadata['target_audit']
+        summary['target_audit']={'mode':'target','replaced_source_operations':len(audit['replaced_sources']),
+            'catalog':audit['catalog'],'schema':audit['schema'],'capture_table_stats':audit['capture_table_stats'],
+            'business_value_bindings':audit['value_bindings'],'stats_targets':audit['stats_targets']}
+        write_json(package_output/'audit_replacement_plan.json',audit)
+    if reference_inventory:summary['supporting_references']=reference_inventory['summary']
     if plan.metadata.get('requires_shared_runtime_state'):
         summary['runtime_bindings'] = {'variables':plan.metadata['runtime_variables'],
             'widget':'ssis_runtime_values', 'execution_mode':'SINGLE_NOTEBOOK',
@@ -364,6 +382,9 @@ def generate_migration_artifacts(package_ir, analysis, connection_mapping_path, 
                             'conditional_output_routing', 'numeric_and_timestamp_boundaries',
                             'target_write_semantics', 'failure_and_rerun_behavior'],
         'note': 'Requirements only. No dataset comparison, legacy execution, or Spark execution has been performed.'}
+    if plan.metadata.get('target_audit'):
+        verification_plan['required_checks']+=['target_audit_existing_schema','target_audit_success_failure_lifecycle','target_audit_business_key_bridges','target_audit_table_statistics']
+        dependency_inventory['replaced_source_audit_refs']=plan.metadata['target_audit']['replaced_sources']
     for name, data in [('package_ir', package_ir.to_dict()), ('analysis', analysis), ('migration_plan', plan.to_dict()),
                        ('validation_results', validations + ai_results), ('source_inventory', inventory), ('task_graph', plan.metadata.get('task_graph', {})),
                        ('dataflow_graphs', plan.metadata.get('dataflow_graphs', [])),
@@ -394,11 +415,19 @@ def _review_text(name, summary, findings):
              f"Source items: {summary['source_accounting']['total_items']}",
              checks,
              f"Container/control bookkeeping operations (excluded): {generation.get('structural_operation_count', 0)}",
+             f"Source audit operations replaced (excluded): {generation.get('audit_replaced_operation_count',0)}",
              f"Pending implementation sections: {summary['planning']['pending_section_count']}",
              f"Execution readiness: {summary['execution_readiness']['status']}",
              'Read this review and the notebook draft first. JSON files are diagnostic records, not scripts to run.',
              'Operation coverage is a static generation metric, not legacy accuracy.', '', '## Human review findings', '']
     lines.extend(f"- **{f['code']}** (`{f['source_id']}`): {f['message']}" for f in findings)
+    if summary.get('target_audit'):
+        audit=summary['target_audit']
+        lines+=['','## Target audit replacement','',
+            f"Target audit location: {audit['catalog']}.{audit['schema']}",
+            f"Source audit/notification operations replaced: {audit['replaced_source_operations']}",
+            'The existing target audit storage contract is used through a native adapter. No shared UDF library or table-creation SQL is run.',
+            'Source auditing is intentionally replaced, not certified equivalent. See audit_replacement_plan.json for original SQL/bindings and business value bridges.']
     if not findings: lines.append('No static findings. Runtime comparison is still required.')
     return '\n'.join(lines)
 
@@ -407,15 +436,21 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
         ai=False, ai_provider='databricks', ddl_path=None, procedures_path=None, ddl_paths=(), procedures_paths=(),
         layer='unspecified', target_schema=None, description='', default_schema='dbo', strict_mode=False,
         dry_run=False, respect_human_edits=True, planner_mode='graph', object_mappings=None, dependency_scopes=None,
-        destination_write_mode='source'):
+        destination_write_mode='source', references_paths=(),audit_mode='source',audit_catalog=None,audit_schema=None,
+        audit_capture_table_stats=True,audit_value_bindings=None,source_audit_rules=None,audit_contract=None):
     from ssis_migration.lifecycle import input_manifest, notebook_protection_reason, file_record
     if execute: raise ValueError('Deployment and data execution are not implemented; use conversion/assessment only')
     config = AssessmentConfig(catalog=catalog or 'main', layer=layer, target_schema=target_schema,
         description=description, default_schema=default_schema, strict_mode=strict_mode, dry_run=dry_run,
         respect_human_edits=respect_human_edits, planner_mode=planner_mode,
-        object_mappings=object_mappings or {}, dependency_scopes=dependency_scopes or {}, destination_write_mode=destination_write_mode)
+        object_mappings=object_mappings or {}, dependency_scopes=dependency_scopes or {}, destination_write_mode=destination_write_mode,
+        audit_mode=audit_mode,audit_catalog=audit_catalog,audit_schema=audit_schema,audit_capture_table_stats=audit_capture_table_stats,
+        audit_value_bindings=audit_value_bindings if audit_value_bindings is not None else {},
+        source_audit_rules=source_audit_rules if source_audit_rules is not None else {},
+        audit_contract=audit_contract if audit_contract is not None else {})
     procedures = dependency_paths(procedures_path, procedures_paths)
     ddls = dependency_paths(ddl_path, ddl_paths)
+    references=dependency_paths(None,references_paths)
     known_dependency_files = {str(p) for p in procedures + ddls} | {p.name for p in procedures + ddls}
     if any(key not in known_dependency_files for key in config.dependency_scopes):
         raise ValueError('Dependency scopes must reference supplied procedure/DDL files')
@@ -438,7 +473,7 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
             mapping = Path(connection_mapping).expanduser().resolve() if connection_mapping else package.parent / 'connection_mapping.json'
             if connection_mapping and not mapping.is_file(): raise FileNotFoundError(f'Connection mapping not found: {mapping}')
             mapping = mapping if mapping.is_file() else None
-            manifest = input_manifest(package, procedures, ddls, mapping, resolved_base, config, ai=ai and not dry_run, ai_provider=ai_provider)
+            manifest = input_manifest(package, procedures, ddls, mapping, resolved_base, config, ai=ai and not dry_run, ai_provider=ai_provider,references=references)
             directory = output_path / name / manifest['fingerprint'][:20]
             directory.mkdir(parents=True, exist_ok=True)
             cache = directory / 'package_result.json'
@@ -449,7 +484,9 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
                     protection_reason=protection, execution_readiness={'status':'REVALIDATION_REQUIRED','runtime_verification':'NOT_MEASURED'},
                     stages={'parsing':'NOT_RUN','analysis':'NOT_RUN','generation':'SKIPPED_HUMAN_REVIEWED','runtime_verification':'NOT_MEASURED'})
                 for key, filename in [('manifest','migration_manifest.json'), ('notebook',f'{name}_Migration.ipynb'),
-                        ('review',f'{name}_review.md'), ('pending_items','pending_items.json')]:
+                        ('review',f'{name}_review.md'), ('pending_items','pending_items.json'),
+                        ('reference_inventory','reference_inventory.json'),('reference_review','reference_review.md'),
+                        ('audit_replacement_plan','audit_replacement_plan.json')]:
                     path = directory / filename
                     if path.is_file(): entry['artifacts'][key] = str(path)
             else:
@@ -461,7 +498,7 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
                 analyzed = analyze_one_package(package, procedures_paths=procedures, default_schema=default_schema, dependency_scopes=config.dependency_scopes)
                 result = generate_migration_artifacts(analyzed['package_ir'], analyzed['analysis'], mapping,
                     resolved_base, directory, ai=ai and not dry_run, ai_provider=ai_provider, catalog=catalog,
-                    package_name=name, ddl_paths=ddls, procedures_paths=procedures, config=config)
+                    package_name=name, ddl_paths=ddls, procedures_paths=procedures,references_paths=references, config=config)
                 entry.update(status=result['assessment']['status'], assessment=result['assessment'],
                     notebook_status=result['notebook_status'], findings=result['findings'],
                     artifacts={'review': result['review_file'], 'manifest': str(directory / 'migration_manifest.json'),
@@ -474,6 +511,10 @@ def run_migration(source, output, *, catalog=None, connection_mapping=None, base
                         'generation': 'NOT_RUN' if dry_run else result['notebook_status'], 'runtime_verification': 'NOT_MEASURED'})
                 if result['notebook_file']: entry['artifacts']['notebook'] = result['notebook_file']
                 entry['artifacts']['pending_items'] = str(directory / 'pending_items.json')
+                if references:
+                    entry['artifacts']['reference_inventory']=str(directory/'reference_inventory.json')
+                    entry['artifacts']['reference_review']=str(directory/'reference_review.md')
+                if audit_mode=='target':entry['artifacts']['audit_replacement_plan']=str(directory/'audit_replacement_plan.json')
                 manifest['artifacts'] = entry['artifacts']
                 manifest['generated_notebooks'] = {Path(result['notebook_file']).name:file_record(result['notebook_file'])['sha256']} if result['notebook_file'] else {}
                 write_json(directory / 'migration_manifest.json', manifest)
@@ -504,6 +545,14 @@ def main():
     parser.add_argument('--base-path')
     parser.add_argument('--procedure', dest='procedures_paths', action='append', default=[], help='Repeat for each procedure file')
     parser.add_argument('--ddl', dest='ddl_paths', action='append', default=[], help='Repeat for each DDL file')
+    parser.add_argument('--reference',dest='references_paths',action='append',default=[],help='Inspect a target notebook/library/ZIP as reference data only')
+    parser.add_argument('--audit-mode',choices=['source','target'],default='source')
+    parser.add_argument('--audit-catalog')
+    parser.add_argument('--audit-schema',help='Existing schema containing audit_notebooks and audit_tables')
+    parser.add_argument('--audit-value-bindings',help='JSON file mapping business-consumed audit variable keys to runtime_input or notebook_key')
+    parser.add_argument('--source-audit-rules',help='JSON file with source audit signatures, scoped objects, and explicit leaf-task rules')
+    parser.add_argument('--audit-contract',help='JSON file mapping canonical target audit roles to existing table/column names')
+    parser.add_argument('--no-audit-table-stats',dest='audit_capture_table_stats',action='store_false',default=True)
     parser.add_argument('--layer', default='unspecified')
     parser.add_argument('--planner-mode', choices=['graph','legacy'], default='graph')
     parser.add_argument('--destination-write-mode', choices=['source','review','append_existing'], default='source')
@@ -520,7 +569,7 @@ def main():
     args = parser.parse_args()
     if args.execute: parser.error('--execute is not available: deployment and execution are not implemented')
     values = vars(args).copy()
-    for key in ('object_mappings','dependency_scopes'):
+    for key in ('object_mappings','dependency_scopes','audit_value_bindings','source_audit_rules','audit_contract'):
         values[key] = json.loads(Path(values[key]).read_text(encoding='utf-8-sig')) if values[key] else {}
     result = run_migration(**values)
     print(json.dumps(result, indent=2, ensure_ascii=False))

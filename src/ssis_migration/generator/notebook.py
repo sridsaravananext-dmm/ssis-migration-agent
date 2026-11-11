@@ -110,6 +110,10 @@ class NotebookAssembler:
             if plan_dict.get('metadata',{}).get('package_error_handler'):
                 cells[-1]['source']=self._split_source(''.join(cells[-1]['source'])+
                     "\ndbutils.widgets.text('ssis_error_codes', '{}', 'Target error class to source audit code (JSON)')\n")
+            if plan_dict.get('metadata',{}).get('target_audit'):
+                cells[-1]['source']=self._split_source(''.join(cells[-1]['source'])+
+                    "\ndbutils.widgets.text('target_audit_job', '{}', 'Target job context (JSON, optional)')\n"
+                    "dbutils.widgets.text('execution_key', '', 'Existing Running target execution key (optional)')\n")
 
         # -------------------------------------------------
         # Setup cell: ETL control-table helpers
@@ -128,6 +132,8 @@ class NotebookAssembler:
             for item in plan_dict['metadata'].get('runtime_variables', []):
                 origin = {'failure_context':'supplied by package OnError handler',
                     'error_code_mapping':'mapped from target error class through ssis_error_codes',
+                    'target_audit_bridge':'explicit business value bridge from replaced source auditing',
+                    'target_audit_notebook_key':'assigned from target Int64 notebook execution key',
                     'source_result':'assigned by source task result binding (producer may still be pending)'}.get(item.get('origin'))
                 origin = origin or ('derived source expression' if item.get('derived') else 'captured default' if item['key'] in defaults else 'result/runtime state' if item.get('write') else 'required runtime input')
                 rows.append(f"- `{item['key']}` — {item['kind']}; {origin}")
@@ -141,6 +147,23 @@ class NotebookAssembler:
                 'Supply explicit target-error-class mappings through `ssis_error_codes`; no legacy numeric code is invented. '
                 'The original failure is re-raised even if a handler task fails.'))
             cells.append(self._code_cell(handler_setup(plan_dict,operations_by_step)))
+        if plan_dict.get('metadata',{}).get('supporting_references'):
+            refs=plan_dict['metadata']['supporting_references']
+            cells.append(self._markdown_cell('## Supporting notebook references\n\n'
+                f"Inspected {refs['input_count']} inputs and {refs['file_count']} members as reference data. "
+                'See reference_review.md for schema/library contract findings. '
+                'Supporting notebooks, DDL, libraries, and UDFs are not executed or included in this workload. '
+                'They do not replace missing legacy procedure bodies.'))
+        if plan_dict.get('metadata',{}).get('target_audit'):
+            from ssis_migration.generator.target_audit import setup_code
+            audit=plan_dict['metadata']['target_audit']
+            cells.append(self._markdown_cell('## Target audit framework\n\n'
+                'Uses the configured existing run/table audit storage contract through a native adapter; no shared library or UDF is imported. '
+                f"Replaced {len(audit['replaced_sources'])} selected source audit/notification operations; see audit_replacement_plan.json. "
+                'An incoming execution_key attaches to one Running framework record. Otherwise a new execution is recorded. '
+                'Job identifiers and source_file_path can be supplied through target_audit_job. No audit tables are created. '
+                'Business audit-key bindings remain explicit; source 32-bit keys are never silently replaced by target 64-bit keys.'))
+            cells.append(self._code_cell(setup_code(plan_dict)))
         if plan_dict.get("metadata", {}).get("uses_legacy_controls", False):
             cells.append(self._code_cell(self._setup_helpers_code()))
 
@@ -218,6 +241,9 @@ class NotebookAssembler:
                 f"| Target Objects | {target_str} |\n"
             ))
             handler=plan_dict.get('metadata',{}).get('package_error_handler')
+            if metadata.get('audit_replacement'):
+                cells.append(self._markdown_cell('Source audit operation replaced by the target framework lifecycle. Original SQL/bindings are retained in audit_replacement_plan.json.'))
+                continue
             if handler and metadata.get('source_ref_id') in handler['source_ids']:
                 cells.append(self._markdown_cell('Executed only by the package OnError handler above; this is not a normal pipeline step.'))
                 continue
@@ -284,7 +310,7 @@ class NotebookAssembler:
             if is_ai_generated:
                 # Use the LLM-generated code directly.
                 cells.append(self._code_cell(
-                    self._wrap_step_code(step_id, artifact.code,on_error=on_error)
+                    self._wrap_step_code(step_id, artifact.code,on_error=on_error,target_audit=bool(plan_dict.get('metadata',{}).get('target_audit')))
                 ))
 
             else:
@@ -314,6 +340,7 @@ class NotebookAssembler:
                             step_id,
                             "\n\n".join(code_blocks),
                             on_error=on_error,
+                            target_audit=bool(plan_dict.get('metadata',{}).get('target_audit')),
                         )
                     ))
                     cells[-1]['metadata']['ssis_migration'] = {
@@ -346,6 +373,9 @@ class NotebookAssembler:
                     cells.append(self._markdown_cell(
                         f"*No code generated for this step.*\n"
                     ))
+
+        if plan_dict.get('metadata',{}).get('target_audit'):
+            cells.append(self._code_cell("_target_audit_success()\nif _ta_attached:\n    dbutils.notebook.exit('[$OK][$STR]')"))
 
         # -------------------------------------------------
         # Assemble notebook
@@ -605,7 +635,7 @@ def update_etl_cutoff(table_name: str, cutoff_time) -> None:
         ] + [lines[-1]]
 
     @staticmethod
-    def _wrap_step_code(step_id: str, code: str, *, on_error=None) -> str:
+    def _wrap_step_code(step_id: str, code: str, *, on_error=None,target_audit=False) -> str:
         """
         Wrap step code with a conditional guard so the
         notebook can run a single step when invoked by a
@@ -623,6 +653,11 @@ def update_etl_cutoff(table_name: str, cutoff_time) -> None:
                 '    except Exception as _ssis_dispatch_error:',
                 "        _ssis_event_errors.append({'source':'package_on_error','error':str(_ssis_dispatch_error)})",'    raise']
             code='\n'.join(wrapped)
+        if target_audit:
+            if not ast.parse(code).body:code+="\nraise RuntimeError('No executable implementation is available for this step.')"
+            code='\n'.join(['if _ta_terminal:',"    raise RuntimeError('Target audit execution has already finished; start a new run before further work.')",'try:']+['    '+line if line.strip() else '' for line in code.splitlines()]+[
+                'except Exception as _target_original:',
+                '    _target_audit_failure(_target_original)', '    raise'])
         guard = f'if _step_id in ("all", {step_id!r}):'
 
         if code.startswith("%sql\n"):

@@ -29,8 +29,9 @@ CLI exit status is nonzero for technical failures and, in strict mode, packages 
 
 ## Inputs
 
-- One mandatory `.dtsx`, or a directory of packages through the CLI/API.
+- One or more mandatory `.dtsx` files through the frontend, or a file/directory of packages through the CLI/API. Each selected frontend batch is isolated from earlier uploads; duplicate filenames receive separate output identities and malformed packages do not stop valid packages.
 - Multiple optional procedure files (`--procedure`, repeatable), and DDL files (`--ddl`, repeatable).
+- Optional target notebook/library references (`--reference`, repeatable): ZIP, Databricks Python/HTML exports, IPython notebooks, or SQL/text supplied explicitly as reference. References are inspected without execution and do not supply legacy procedure/DDL definitions.
 - Optional connection mapping JSON with a `mappings` list. Referenced metadata files are resolved against `--base-path`.
 - Logical layer: Bronze, Silver, Gold, Multi-layer, unspecified, or custom text. No LLM is used to select it.
 - Optional `--object-mappings objects.json` overrides default naming with fully qualified Databricks objects. Scoped keys use `connection_reference|schema.object`; unscoped keys deliberately apply across connections.
@@ -55,13 +56,14 @@ Start with the Markdown review and `_Migration.ipynb` draft. The UI keeps diagno
 - `operations.json`: original generation output for diagnosis, including rejected content.
 - `validation_results.json`, `assessment.json`, and a Markdown review report.
 - `pending_items.json` indexes named sections with stable IDs, original SQL, connections, procedure availability, and bindings.
+- With reference inputs, `reference_inventory.json` and `reference_review.md` classify each archive/member and report bounded table/library contract findings. Same-named archives remain distinct through their content hashes.
 - A `_Migration.ipynb` graph review draft for every non-dry-run assessment. The filename suffix is retained for compatibility; it does not indicate certified migration.
 
 Incomplete graph notebooks have `notebook_status = DRAFT_REQUIRES_REVIEW` and `execution_readiness.status = BLOCKED_BY_REVIEW`. Static checks passing still do not imply runtime equivalence.
 
 Statuses include `REVIEW_REQUIRED`, `ARTIFACTS_GENERATED`, `ANALYZED`, `PARTIAL_FAILURE`, and `FAILED`. There is no unconditional `MIGRATED` result.
 
-Operation coverage is the percentage of generated non-structural operations passing native-code static checks. Container entry/completion bookkeeping is validated and counted separately. It is **not** task coverage, runtime validation, or behavioral accuracy. All source tasks/components have a disposition; unsupported standalone work is retained as a review step rather than disappearing.
+Operation coverage is the percentage of generated business operations passing native-code static checks. Container bookkeeping and intentionally replaced audit operations are validated and counted separately. They do not inflate coverage. It is **not** task coverage, runtime validation, or behavioral accuracy. All source tasks/components have a disposition; unsupported standalone work is retained as a review step rather than disappearing.
 
 Content-addressed output versions change with source/dependencies, referenced metadata, configuration, and engine code. Same-input findings retain stable IDs. Generated notebook hashes are recorded in the manifest. A changed notebook is preserved even without a review marker; explicitly reviewed, unreadable, and untracked notebooks are also protected. Preserved outputs stay downloadable and require revalidation. They do not count as newly analyzed or generated packages. These policies concern generated artifacts, not data-pipeline rerun safety.
 
@@ -93,7 +95,41 @@ Supported computed variables are evaluated from their source expressions at each
 
 Expression Tasks capture their source Expression and support one assignment to a declared User variable using the same scalar subset. Unsupported functions, including GETDATE/DATEADD/DATEPART, retain the original expression in a named pending section. No cutoff clock or timezone policy is guessed.
 
-Runtime binding records distinguish external inputs, captured defaults, derived expressions, source result producers (including pending producers), failure context, and error-code mappings. `required_external_input` identifies missing external values. Source auditing stays in the generated plan; captured zero audit-count defaults are not synthesized into measured counts.
+Runtime binding records distinguish external inputs, captured defaults, derived expressions, source result producers, failure context, and audit value bridges. `required_external_input` identifies missing external values. Source mode retains source auditing; target mode records its replacement separately. Captured zero audit-count defaults are never presented as measured counts.
+
+## Existing framework references
+
+Use the frontend reference role or `--reference path/to/framework.zip` for target configuration, database-definition, and library notebooks. This role stays separate from SQL Server procedure/DDL inputs. Two similarly named cfg archives are classified per member by their contents. A database-definition notebook can contain DDL; it is still target reference evidence, not a source schema override.
+
+The inspector reads supported notebook cells, including encoded Databricks HTML models, without importing Python, running `%run`, executing setup SQL, sending notifications, or installing UDFs. It records function/class signatures, DDL columns, supported subsequent ADD COLUMN changes, explicit INSERT column contracts, and include candidates. Raw notebook bodies, outputs, credential values, and configuration row data are not copied into its inventory or generated workload. Unsupported formats/SQL/Python remain reference review findings.
+
+Contract comparisons use unique column signatures by table name and retain the need to verify dynamic catalog/schema identities. Conflicting definitions and missing INSERT columns are findings, not automatic table repairs. Native-UDF and unbounded-driver-collection policy findings identify reference code that cannot be assumed compatible with generated workloads. Reference code is never automatically imported. Target auditing uses the native adapter described below.
+
+ZIP intake validates paths, duplicate entries, symlinks, nested/encrypted archives, member counts, and compressed/expanded size bounds. Referenced content hashes participate in output versions and reviewed-output protection. Only metadata is emitted; support archives remain input files. No connection to a live Databricks environment or verification of deployed table versions is implied.
+
+## Target audit framework
+
+The frontend defaults to **Target audit framework**. Set the existing audit schema and optionally a different audit catalog. The schema must already contain compatible `audit_notebooks` and `audit_tables` Delta tables; the converter never creates or alters them. API/CLI callers retain source mode by default for backward compatibility. Select target mode explicitly:
+
+```sh
+python -m ssis_migration.migrate --source package.dtsx --output ./review \
+  --catalog data_catalog --target-schema data_schema \
+  --audit-mode target --audit-catalog existing_catalog --audit-schema existing_audit_schema
+```
+
+The adapter writes the existing framework's notebook/table audit storage contract through literal, bound Spark SQL. It does not import the shared workflow library or register its UDF. Required column names/types are checked before business work. Optional job columns are used only when present with compatible types. Unknown required columns, missing schemas/tables, and incompatible versions stop execution instead of triggering automatic DDL.
+
+Source audit replacement uses explicit INSERT column signatures, connection/object identities, variable producers/consumers, and a recognized audit-notification chain. Task labels are not classification evidence. Audit-only row counts can be replaced; counts still consumed by business work are preserved. Mixed business/audit SQL, unknown recovery tasks, unsupported handlers, and embedded source-audit writes remain review work. `audit_replacement_plan.json` retains every replaced source reference, original SQL/bindings, reason, and business value bridge. Replaced audit operations remain in source accounting but are excluded from operation coverage through `audit_replaced_operation_count`.
+
+At runtime, a standalone run records Running then Success/Error. Passing `execution_key` attaches to one existing Running framework record without a duplicate INSERT; completed/ambiguous keys are rejected. Attached success returns `[$OK][$STR]` for the framework caller. Job metadata is read from the target Databricks context when available. `target_audit_job` can explicitly supply `job_id`, `job_name`, `job_run_id`, `master_key`, `execution_key`, and `source_file_path`. Root keys use positive UUID-derived Int64 values; target audit identity/lineage and concurrency still need runtime review.
+
+Table statistics cover known mapped write targets, using distributed counts and at most two metadata rows per lookup. Before/after metrics are recorded on success and attempted on failure; missing metrics are not invented. Statistics errors and audit-write errors never replace the original business exception. A failed/finished execution cannot continue writing business cells or report a later false success. Business mutations and audit writes are separate target transactions; no rollback or data rerun guarantee is implied. Use `--no-audit-table-stats` when those Delta statistics are not part of the intended target contract.
+
+An audit value consumed by business SQL cannot simply disappear. Choose a binding with `--audit-value-bindings bridge.json`, for example `{"User::BusinessAuditKey":"runtime_input"}`. Supply that explicitly chosen business value through `ssis_runtime_values`. `notebook_key` is permitted only for a captured Int64 variable; Int32 values are never silently narrowed from the target execution key. Stale source defaults are removed. Missing bindings, incompatible types, and unavailable business procedure bodies remain blockers. Target auditing replaces source audit/error notifications; it does not fabricate the missing business transformation or automatically send source emails.
+
+Generated target-audit notebooks require `step_id=all`. Use one notebook per workload; per-step jobs cannot share audit state. Source mode remains available for controlled comparison.
+
+Different source frameworks can add column signatures, connection-scoped objects, or package-scoped audit leaf-task rules with `--source-audit-rules`. Existing target tables/columns and lifecycle status values can be mapped with `--audit-contract`. Both JSON settings are also available in the frontend and Python API. See [audit configuration and support boundaries](docs/audit-configuration.md) for examples, required role types, batch behavior, and unsupported workload handling. The extensions generalize classification/storage; they do not certify every SSIS task or arbitrary audit semantics.
 
 The package OnError handler records source name/description and target exception text. Its `ssis_error_codes` widget requires an explicit target-error-class to source audit-code mapping when the source SQL reads ErrorCode; no legacy numeric code is invented. Handler failures are recorded and the original main failure is re-raised. SSIS propagation and fast-load/transaction differences remain review findings.
 

@@ -60,6 +60,39 @@ def test_expression_task_updates_values_used_by_later_native_sql(spark):
     assert data['_ssis_values']['User::Result']==2
 
 
+def test_native_target_audit_start_inserts_into_existing_schema_with_bound_values(spark):
+    from ssis_migration.generator.target_audit import RUN_TYPES,setup_code
+    from ssis_migration.ir.models import ExecutableIR
+    from ssis_migration.context.builder import build_migration_context
+    from ssis_migration.planner.task_graph import build_graph_plan
+    schema=', '.join(name+' '+kind for name,kind in RUN_TYPES.items())
+    spark.sql('CREATE TABLE audit_notebooks ('+schema+') USING PARQUET')
+    ir=PackageIR(package_name="quoted 'package'",executables=[ExecutableIR(ref_id='Package\\Main',executable_type='Microsoft.ExecuteSQLTask',properties={'SqlStatementSource':'SELECT 1'})])
+    config=AssessmentConfig(catalog='spark_catalog',audit_mode='target',audit_schema='default',audit_capture_table_stats=False)
+    context=build_migration_context(ir,{});context.metadata.update(config.to_dict())
+    plan=build_graph_plan(context,config)
+    values={'target_audit_job':'{}','execution_key':''}
+    data={'spark':spark,'dbutils':SimpleNamespace(widgets=SimpleNamespace(get=lambda name:values[name]))}
+    code=setup_code(plan.to_dict())
+    with pytest.raises(RuntimeError,match='requires existing Delta'):exec(code,data)
+    assert spark.table('audit_notebooks').count()==0
+    # Exercise the generated insert independently with a Parquet fixture;
+    # the full adapter intentionally refuses non-Delta storage.
+    import ast
+    tree=ast.parse(code)
+    definition=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_ta_insert_run')
+    exec(compile(ast.Module(body=[definition],type_ignores=[]),'<audit-insert>','exec'),data)
+    from datetime import datetime
+    data['_ta_run_fields']=set(RUN_TYPES)
+    data['_ta_insert_run']({'notebook_key':41,'master_key':41,'notebook':"quoted 'package'",'time_start':datetime(2026,1,1),
+        'time_end':None,'duration_time':None,'user_id':'synthetic','status':'Running','source_file_path':None,'target_table':'','message':''})
+    row=spark.table('audit_notebooks').first()
+    assert row['notebook']=="quoted 'package'" and row['status']=='Running'
+    assert row['notebook_key']==41 and row['master_key']==row['notebook_key']
+    # Delta UPDATE/DESCRIBE behavior belongs to the target-runtime checks;
+    # this local Parquet fixture verifies native argument/type/storage mechanics.
+
+
 def test_real_spark_variable_expression_uses_bound_numeric_values(spark):
     runtime=BindingContext(PackageIR())
     call,_=variable_query({'status':'DECLARED_REQUIRES_RUNTIME_REVIEW','evaluate_as_expression':True,
@@ -68,6 +101,34 @@ def test_real_spark_variable_expression_uses_bound_numeric_values(spark):
     data=env(runtime,spark,{'$Package::Key':20})
     exec('result = '+call,data)
     assert data['result'].first()['id']==2
+
+
+def test_mapped_target_audit_insert_uses_real_spark_identifiers_and_bound_status(spark):
+    import ast
+    from datetime import datetime
+    from ssis_migration.generator.target_audit import setup_code
+    from ssis_migration.context.builder import build_migration_context
+    from ssis_migration.planner.task_graph import build_graph_plan
+    from tests.test_general_audit import CUSTOM
+    from ssis_migration.audit_contract import storage_contract, RUN_TYPES
+    # Spark's local session catalog forbids spaces in table names. Keep
+    # mapped/quoted columns while using a valid local table identifier.
+    overrides={**CUSTOM,'notebook_table':'mapped_run_ledger'}
+    contract=storage_contract(overrides)
+    aliases=contract['notebook_columns']
+    schema=', '.join('`'+aliases[k]+'` '+kind for k,kind in RUN_TYPES.items() if aliases[k] is not None)
+    spark.sql('CREATE TABLE mapped_run_ledger ('+schema+') USING PARQUET')
+    config=AssessmentConfig(catalog='spark_catalog',audit_mode='target',audit_schema='default',audit_contract=overrides)
+    context=build_migration_context(PackageIR(package_name='Synthetic'),{})
+    plan=build_graph_plan(context,config)
+    tree=ast.parse(setup_code(plan.to_dict()))
+    definition=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_ta_insert_run')
+    data={'spark':spark,'_ta_run_fields':{k for k,v in aliases.items() if v is not None}}
+    exec(compile(ast.Module(body=[definition],type_ignores=[]),'<mapped-insert>','exec'),data)
+    data['_ta_insert_run']({'notebook_key':52,'master_key':52,'notebook':"package 'name'",'time_start':datetime(2026,1,1),
+        'time_end':None,'user_id':'synthetic','status':"DONE 'OK'",'message':"quoted 'message'"})
+    row=spark.table('mapped_run_ledger').first()
+    assert row['run notebook_key']==52 and row['run status']=="DONE 'OK'" and row['run message']=="quoted 'message'"
 
 
 def test_real_spark_insert_then_select_batch_preserves_order_and_state(spark):

@@ -133,6 +133,8 @@ For a source `new SmtpClient(host)` that reads only SmtpServer, the generated tr
 
 ## Evidence and verification
 
+Target audit mode replaces the recognized source audit profile with an adapter for existing `audit_notebooks`/`audit_tables`. The frontend selects it by default; the CLI/API retain explicit source/target selection. See the README target-audit contract for location settings, execution_key attachment, statistics, and business key bridges. Replaced source statements remain in `audit_replacement_plan.json`; they are not executed or counted as converted business work. Unknown recovery or embedded source-audit writes remain blocked. Source-mode handler/notification behavior above is retained for comparison.
+
 Additional artifacts:
 
 - `dataflow_graphs.json`: component and port edges, order, mapping uses.

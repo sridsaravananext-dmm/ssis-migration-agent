@@ -128,8 +128,9 @@ def path(node):
 
 
 class Compiler:
-    def __init__(self,package,runtime,owner):
+    def __init__(self,package,runtime,owner,inspect_only=False):
         self.package=package;self.runtime=runtime;self.owner=owner;self.symbols={};self.lines=[];self.sent=0;self.success=0;self.references=set()
+        self.inspect_only=inspect_only
         self.prefix='_ssis_script_'+hashlib.sha256(owner.encode()).hexdigest()[:10]+'_'
     def line(self,value,indent=0):self.lines.append('    '*indent+value)
     def variable(self,name):
@@ -168,6 +169,7 @@ class Compiler:
                     if (prop[0]=='index' and prop[2]==('string','SmtpServer') and prop[1]==('attr',connection,'Properties')
                             and connection[0]=='index' and path(connection[1])=='Dts.Connections' and connection[2][0]=='string'):
                         name=connection[2][1]
+                        if self.inspect_only:return "''",'string','source_mail_connection'
                         profiles=self.package.metadata.get('smtp_connections',{})
                         matches=[(ref,p) for ref,p in profiles.items() if ref==name or p.get('name')==name]
                         if len(matches)!=1 or not re.fullmatch(r'[A-Za-z0-9_.-]+',str(matches[0][1].get('host') or '')):
@@ -250,7 +252,7 @@ class Compiler:
             self.line(line,indent)
 
 
-def translate_script_mail(exe,package,runtime):
+def translate_script_mail(exe,package,runtime,*,inspect_only=False):
     generated={'properties/settings.designer.cs','properties/resources.designer.cs','properties/assemblyinfo.cs'}
     for source in exe.properties.get('script_sources',[]):
         name=source.get('name','').replace('\\','/').casefold()
@@ -262,7 +264,7 @@ def translate_script_mail(exe,package,runtime):
     if len(sources)!=1:gap('One captured C# ScriptMain.cs is required for bounded mail translation.')
     try:constants,main=Parser(sources[0]['text']).program()
     except RecursionError:gap('Script nesting exceeds the supported limit.')
-    candidate=runtime.fork();compiler=Compiler(package,candidate,exe.ref_id)
+    candidate=runtime.fork();compiler=Compiler(package,candidate,exe.ref_id,inspect_only=inspect_only)
     compiler.lines=['import smtplib','from email.message import EmailMessage','from email.utils import getaddresses, parseaddr']
     try:
         for name,value in constants:
@@ -275,5 +277,6 @@ def translate_script_mail(exe,package,runtime):
     if any(name in exe.properties for name in ('ReadOnlyVariables','ReadWriteVariables')):
         declared={v.strip() for name in ('ReadOnlyVariables','ReadWriteVariables') for v in exe.properties.get(name,'').split(',') if v.strip()}
         if not compiler.references.issubset(declared):gap('Script references variables outside its captured access declarations.')
+    if inspect_only:return None
     runtime.adopt(candidate)
     return '\n'.join(compiler.lines)

@@ -47,7 +47,8 @@ def describe_variable(reference, owner_ref, package):
         else:
             inferred=scope.rsplit('\\',1)[0] if '\\' in scope else None
             scope=inferred if inferred and '.EventHandlers[' in inferred and inferred not in seen else parents.get(scope) or inferred
-    if 'Package' not in scopes: scopes.append('Package')
+    root=package.metadata.get('package_root_ref','Package')
+    if root not in scopes: scopes.append(root)
     selected = []
     for scope in scopes:
         selected = [v for v in candidates if v.scope_ref_id == scope]

@@ -19,6 +19,13 @@ class AssessmentConfig:
     object_mappings: dict = field(default_factory=dict)
     dependency_scopes: dict = field(default_factory=dict)
     destination_write_mode: str = 'source'
+    audit_mode: str = 'source'
+    audit_catalog: str | None = None
+    audit_schema: str | None = None
+    audit_capture_table_stats: bool = True
+    audit_value_bindings: dict = field(default_factory=dict)
+    source_audit_rules: dict = field(default_factory=dict)
+    audit_contract: dict = field(default_factory=dict)
 
     def __post_init__(self):
         for key in ('catalog', 'layer', 'description', 'default_schema'):
@@ -42,6 +49,17 @@ class AssessmentConfig:
             raise ValueError('Destination write mode must be source, review, or append_existing')
         if self.planner_mode != 'graph' and self.destination_write_mode == 'append_existing':
             raise ValueError('Native destination writes require the source graph planner')
+        if not isinstance(self.audit_mode,str) or self.audit_mode not in {'source','target'}:raise ValueError('Audit mode must be source or target')
+        if self.audit_mode=='target' and self.planner_mode!='graph':raise ValueError('Target auditing requires the source graph planner')
+        if not isinstance(self.audit_capture_table_stats,bool):raise ValueError('Audit table statistics setting must be a boolean')
+        from ssis_migration.mapping import location_identifier
+        for key in ('audit_catalog','audit_schema'):
+            value=getattr(self,key)
+            if value is not None:location_identifier(value,key)
+        if not isinstance(self.audit_value_bindings,dict) or any(not isinstance(k,str) or not isinstance(v,str) or v not in {'runtime_input','notebook_key'} for k,v in self.audit_value_bindings.items()):
+            raise ValueError('Audit value bindings map scoped variable keys to runtime_input or notebook_key')
+        from ssis_migration.audit_contract import storage_contract,source_rules
+        storage_contract(self.audit_contract);source_rules(self.source_audit_rules,self.default_schema)
         if self.planner_mode == 'graph':
             from ssis_migration.mapping import location_identifier
             location_identifier(self.catalog, 'Target catalog')

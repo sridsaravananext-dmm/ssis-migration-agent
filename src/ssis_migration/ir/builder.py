@@ -43,6 +43,7 @@ class IRBuilder:
                 "parser": "ssis_migration",
                 "model_version": "2.1",
                 "package_attributes": package_attributes,
+                "package_root_ref": package_attributes.get('refId') or 'Package',
                 "package_expressions": parsed.get('package_expressions', []),
                 "connection_aliases": parsed.get('connection_aliases', {}),
                 "smtp_connections": parsed.get('smtp_connections', {}),
@@ -75,7 +76,7 @@ class IRBuilder:
             # executable collection. It is represented by
             # PackageIR, so do not duplicate it here.
 
-            if ref_id == "Package":
+            if executable.get('_is_package_root') or ('_is_package_root' not in executable and ref_id == package.metadata['package_root_ref']):
                 continue
 
             package.executables.append(
