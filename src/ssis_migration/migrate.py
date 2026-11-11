@@ -406,13 +406,14 @@ def _review_text(name, summary, findings):
 def run_migration(source, output, *, catalog=None, connection_mapping=None, base_path=None, execute=False,
         ai=False, ai_provider='databricks', ddl_path=None, procedures_path=None, ddl_paths=(), procedures_paths=(),
         layer='unspecified', target_schema=None, description='', default_schema='dbo', strict_mode=False,
-        dry_run=False, respect_human_edits=True, planner_mode='graph', object_mappings=None, dependency_scopes=None):
+        dry_run=False, respect_human_edits=True, planner_mode='graph', object_mappings=None, dependency_scopes=None,
+        destination_write_mode='source'):
     from ssis_migration.lifecycle import input_manifest, notebook_protection_reason, file_record
     if execute: raise ValueError('Deployment and data execution are not implemented; use conversion/assessment only')
     config = AssessmentConfig(catalog=catalog or 'main', layer=layer, target_schema=target_schema,
         description=description, default_schema=default_schema, strict_mode=strict_mode, dry_run=dry_run,
         respect_human_edits=respect_human_edits, planner_mode=planner_mode,
-        object_mappings=object_mappings or {}, dependency_scopes=dependency_scopes or {})
+        object_mappings=object_mappings or {}, dependency_scopes=dependency_scopes or {}, destination_write_mode=destination_write_mode)
     procedures = dependency_paths(procedures_path, procedures_paths)
     ddls = dependency_paths(ddl_path, ddl_paths)
     known_dependency_files = {str(p) for p in procedures + ddls} | {p.name for p in procedures + ddls}
@@ -505,6 +506,7 @@ def main():
     parser.add_argument('--ddl', dest='ddl_paths', action='append', default=[], help='Repeat for each DDL file')
     parser.add_argument('--layer', default='unspecified')
     parser.add_argument('--planner-mode', choices=['graph','legacy'], default='graph')
+    parser.add_argument('--destination-write-mode', choices=['source','review','append_existing'], default='source')
     parser.add_argument('--object-mappings', help='JSON file mapping source objects to fully qualified target objects')
     parser.add_argument('--dependency-scopes', help='JSON file mapping dependency file names to connection references')
     parser.add_argument('--target-schema')

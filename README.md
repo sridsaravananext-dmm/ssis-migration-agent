@@ -69,13 +69,15 @@ Content-addressed output versions change with source/dependencies, referenced me
 
 The source-graph planner supports standalone relational SQL, explicit table overrides or visible default naming, sequence boundaries, success-AND precedence, static mapped OLE DB sources, Multicast, a restricted Derived Column expression subset, and ordered Conditional Split outputs. It uses exact port IDs and never flattens a multi-source graph into the first source.
 
-Data-flow destination projections are previews. Their writes remain blocked by `LOAD_STRATEGY_REQUIRED` until load semantics are agreed. Explicit single-statement DML already present in an Execute SQL Task can be translated; that preserves supplied source behavior rather than choosing a new load strategy.
+The default destination policy preserves captured source behavior. Authoritatively identified OLE DB table/FastLoad destinations with static targets generate native inserts into existing mapped tables. A separate source TRUNCATE remains a separate preceding task; the destination does not add another truncate or overwrite. Exact lineage, external column mappings, types, and target columns are checked. Unknown modes remain pending. Use `--destination-write-mode review` for projection-only drafts; `append_existing` explicitly requests the same guarded insert path. Neither mode creates tables or selects MERGE keys.
 
 Source access modes select the active table, SQL command, or variable. Inactive captured SQL is not used as dependency evidence. Variable-backed sections retain lexical scope and declarations. Supported SQL expressions made of literal strings plus numeric value references become native named SQL arguments; source expressions are never run through Python eval or runtime SQL string concatenation. Other expressions remain pending.
 
-Missing procedures produce named draft sections. Supplying a definition regenerates the source step in a new input version; a parameterless call to a single supported relational statement can become native Spark SQL. Other procedure bodies and argument/result bindings remain pending with their available definitions recorded.
+Missing procedures produce named draft sections. Supplying a definition regenerates the source step in a new input version. Supported literal/default/named/positional input arguments and task-variable bindings are matched to formal parameters, cast, and inlined into bounded relational Spark SQL bodies. General procedural bodies, output/return parameters, and ambiguous conversions remain pending with their definitions recorded.
 
-Loops, Script Tasks, joins/lookups/aggregates, general procedural SQL, unsupported parameter/result bindings, row-error redirection, event handlers, checkpoints, forced results, cycles, and conditional/failure/completion/OR task constraints remain explicit blockers. Independent task branches require a concurrency/failure-isolation decision before executable notebook acceptance. The optional legacy planner still uses warehouse/name/control-table conventions and reports those assumptions.
+A flat, ordered package OnError handler can run after a main step fails, preserving supported success/failure/completion and expression constraints inside that handler. Main-path conditional constraints and nested/parallel handlers remain blocked. Native Send Mail Tasks can retain captured unauthenticated SMTP/STARTTLS settings. Script Tasks remain review work: a label such as “Send Mail Task” does not establish SMTP behavior. Embedded C#/VB source is extracted as review data when available; missing programs remain named source gaps.
+
+Loops, Script Tasks/components, joins/lookups/aggregates, general procedural SQL, unsupported bindings, row-error redirection, checkpoints, forced results, and cycles remain explicit blockers. Independent task branches require a concurrency/failure-isolation decision before executable notebook acceptance. The optional legacy planner still uses warehouse/name/control-table conventions and reports those assumptions.
 
 No deployment, runtime equivalence measurement, Volume browsing, or new pipeline/load strategy is implied. See [the source-graph guide](docs/source-graph.md) for mapping examples, supported subsets, and validation steps.
 
@@ -86,6 +88,10 @@ See [the assessment contract](docs/assessment-contract.md) for details and follo
 ## Native runtime bindings
 
 Named input parameters, ordinal single-row results, and bounded relational batches can generate native Spark SQL code. The notebook `ssis_runtime_values` JSON widget supplies external values, using the keys listed in the generated Native runtime bindings section. Captured literal variable defaults are retained; supported result bindings update shared notebook state. Missing inputs, unsupported NULL conversions, integer overflow, and incompatible scalar types fail explicitly.
+
+Supported computed variables are evaluated from their source expressions at each read, using ordinary Python helpers. They do not become extra manual inputs or Spark/Pandas UDFs. The bounded subset includes typed additions, selected scalar casts, and UTF-16 SUBSTRING/LEFT/RIGHT. Captured non-sensitive, non-required package-parameter defaults are retained; required or sensitive values must be supplied externally. Unknown expressions remain pending.
+
+The package OnError handler records source name/description and target exception text. Its `ssis_error_codes` widget requires an explicit target-error-class to source audit-code mapping when the source SQL reads ErrorCode; no legacy numeric code is invented. Handler failures are recorded and the original main failure is re-raised. SSIS propagation and fast-load/transaction differences remain review findings.
 
 This subset requires Spark 3.4+ native named SQL arguments and one shared notebook run (`step_id=all`). Per-step Jobs are blocked until a state-transfer design is supplied. Input/provider conversions and timestamp policy remain review items. INSERT followed by MAX receives an identity/concurrency blocker; separate calls receive an atomicity review warning. The tool does not invent identity columns or a load strategy.
 
@@ -106,4 +112,4 @@ python -m pip install pyspark
 SPARK_LOCAL_IP=127.0.0.1 pytest tests/test_bound_sql_spark.py -q
 ```
 
-These checks validate native argument/result mechanics, not SSIS equivalence or Databricks Delta execution.
+These checks validate native arguments/results, derived dates, ordered SQL, and mapped inserts with schema/length guards. They do not measure SSIS equivalence or Databricks Delta behavior.

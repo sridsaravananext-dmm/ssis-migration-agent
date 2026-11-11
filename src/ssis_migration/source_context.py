@@ -34,11 +34,19 @@ def describe_variable(reference, owner_ref, package):
         'expression':None, 'value':None, 'references':[]}
     candidates = [v for v in package.variables if f'{v.namespace or "User"}::{v.name}' == qualified]
     parents = {e.ref_id:e.properties.get('_parent_ref_id') for e in package.executables}
+    lexical={}
+    for exe in package.executables:
+        chain=exe.properties.get('_lexical_scopes',[])
+        for child,parent in zip(chain,chain[1:]):lexical[child]=parent
     scopes, seen = [], set()
     scope = owner_ref
     while scope and scope not in seen:
         scopes.append(scope); seen.add(scope)
-        scope = parents.get(scope) or (scope.rsplit('\\', 1)[0] if '\\' in scope else None)
+        if scope in lexical:scope=lexical[scope]
+        elif re.search(r'\.EventHandlers\[[^\]]+\]$',scope):scope=scope.rsplit('.EventHandlers[',1)[0]
+        else:
+            inferred=scope.rsplit('\\',1)[0] if '\\' in scope else None
+            scope=inferred if inferred and '.EventHandlers[' in inferred and inferred not in seen else parents.get(scope) or inferred
     if 'Package' not in scopes: scopes.append('Package')
     selected = []
     for scope in scopes:

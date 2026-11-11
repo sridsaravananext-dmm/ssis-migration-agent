@@ -8,6 +8,8 @@ from ssis_migration.drafts import pending_operation, procedure_references, trans
 from ssis_migration.sql_text import normalize_name
 from ssis_migration.source_context import describe_variable
 from ssis_migration.bound_sql import BindingContext, bound_task
+from ssis_migration.procedure_translation import translate_procedure
+from ssis_migration.event_handlers import edge_expression, mail_code
 
 
 def topological_order(dependencies):
@@ -57,10 +59,14 @@ def build_graph_plan(context, config):
         while ref in by_ref and ref not in seen:
             seen.add(ref)
             if by_ref[ref].properties.get('_event_handler') or '.EventHandlers[' in ref:
-                return ref.split(']')[0] + ']' if '.EventHandlers[' in ref else 'event:' + ref
+                scope=by_ref[ref].properties.get('_event_handler_attributes',{}).get('refId') or ref
+                return scope.split(']')[0] + ']' if '.EventHandlers[' in scope else 'event:' + ref
             ref = parent.get(ref)
         return None
     def finish(ref): return ref + '::complete' if sequence(by_ref[ref]) else ref
+    root_event_refs={ref for ref in by_ref if event_scope(ref)=='Package.EventHandlers[OnError]'}
+    flat_handler=bool(root_event_refs) and all(parent[r] is None and not children[r] and not sequence(by_ref[r])
+        and 'loop' not in (by_ref[r].executable_type or by_ref[r].creation_name or '').casefold() for r in root_event_refs)
     deps = {ref:set() for ref in by_ref}
     barriers = {}
     for ref, exe in by_ref.items():
@@ -87,7 +93,7 @@ def build_graph_plan(context, config):
         if parent[a] != parent[b] or event_scope(a) != event_scope(b):
             plan.unresolved.append(finding('CONTROL_SCOPE_UNSUPPORTED', edge.ref_id or str(index), 'Precedence connects different container scopes.'))
         deps[b].add(finish(a))
-        if edge.expression or edge.value not in {None,'Success','0'} or edge.logical_and is False or edge.evaluation_operation not in {None,'Constraint','0'}:
+        if (edge.expression or edge.value not in {None,'Success','0'} or edge.logical_and is False or edge.evaluation_operation not in {None,'Constraint','0'}) and not (flat_handler and a in root_event_refs and b in root_event_refs):
             plan.unresolved.append(finding('CONTROL_FLOW_NOT_PRESERVED', edge.ref_id or str(index),
                 'Conditional, failure, completion, or OR execution is retained but requires implementation.'))
     order, cycles = topological_order(deps)
@@ -108,8 +114,43 @@ def build_graph_plan(context, config):
             seen.add(ref)
             attrs = by_ref[ref].properties.get('_attributes', {})
             if truth(attrs.get('Disabled',False)) or str(attrs.get('Disabled',''))=='-1': return True
+            if truth(by_ref[ref].properties.get('_event_handler_attributes',{}).get('Disabled',False)):return True
             ref = parent.get(ref)
         return False
+    handler=None
+    if flat_handler and not (root_event_refs & set(cycles)):
+        active=[r for r in order if r in root_event_refs and not disabled(r)]
+        if active and len(active)!=len(root_event_refs):
+            plan.unresolved.append(finding('EVENT_DISABLED_TASK_REVIEW_REQUIRED','Package.EventHandlers[OnError]',
+                'Mixed enabled/disabled event tasks need explicit constraint-outcome review.'))
+            active=[]
+        if active:
+            candidate=runtime.fork()
+            try:
+                edges=[]
+                for edge in edge_records:
+                    if edge['from'] in active and edge['to'] in active:
+                        edges.append({**edge,'compiled_condition':edge_expression(edge,candidate,edge['to'])})
+                for ref in active:
+                    kinds={e['logical_and'] is not False for e in edges if e['to']==ref}
+                    if len(kinds)>1:raise ConversionGap('EVENT_CONSTRAINT_UNSUPPORTED','Mixed AND/OR incoming constraints require explicit grouping.')
+                    attrs=by_ref[ref].properties.get('_event_handler_attributes',{})
+                    if str(attrs.get('TransactionOption','')) in {'2','Required'}:
+                        raise ConversionGap('TRANSACTION_SEMANTICS_UNSUPPORTED','Required event-handler transactions need an explicit target design.')
+                    for key in ('ForceExecutionResult','ForceExecutionValue'):
+                        if str(attrs.get(key,'')) not in {'','-1','None','False','false'}:
+                            raise ConversionGap('EXECUTION_OVERRIDE_UNSUPPORTED','Forced event-handler outcomes require explicit translation.')
+                event_deps={ref:{e['from'] for e in edges if e['to']==ref} for ref in active}
+                while event_deps:
+                    ready={ref for ref,parents in event_deps.items() if not parents}
+                    if len(ready)>1:raise ConversionGap('EVENT_CONCURRENCY_REVIEW_REQUIRED','Independent event-handler branches require a concurrency/failure-isolation decision.')
+                    for ref in ready:event_deps.pop(ref)
+                    for parents in event_deps.values():parents.difference_update(ready)
+                runtime.adopt(candidate)
+                handler={'scope':'Package.EventHandlers[OnError]','source_ids':active,'edges':edges}
+                plan.unresolved.append(finding('EVENT_PROPAGATION_REVIEW_REQUIRED',package.package_name or 'package',
+                    'Package OnError runs once per failed notebook step. Review SSIS propagation and supply target error-class mappings.',severity='WARNING'))
+            except ConversionGap as exc:plan.unresolved.append(finding(exc.code,'Package.EventHandlers[OnError]',str(exc)))
     waves = {key:set(values) for key,values in deps.items()}
     while waves:
         ready = {key for key,values in waves.items() if not values}
@@ -142,15 +183,25 @@ def build_graph_plan(context, config):
         connection = context.metadata.get('connection_aliases', {}).get(connection, connection)
         sql_source = props.get('SqlStatementSource')
         procedures, bodies = procedure_references(sql_source, connection, context) if sql_source and not is_disabled else ([], {})
-        if not is_disabled and exe.properties.get('_property_expressions'):
+        handler_step=handler is not None and origin in handler['source_ids']
+        is_mail='sendmailtask' in kind
+        if not is_disabled and exe.properties.get('_property_expressions') and not is_mail:
             findings.append(finding('DYNAMIC_EXECUTABLE_PROPERTY',origin,'Executable property expressions require typed evaluation.'))
-        if not is_disabled and event_scope(origin):
+        if not is_disabled and event_scope(origin) and not handler_step:
             findings.append(finding('EVENT_HANDLER_UNSUPPORTED',origin,'Event handler execution semantics require review.'))
         if is_disabled or barrier or sequence(exe):
             task_type = 'DISABLED' if is_disabled else 'SEQUENCE_COMPLETE' if barrier else 'SEQUENCE_START'
             ops = [{'operation_id':ref,'operation_type':'STRUCTURAL','order':0,'code':f'_completed_{sid} = True'}]
-        elif event_scope(origin):
+        elif event_scope(origin) and not handler_step:
             findings.append(finding('EVENT_HANDLER_UNSUPPORTED',origin,'Event handlers cannot run as ordinary top-level tasks.'))
+        elif is_mail:
+            try:
+                code=mail_code(exe,package,runtime)
+                task_type='NATIVE_SEND_MAIL'
+                ops=[{'operation_id':origin,'operation_type':'NATIVE_SMTP','order':0,'code':code}]
+                findings.append(finding('SMTP_TRANSPORT_REVIEW_REQUIRED',origin,
+                    'Captured SMTP settings are preserved. Confirm target relay access, TLS trust, and notification delivery.',severity='WARNING'))
+            except ConversionGap as exc:findings.append(finding(exc.code,origin,str(exc)))
         elif exe.properties.get('_property_expressions'):
             findings.append(finding('DYNAMIC_EXECUTABLE_PROPERTY',origin,'Executable property expressions require typed evaluation.'))
         elif origin in flows:
@@ -169,7 +220,17 @@ def build_graph_plan(context, config):
                 if procedures:
                     if len(procedures) != 1 or procedures[0]['name'] not in bodies:
                         raise ConversionGap('PROCEDURE_IMPLEMENTATION_PENDING', 'Retain this procedure call until its definition and call semantics are available.')
-                    sql, mapping_uses = translate_parameterless_procedure(sql_source, bodies[procedures[0]['name']], connection, config, props)
+                    try:
+                        sql, mapping_uses = translate_parameterless_procedure(sql_source, bodies[procedures[0]['name']], connection, config, props)
+                    except ConversionGap:
+                        code,mapping_uses,evidence=translate_procedure(sql_source,bodies[procedures[0]['name']],props,origin,connection,config,runtime)
+                        ops=[{'operation_id':origin,'operation_type':'NATIVE_PROCEDURE_BODY','order':0,'code':code}]
+                        findings.append(finding('PROCEDURE_CONVERSION_REVIEW',origin,
+                            'Procedure formals are cast and inlined. Review SQL Server parameter conversion, NULL, precision/length, and commit semantics.',severity='WARNING',evidence=evidence['procedure_parameters']))
+                        if evidence['batch']:findings.append(finding('BATCH_ATOMICITY_REVIEW_REQUIRED',origin,
+                            'Inlined procedure statements use separate Spark SQL calls; verify transactional behavior.',severity='WARNING'))
+                        if evidence['identity_review']:findings.append(finding('RESULT_KEY_GENERATION_REVIEW_REQUIRED',origin,
+                            'INSERT followed by MAX needs an explicit target identity/concurrency design.'))
                 elif props.get('parameter_bindings') or props.get('result_bindings') or str(props.get('ResultType','ResultSetType_None')) not in {'0','ResultSetType_None','None',''}:
                     code, mapping_uses, evidence = bound_task(props, origin, connection, config, runtime)
                     ops = [{'operation_id':origin, 'operation_type':'NATIVE_BOUND_SQL', 'order':0, 'code':code}]
@@ -189,6 +250,12 @@ def build_graph_plan(context, config):
                 if not ops:
                     ops = [{'operation_id':origin, 'operation_type':'NATIVE_SQL','order':0,'code':f'_result_{sid} = spark.sql({sql!r})'}]
             except ConversionGap as exc: findings.append(finding(exc.code,origin,str(exc),evidence=exc.evidence))
+        elif 'scripttask' in kind:
+            sources=props.get('script_sources',[])
+            captured=any(s.get('status')=='CAPTURED' and s.get('text') for s in sources)
+            findings.append(finding('SCRIPT_TRANSLATION_REVIEW_REQUIRED' if captured else 'SCRIPT_SOURCE_REQUIRED',origin,
+                'Captured Script Task source requires semantic translation.' if captured else
+                'The Script Task program is unavailable. Supply/extract its C#/VB source; its task name does not identify its behavior.'))
         else:
             findings.append(finding('TASK_TRANSLATION_UNSUPPORTED',origin,f'No native implementation for task type {exe.executable_type or exe.creation_name}.'))
         attrs = exe.properties.get('_attributes',{})
@@ -208,7 +275,7 @@ def build_graph_plan(context, config):
         plan.unresolved.extend(findings)
         metadata = {'source_ref_id':origin,'source_scope':parent[origin], 'mapping_uses':mapping_uses,
                     'migration_strategy':{'strategy':'DETERMINISTIC' if not findings else 'REVIEW_REQUIRED'},
-                    'graph_node_id':ref, 'event_handler_scope':event_scope(origin)}
+                    'graph_node_id':ref, 'event_handler_scope':event_scope(origin), 'source_description':exe.description or ''}
         plan.steps.append(MigrationStep(step_id=sid,name=exe.name or origin,step_type=task_type,
             dependencies=[step_id(d) for d in sorted(deps[ref])],metadata=metadata))
         plan.metadata['operations_by_step'][sid] = ops
@@ -259,8 +326,10 @@ def build_graph_plan(context, config):
     plan.metadata['execution_model'] = 'serialized_topological'
     plan.metadata['runtime_variables'] = list(runtime.inputs.values())
     plan.metadata['runtime_defaults'] = runtime.defaults
-    plan.metadata['requires_shared_runtime_state'] = bool(runtime.inputs)
-    if runtime.inputs: plan.metadata['minimum_binding_runtime'] = 'Spark 3.4+ / Databricks native named SQL arguments'
+    plan.metadata['runtime_derived_expressions'] = runtime.derived
+    plan.metadata['requires_shared_runtime_state'] = bool(runtime.inputs) or handler is not None
+    if handler:plan.metadata['package_error_handler']=handler
+    if plan.metadata['requires_shared_runtime_state']: plan.metadata['minimum_binding_runtime'] = 'Spark 3.4+ / Databricks native named SQL arguments'
     plan.metadata['mapping_uses'] = uses
     plan.metadata['mapping_review_complete'] = not any(f['code'] in {'CONVENTION_TARGET_REVIEW','TARGET_LOCATION_UNRESOLVED','TARGET_NAME_COLLISION','LAYER_MAPPING_REQUIRED','TARGET_SCHEMA_CONTEXT_CONFLICT','LAYER_CONTEXT_CONFLICT'} for f in plan.unresolved)
     plan.metadata['unused_object_mappings'] = sorted(set(config.object_mappings) - {u['mapping_key'] for u in uses})

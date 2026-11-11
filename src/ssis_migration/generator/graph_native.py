@@ -9,6 +9,7 @@ from ssis_migration.mapping import ConversionGap, resolve_target, translate_sql
 from ssis_migration.drafts import pending_operation
 from ssis_migration.source_context import source_selection, active_source_sql, describe_variable
 from ssis_migration.bound_sql import variable_query
+from ssis_migration.generator.destination_write import append_code
 
 
 def variable(ref):
@@ -122,6 +123,9 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None, 
     for ref in ordered:
         comp = components[ref]
         code = []
+        write_enabled = config.destination_write_mode == 'append_existing' or (
+            config.destination_write_mode == 'source' and str(comp.properties.get('AccessMode','')) in {'0','3'}
+            and (comp.properties.get('_type_evidence') == 'class_id' or str(comp.component_class_id).casefold() == 'microsoft.oledbdestination'))
         source_context = None
         if comp.detected_type == 'OLE_DB_SOURCE':
             selected = source_selection(comp.properties)
@@ -149,12 +153,15 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None, 
                     raise ConversionGap('TARGET_MAPPING_REVIEW_REQUIRED', 'Destination table must be a static OpenRowset.')
                 mapped, use = resolve_target(table, canonical(comp), config, role='destination')
                 mapping_uses.append({**use, 'source_id':ref})
-                findings.append(finding('LOAD_STRATEGY_REQUIRED', ref,
-                    'Destination is mapped. Define target write/load semantics before generating a write.', evidence=mapped.sql(dialect='databricks')))
-                pending = pending_operation(ref, ['LOAD_STRATEGY_REQUIRED'], connection=canonical(comp),
-                    properties=comp.properties, kind='TARGET_WRITE', operation_id=ref + ':write')
-                pending.update(operation_type='WRITE_PENDING', order=len(operations))
-                operations.append(pending)
+                if not write_enabled:
+                    findings.append(finding('LOAD_STRATEGY_REQUIRED', ref,
+                        'Destination is mapped. Define target write/load semantics before generating a write.', evidence=mapped.sql(dialect='databricks')))
+                    pending = pending_operation(ref, ['LOAD_STRATEGY_REQUIRED'], connection=canonical(comp),
+                        properties=comp.properties, kind='TARGET_WRITE', operation_id=ref + ':write')
+                    pending.update(operation_type='WRITE_PENDING', order=len(operations))
+                    operations.append(pending)
+                elif use['resolution'] == 'PLACEHOLDER':
+                    raise ConversionGap('TARGET_LOCATION_UNRESOLVED','Destination writes require a known target location.')
 
             linked = [state[inbound[p['ref_id']]] for p in comp.inputs if p.get('ref_id') in inbound and inbound[p['ref_id']] in state]
             actual_inputs = [p for p in comp.inputs if p.get('ref_id') in inbound]
@@ -260,14 +267,19 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None, 
                 state[default[0]['ref_id']] = (name, list(cols), dict(lineage))
             elif comp.detected_type == 'OLE_DB_DESTINATION':
                 source, cols, lineage = linked[0]
-                code.append(f'{variable(ref)} = {source}')
+                if write_enabled:
+                    emitted,pairs=append_code(comp,source,cols,lineage,mapped)
+                    code.append(emitted)
+                    findings.append(finding('DESTINATION_WRITE_REVIEW',ref,
+                        'Native INSERT preserves supplied mappings. Review source fast-load commit behavior and target constraints.', severity='WARNING',evidence=pairs))
+                else: code.append(f'{variable(ref)} = {source}')
             else:
                 raise ConversionGap('TRANSFORMATION_UNSUPPORTED', f'No native translator for {comp.detected_type}.')
             # Error redirection is never dropped. Any wired error output remains a blocker.
             for port in comp.outputs:
                 if truth(port.get('attributes', {}).get('isErrorOut', False)) and port.get('ref_id') in outbound:
                     raise ConversionGap('ERROR_ROUTING_UNSUPPORTED', 'Connected error output needs explicit implementation.')
-            operations.append({'operation_id': ref, 'operation_type':'NATIVE_DATAFRAME', 'order':len(operations),
+            operations.append({'operation_id': ref, 'operation_type':'NATIVE_DESTINATION_WRITE' if comp.detected_type == 'OLE_DB_DESTINATION' and write_enabled else 'NATIVE_DATAFRAME', 'order':len(operations),
                                'code':'from pyspark.sql import functions as F\n' + '\n'.join(code)})
         except (ConversionGap, KeyError, ValueError) as exc:
             if ref in compiled_sources: compiled_sources.remove(ref)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any
+import base64
+import hashlib
 
 from .namespace import local_name
 
@@ -41,6 +43,33 @@ class SSISExecutableParser:
                     element
                 )
             )
+        elif any('sendmailtask' in value.casefold() for value in (executable_type,creation_name)):
+            for child in element.iter():
+                if local_name(child.tag).casefold()=='sendmailtaskdata':
+                    result['properties']={local_name(k):v for k,v in child.attrib.items()}
+        elif any('scripttask' in value.casefold() for value in (executable_type,creation_name)):
+            sources=[];binary=[]
+            for child in element.iter():
+                attrs={local_name(k):v for k,v in child.attrib.items()}
+                tag=local_name(child.tag).casefold()
+                if tag=='scripttaskdata':result['properties'].update(attrs)
+                name=attrs.get('Name') or attrs.get('name') or attrs.get('FileName') or ''
+                if name.casefold().endswith(('.cs','.vb')):
+                    text=''.join(child.itertext()).strip()
+                    if not text:continue
+                    encoding=str(attrs.get('Encoding') or attrs.get('encoding') or '').casefold()
+                    status='CAPTURED'
+                    if encoding=='base64':
+                        try:
+                            raw=base64.b64decode(''.join(text.split()),validate=True)
+                            if len(raw)>1024*1024:raise ValueError('Script source exceeds extraction limit')
+                            text=raw.decode('utf-16' if raw.startswith((b'\xff\xfe',b'\xfe\xff')) else 'utf-8-sig')
+                        except (ValueError,UnicodeError):status='ENCODING_REVIEW_REQUIRED';text=None
+                    sources.append({'name':name,'status':status,'text':text,
+                        'sha256':hashlib.sha256(text.encode()).hexdigest() if text is not None else None})
+                elif tag in {'binaryitem','binarycode'}:
+                    binary.append({'name':name,'encoded_sha256':hashlib.sha256(''.join(child.itertext()).encode()).hexdigest()})
+            result['properties'].update(script_sources=sources,script_binaries=binary)
 
         return result
 

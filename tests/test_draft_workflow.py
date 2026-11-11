@@ -53,7 +53,7 @@ def test_missing_procedure_has_named_stable_pending_section_with_bindings():
     replacement = next(iter(supplied.metadata['operations_by_step'].values()))[0]['pending_item']
     assert replacement['pending_id'] == pending['pending_id']
     assert replacement['procedures'][0]['definition_status'] == 'AVAILABLE'
-    assert 'PROCEDURE_BINDINGS_UNSUPPORTED' in replacement['reason_codes']
+    assert 'VARIABLE_BINDING_UNRESOLVED' in replacement['reason_codes']
 
 
 def test_strict_mode_writes_draft_and_preflight_stops_before_any_spark_call(tmp_path):
@@ -111,7 +111,6 @@ def test_definition_arrival_replaces_supported_procedure_placeholder(tmp_path):
 
 
 @pytest.mark.parametrize('definition,call', [
-    ('CREATE PROC dbo.LoadOrders @x int AS SELECT @x', 'EXEC dbo.LoadOrders 1'),
     ('CREATE PROC dbo.LoadOrders AS SELECT 1; SELECT 2', 'EXEC dbo.LoadOrders'),
     ('CREATE PROC dbo.LoadOrders WITH EXECUTE AS OWNER AS SELECT 1', 'EXEC dbo.LoadOrders'),
     ('CREATE PROC dbo.LoadOrders AS BEGIN TRY SELECT 1 END TRY BEGIN CATCH SELECT 2 END CATCH', 'EXEC dbo.LoadOrders'),
@@ -176,7 +175,7 @@ def test_event_handlers_do_not_appear_as_parallel_normal_branches():
     ir = PackageIR(executables=[normal,error])
     p = graph(ir)
     codes = {f['code'] for f in p.unresolved}
-    assert 'EVENT_HANDLER_UNSUPPORTED' in codes
+    assert 'EVENT_PROPAGATION_REVIEW_REQUIRED' in codes
     assert 'PARALLEL_CONTROL_REVIEW_REQUIRED' not in codes
     nodes = p.metadata['task_graph']['nodes']
     assert next(n for n in nodes if n['id']==error.ref_id)['event_handler_scope'] == 'Package.EventHandlers[OnError]'

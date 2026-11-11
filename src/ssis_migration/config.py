@@ -18,6 +18,7 @@ class AssessmentConfig:
     planner_mode: str = "graph"
     object_mappings: dict = field(default_factory=dict)
     dependency_scopes: dict = field(default_factory=dict)
+    destination_write_mode: str = 'source'
 
     def __post_init__(self):
         for key in ('catalog', 'layer', 'description', 'default_schema'):
@@ -37,6 +38,10 @@ class AssessmentConfig:
 
         if not isinstance(self.planner_mode, str) or self.planner_mode not in {'graph', 'legacy'}:
             raise ValueError('Planner mode must be graph or legacy')
+        if not isinstance(self.destination_write_mode,str) or self.destination_write_mode not in {'source','review','append_existing'}:
+            raise ValueError('Destination write mode must be source, review, or append_existing')
+        if self.planner_mode != 'graph' and self.destination_write_mode == 'append_existing':
+            raise ValueError('Native destination writes require the source graph planner')
         if self.planner_mode == 'graph':
             from ssis_migration.mapping import location_identifier
             location_identifier(self.catalog, 'Target catalog')

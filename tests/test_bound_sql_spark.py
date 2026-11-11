@@ -66,3 +66,60 @@ def test_real_spark_insert_then_select_batch_preserves_order_and_state(spark):
     exec(code,data)
     assert evidence['identity_review']  # Synthetic execution does not waive the production review.
     assert data['_ssis_values']['User::Result']==3
+
+
+def test_real_spark_destination_insert_preserves_mapping_and_target_column_order(spark):
+    from pyspark.sql import functions as F
+    from tests.test_destination_write import destination
+    from ssis_migration.generator.destination_write import append_code
+    from ssis_migration.mapping import target_table
+    spark.createDataFrame([('seed',0)],'label string, id int').write.saveAsTable('mapped_destination')
+    frame=spark.createDataFrame([(10,'ok'),(11,'😀😀')],'src_id int, src_label string')
+    code,_=append_code(destination(),'frame',['src_id','src_label'],{'1':'src_id','2':'src_label'},target_table('spark_catalog.default.mapped_destination'))
+    exec(code,{'spark':spark,'frame':frame,'F':F})
+    assert spark.table('mapped_destination').where('id=10').first()['label']=='ok'
+    assert spark.table('mapped_destination').where('id=11').first()['label']=='😀😀'
+
+
+@pytest.mark.parametrize('label',['abcde','😀😀😀'])
+def test_real_spark_destination_length_failure_does_not_append_rows(spark,label):
+    from pyspark.sql import functions as F
+    from tests.test_destination_write import destination
+    from ssis_migration.generator.destination_write import append_code
+    from ssis_migration.mapping import target_table
+    frame=spark.createDataFrame([(12,label)],'src_id int, src_label string')
+    code,_=append_code(destination(),'frame',['src_id','src_label'],{'1':'src_id','2':'src_label'},target_table('spark_catalog.default.mapped_destination'))
+    before=spark.table('mapped_destination').count()
+    with pytest.raises(Exception,match='SSIS destination'):
+        exec(code,{'spark':spark,'frame':frame,'F':F})
+    assert spark.table('mapped_destination').count()==before
+
+
+def test_real_spark_destination_missing_table_and_type_changes_stop_before_insert(spark):
+    from pyspark.sql import functions as F
+    from tests.test_destination_write import destination
+    from ssis_migration.generator.destination_write import append_code
+    from ssis_migration.mapping import target_table
+    frame=spark.createDataFrame([(1,'ok')],'src_id long, src_label string')
+    code,_=append_code(destination(),'frame',['src_id','src_label'],{'1':'src_id','2':'src_label'},target_table('spark_catalog.default.missing_destination'))
+    with pytest.raises(RuntimeError,match='must already exist'):exec(code,{'spark':spark,'frame':frame,'F':F})
+    assert not spark.catalog.tableExists('missing_destination')
+    code,_=append_code(destination(),'frame',['src_id','src_label'],{'1':'src_id','2':'src_label'},target_table('spark_catalog.default.mapped_destination'))
+    before=spark.table('mapped_destination').count()
+    with pytest.raises(RuntimeError,match='types differ'):exec(code,{'spark':spark,'frame':frame,'F':F})
+    assert spark.table('mapped_destination').count()==before
+
+
+def test_real_spark_parameterized_procedure_and_derived_date(spark):
+    from ssis_migration.procedure_translation import translate_procedure
+    runtime=BindingContext(PackageIR(variables=[
+        VariableIR(name='Date',namespace='User',scope_ref_id='Package',data_type='7',evaluate_as_expression=True,
+            expression='(DT_DATE) (SUBSTRING(@[$Package::Date],1,4) + "-" + SUBSTRING(@[$Package::Date],5,2) + "-" + RIGHT(@[$Package::Date],2))'),
+        VariableIR(name='Result',namespace='User',scope_ref_id='Package',data_type='3')]))
+    props={'parameter_bindings':[{'ParameterName':'@actual','DtsVariableName':'User::Date'}],
+        'ResultType':'ResultSetType_SingleRow','result_bindings':[{'ResultName':'0','DtsVariableName':'User::Result'}]}
+    code,_,_=translate_procedure('EXEC dbo.P @actual','CREATE PROC dbo.P @d datetime AS SELECT YEAR(@d)',props,
+        'Package','Legacy',cfg(),runtime)
+    data=env(runtime,spark,{'$Package::Date':'20261111'})
+    exec(code,data)
+    assert data['_ssis_values']['User::Result']==2026

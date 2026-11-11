@@ -47,10 +47,18 @@ The default planner now builds identity-based task and data-flow graphs, emits s
 3. Add human review state management keyed by finding ID, with decisions tied to source versions and evidence.
 4. Add runtime comparison harnesses for keys, duplicates, nulls, decimals, timestamps, temporal intervals, writes, cutoffs, reruns, and failure paths. Only measured evidence may populate verification results.
 5. Add authorized Volume browsing and optional reference conventions using the same input manifest, without making a framework mandatory.
-6. Decide pipeline strategy and load strategy with the user. Artifact generation, deployment, and data execution remain separate operations.
+6. Extend pipeline, concurrency, transaction, and rerun strategies beyond the captured source inserts. A separate source TRUNCATE followed by an insert remains that sequence. Artifact generation, deployment, and data execution remain separate operations.
 
 No broad workload-accuracy, memory, performance, or production-readiness claim is made by this implementation.
 
 ## Native binding implementation
 
 Supported named inputs, ordinal single-row results, bounded relational batches, and literal/reference SQL templates generate executable native bodies. Runtime requirements remain separate from generation status. Missing procedures and unsupported handlers retain named pending sections. Identity allocation, statement atomicity, and source/target conversions retain explicit review findings. See [source-graph.md](source-graph.md) for the supported forms and shared-notebook restriction.
+
+## Source-preserving development update
+
+The graph planner now generates guarded inserts into existing mapped tables for captured OLE DB table/FastLoad destinations, matches bounded procedure arguments to formals, and evaluates supported scalar variable expressions from current runtime state. The generated scalar helpers are ordinary Python functions. Spark/Pandas UDFs remain prohibited.
+
+Flat ordered package OnError handlers are dispatched only on main-step failure. They preserve supported handler constraints and retain the original exception if an audit/notification task fails. A warning records the once-per-step target event model. An explicit error-class mapping is required where a legacy numeric ErrorCode is consumed. Unsupported handler concurrency, grouping, transactions, nesting, and forced outcomes remain blockers.
+
+Native Send Mail Task metadata supports a bounded SMTP translator; task names do not establish task type. Script Task programs are extracted as review data when present and remain source/translation gaps otherwise. Missing procedure definitions and missing scripts cannot count as implemented code. Having fewer pending sections does not remove identity-allocation, physical-mapping, or other execution-readiness findings, and does not change NOT_MEASURED behavioral match.
