@@ -250,12 +250,28 @@ def build_graph_plan(context, config):
                 if not ops:
                     ops = [{'operation_id':origin, 'operation_type':'NATIVE_SQL','order':0,'code':f'_result_{sid} = spark.sql({sql!r})'}]
             except ConversionGap as exc: findings.append(finding(exc.code,origin,str(exc),evidence=exc.evidence))
+        elif 'expressiontask' in kind:
+            from ssis_migration.scalar_expressions import assignment_code
+            try:
+                code=assignment_code(props.get('Expression'),origin,runtime)
+                task_type='NATIVE_EXPRESSION_ASSIGNMENT'
+                ops=[{'operation_id':origin,'operation_type':'NATIVE_SCALAR_ASSIGNMENT','order':0,'code':code}]
+            except ConversionGap as exc:findings.append(finding(exc.code,origin,str(exc)))
         elif 'scripttask' in kind:
             sources=props.get('script_sources',[])
             captured=any(s.get('status')=='CAPTURED' and s.get('text') for s in sources)
-            findings.append(finding('SCRIPT_TRANSLATION_REVIEW_REQUIRED' if captured else 'SCRIPT_SOURCE_REQUIRED',origin,
-                'Captured Script Task source requires semantic translation.' if captured else
-                'The Script Task program is unavailable. Supply/extract its C#/VB source; its task name does not identify its behavior.'))
+            if captured:
+                from ssis_migration.script_mail import translate_script_mail
+                try:
+                    code=translate_script_mail(exe,package,runtime)
+                    task_type='NATIVE_SCRIPT_MAIL'
+                    ops=[{'operation_id':origin,'operation_type':'NATIVE_SCRIPT_MAIL','order':0,'code':code}]
+                    findings.append(finding('SCRIPT_SMTP_REVIEW_REQUIRED',origin,
+                        'Bounded C# mail logic is translated from source. The host-only SmtpClient constructor uses port 25 without explicit TLS/authentication; review .NET configuration defaults, culture/encoding/address behavior, and target relay access.',severity='WARNING'))
+                except ConversionGap as exc:findings.append(finding(exc.code,origin,str(exc)))
+            else:
+                findings.append(finding('SCRIPT_SOURCE_REQUIRED',origin,
+                    'The Script Task program is unavailable. Supply/extract its C#/VB source; its task name does not identify its behavior.'))
         else:
             findings.append(finding('TASK_TRANSLATION_UNSUPPORTED',origin,f'No native implementation for task type {exe.executable_type or exe.creation_name}.'))
         attrs = exe.properties.get('_attributes',{})
@@ -324,6 +340,23 @@ def build_graph_plan(context, config):
         if use.get('layer') and config.layer.casefold() not in {'unspecified','multi-layer','multilayer',use['layer'].casefold()}:
             plan.unresolved.append(finding('LAYER_CONTEXT_CONFLICT',use['mapping_key'],'Mapped output layer conflicts with package layer context.'))
     plan.metadata['execution_model'] = 'serialized_topological'
+    for exe in package.executables:
+        if disabled(exe.ref_id):continue
+        for binding in exe.properties.get('result_bindings',[]):
+            try:
+                key,_=runtime.fork().variable(binding.get('DtsVariableName'),exe.ref_id,write=True)
+            except ConversionGap:continue
+            if key in runtime.inputs:
+                record=runtime.inputs[key]
+                record['origin']='source_result'
+                record.setdefault('source_producer_ids',[]).append(exe.ref_id)
+    if handler:
+        for key in ('System::SourceName','System::SourceDescription','System::ErrorDescription','System::ErrorCode'):
+            if key in runtime.inputs:
+                runtime.inputs[key]['origin']='error_code_mapping' if key=='System::ErrorCode' else 'failure_context'
+    for key,record in runtime.inputs.items():
+        record['required_external_input']=bool(record.get('read') and not record.get('derived') and key not in runtime.defaults
+            and record.get('origin') not in {'source_result','failure_context','error_code_mapping'})
     plan.metadata['runtime_variables'] = list(runtime.inputs.values())
     plan.metadata['runtime_defaults'] = runtime.defaults
     plan.metadata['runtime_derived_expressions'] = runtime.derived

@@ -126,7 +126,10 @@ class NotebookAssembler:
             defaults = plan_dict['metadata'].get('runtime_defaults', {})
             rows = []
             for item in plan_dict['metadata'].get('runtime_variables', []):
-                origin = 'derived source expression' if item.get('derived') else 'captured default' if item['key'] in defaults else 'result/runtime state' if item.get('write') else 'required runtime input'
+                origin = {'failure_context':'supplied by package OnError handler',
+                    'error_code_mapping':'mapped from target error class through ssis_error_codes',
+                    'source_result':'assigned by source task result binding (producer may still be pending)'}.get(item.get('origin'))
+                origin = origin or ('derived source expression' if item.get('derived') else 'captured default' if item['key'] in defaults else 'result/runtime state' if item.get('write') else 'required runtime input')
                 rows.append(f"- `{item['key']}` — {item['kind']}; {origin}")
             cells.append(self._markdown_cell('## Native runtime bindings\n\n'
                 'Use the `ssis_runtime_values` JSON widget for external inputs. Bound variables share one notebook run '

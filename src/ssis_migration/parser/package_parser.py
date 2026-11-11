@@ -62,7 +62,7 @@ class SSISPackageParser:
                                 values[name.strip().casefold()]=text.strip()
                     elif key.casefold() in {'smtpserver','port','enablessl','usewindowsauthentication'}:
                         values[key.casefold()]=value
-            profiles[attrs['refId']]={'host':values.get('smtpserver'),'port':values.get('port','25'),
+            profiles[attrs['refId']]={'name':attrs.get('ObjectName'),'host':values.get('smtpserver'),'port':values.get('port','25'),
                 'enable_ssl':values.get('enablessl','False'),'windows_authentication':values.get('usewindowsauthentication','False')}
         return profiles
 
