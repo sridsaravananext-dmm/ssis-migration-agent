@@ -24,6 +24,8 @@ def pending_operation(source_id, reason_codes, *, connection=None, sql=None,
         'target_object': properties.get('OpenRowset'),
         'target_proposals': properties.get('_target_proposals', []),
         'source_variable_context': properties.get('_source_variable_context'),
+        'script_sources': properties.get('script_sources', []),
+        'script_binaries': properties.get('script_binaries', []),
         'replacement': 'Supply missing inputs and regenerate this source step; review bindings before implementing it.'}
     lines = [f'# BEGIN PENDING {pending_id}']
     for label, value in [('Source', source_id), ('Connection', connection),
@@ -38,6 +40,9 @@ def pending_operation(source_id, reason_codes, *, connection=None, sql=None,
                          ('Source variable context', item['source_variable_context'])]:
         if value is not None and value != []:
             lines.append('# ' + label + ': ' + json.dumps(value, ensure_ascii=True))
+    for script in item['script_sources']:
+        lines.append('# Script source: ' + json.dumps({'name':script['name'],'status':script['status']},ensure_ascii=True))
+        if script.get('text'):lines.extend('# ' + line for line in script['text'].splitlines())
     if sql:
         if item['source_variable']:
             lines.append('# Variable-backed source: the variable controls SQL; captured command text below is reference only.')

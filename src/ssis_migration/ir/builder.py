@@ -45,6 +45,8 @@ class IRBuilder:
                 "package_attributes": package_attributes,
                 "package_expressions": parsed.get('package_expressions', []),
                 "connection_aliases": parsed.get('connection_aliases', {}),
+                "smtp_connections": parsed.get('smtp_connections', {}),
+                "package_parameters": parsed.get('package_parameters', []),
             },
         )
 

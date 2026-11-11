@@ -32,6 +32,8 @@ class SSISPackageParser:
         return {
             "source": self._parse_source(),
             "connection_aliases": self._connection_aliases(),
+            "smtp_connections": self._smtp_connections(),
+            "package_parameters": self._package_parameters(),
             "package_expressions": ["".join(c.itertext()) for c in self.root if local_name(c.tag).lower() == 'propertyexpression'],
             "package": self._parse_package(),
             "executables": self._parse_executables(),
@@ -42,6 +44,44 @@ class SSISPackageParser:
             "data_flow_tasks": self._parse_data_flow_tasks(),
             "statistics": self._build_statistics(),
         }
+
+    def _smtp_connections(self):
+        profiles={}
+        for element in self.root.iter():
+            attrs=self._attributes(element)
+            if local_name(element.tag).casefold()!='connectionmanager' or not attrs.get('refId'):continue
+            nodes=[n for n in element.iter() if local_name(n.tag).casefold()=='smtpconnectionmanager']
+            if not nodes:continue
+            values={}
+            for node in nodes:
+                for key,value in self._attributes(node).items():
+                    if key.casefold()=='connectionstring':
+                        for setting in value.split(';'):
+                            name,sep,text=setting.partition('=')
+                            if sep and name.strip().casefold() in {'smtpserver','port','enableSsl'.casefold(),'usewindowsauthentication'}:
+                                values[name.strip().casefold()]=text.strip()
+                    elif key.casefold() in {'smtpserver','port','enablessl','usewindowsauthentication'}:
+                        values[key.casefold()]=value
+            profiles[attrs['refId']]={'host':values.get('smtpserver'),'port':values.get('port','25'),
+                'enable_ssl':values.get('enablessl','False'),'windows_authentication':values.get('usewindowsauthentication','False')}
+        return profiles
+
+    def _package_parameters(self):
+        result=[]
+        for container in self.root:
+            if local_name(container.tag).casefold()!='packageparameters':continue
+            for parameter in container:
+                attrs=self._attributes(parameter)
+                if local_name(parameter.tag).casefold()!='packageparameter':continue
+                values={}
+                for child in parameter:
+                    if local_name(child.tag).casefold()=='property':
+                        values[self._get_attribute(child,'Name')]=''.join(child.itertext())
+                sensitive=str(attrs.get('Sensitive',values.get('Sensitive','False'))).casefold() in {'true','1','-1'}
+                required=str(attrs.get('Required',values.get('Required','False'))).casefold() in {'true','1','-1'}
+                result.append({'name':attrs.get('ObjectName'),'data_type':attrs.get('DataType',values.get('DataType')),
+                    'required':required,'sensitive':sensitive,'default_value':None if sensitive else values.get('ParameterValue')})
+        return result
 
     def _connection_aliases(self):
         aliases = {}
@@ -77,9 +117,17 @@ class SSISPackageParser:
     # =========================================================
 
     def _parse_package(self) -> dict[str, Any]:
+        attrs=self._attributes(self.root)
+        for child in self.root:
+            if local_name(child.tag).casefold()=='property':
+                name=self._get_attribute(child,'Name')
+                if name in {'VersionMajor','VersionMinor','VersionBuild','VersionGUID','DTSID','ObjectName'}:
+                    value=''.join(child.itertext())
+                    if name in attrs and attrs[name]!=value:raise ValueError(f'Conflicting package metadata: {name}')
+                    attrs[name]=value
         return {
             "xml_tag": local_name(self.root.tag),
-            "attributes": self._attributes(self.root),
+            "attributes": attrs,
         }
 
         # =========================================================
@@ -97,14 +145,22 @@ class SSISPackageParser:
             ancestor = parents.get(element)
             parent_ref = None
             event_scope = False
+            event_attributes = {}
+            lexical_scopes=[attrs.get('refId')] if attrs.get('refId') else []
             while ancestor is not None:
+                if local_name(ancestor.tag).lower() in {'executable','eventhandler'}:
+                    scope_ref=self._get_attribute(ancestor,'refId')
+                    if scope_ref:lexical_scopes.append(scope_ref)
                 if local_name(ancestor.tag).lower() == "eventhandler":
                     event_scope = True
+                    if not event_attributes:event_attributes=self._attributes(ancestor)
                 if parent_ref is None and local_name(ancestor.tag).lower() == "executable":
                     parent_ref = self._get_attribute(ancestor, "refId")
                 ancestor = parents.get(ancestor)
             parsed["properties"]["_parent_ref_id"] = parent_ref
             parsed["properties"]["_event_handler"] = event_scope
+            parsed["properties"]["_event_handler_attributes"] = event_attributes
+            parsed['properties']['_lexical_scopes']=lexical_scopes
             expressions = []
             for child in element:
                 if local_name(child.tag).lower() == "propertyexpression":

@@ -30,12 +30,14 @@ with st.sidebar:
     selected_layer = st.selectbox('Logical layer', ['Unspecified', 'Bronze', 'Silver', 'Gold', 'Multi-layer', 'Custom'])
     layer = st.text_input('Custom layer') if selected_layer == 'Custom' else selected_layer.lower()
     target_schema = st.text_input('Target schema (optional)', help='Propose catalog.schema.lowercase_table names. Leave blank to retain target placeholders. Enter only the schema name.')
-    st.caption('Target naming uses your catalog/schema and lowercase table names. Object overrides are optional. Destination writes still need a load strategy.')
+    st.caption('Target naming uses your catalog/schema and lowercase table names. Object overrides are optional. Source inserts require existing mapped tables and captured column mappings.')
     description = st.text_area('Package context (optional)')
     default_schema = st.text_input('Default SQL Server schema', value='dbo')
     ai = st.checkbox('Enable AI-assisted legacy generation', value=False, help='The source-graph planner uses deterministic native translation. AI fallback is currently available in legacy warehouse mode.')
     strict = st.checkbox('Strict mode', value=False, help='Graph mode still writes review drafts with named pending sections. Errors block execution; strict CLI exits nonzero when review is required. Legacy mode withholds incomplete notebooks.')
     dry_run = st.checkbox('Dry run', value=False, help='Parse, resolve, and preview the plan without generating a final notebook or calling AI.')
+    write_choice = st.selectbox('Destination writes', ['Preserve source behavior', 'Review only', 'Append to existing mapped tables'],
+        help='Append preserves separate source TRUNCATE tasks. It requires exact captured column mappings/types and creates no tables.')
     with st.expander('Physical mappings and dependency connections'):
         planner_choice = st.selectbox('Planning engine', ['Source graph', 'Legacy warehouse rules'])
         object_text = st.text_area('Physical object mappings (JSON)', value='{}',
@@ -107,7 +109,8 @@ with upload_tab:
                     target_schema=target_schema.strip() or None, description=description,
                     default_schema=default_schema.strip(), ai=ai, strict_mode=strict, dry_run=dry_run,
                     planner_mode='graph' if planner_choice == 'Source graph' else 'legacy',
-                    object_mappings=object_mappings, dependency_scopes=dependency_scopes)
+                    object_mappings=object_mappings, dependency_scopes=dependency_scopes,
+                    destination_write_mode={'Preserve source behavior':'source','Review only':'review','Append to existing mapped tables':'append_existing'}[write_choice])
             st.session_state.result = report
             st.session_state.output = str(output)
             st.info(f"Assessment finished: {report['status']}. See Results for findings.")

@@ -107,6 +107,9 @@ class NotebookAssembler:
                 "\ndbutils.widgets.text('ssis_runtime_values', '{}', 'SSIS runtime values (JSON)')\n"
                 "if _step_id != 'all':\n"
                 "    raise RuntimeError('Bound SSIS variables require one shared notebook run; use step_id=all.')\n")
+            if plan_dict.get('metadata',{}).get('package_error_handler'):
+                cells[-1]['source']=self._split_source(''.join(cells[-1]['source'])+
+                    "\ndbutils.widgets.text('ssis_error_codes', '{}', 'Target error class to source audit code (JSON)')\n")
 
         # -------------------------------------------------
         # Setup cell: ETL control-table helpers
@@ -123,11 +126,18 @@ class NotebookAssembler:
             defaults = plan_dict['metadata'].get('runtime_defaults', {})
             rows = []
             for item in plan_dict['metadata'].get('runtime_variables', []):
-                origin = 'captured default' if item['key'] in defaults else 'result/runtime state' if item.get('write') else 'required runtime input'
+                origin = 'derived source expression' if item.get('derived') else 'captured default' if item['key'] in defaults else 'result/runtime state' if item.get('write') else 'required runtime input'
                 rows.append(f"- `{item['key']}` — {item['kind']}; {origin}")
             cells.append(self._markdown_cell('## Native runtime bindings\n\n'
                 'Use the `ssis_runtime_values` JSON widget for external inputs. Bound variables share one notebook run '
                 '(`step_id=all`). Source NULL, timezone, and provider conversions still require review.\n\n' + '\n'.join(rows)))
+        if plan_dict.get('metadata',{}).get('package_error_handler'):
+            from ssis_migration.event_handlers import handler_setup
+            cells.append(self._markdown_cell('## Package OnError handler\n\n'
+                'Runs only after a main step fails. Source task constraints are retained. '
+                'Supply explicit target-error-class mappings through `ssis_error_codes`; no legacy numeric code is invented. '
+                'The original failure is re-raised even if a handler task fails.'))
+            cells.append(self._code_cell(handler_setup(plan_dict,operations_by_step)))
         if plan_dict.get("metadata", {}).get("uses_legacy_controls", False):
             cells.append(self._code_cell(self._setup_helpers_code()))
 
@@ -204,6 +214,11 @@ class NotebookAssembler:
                 f"| Source Objects | {source_str} |\n"
                 f"| Target Objects | {target_str} |\n"
             ))
+            handler=plan_dict.get('metadata',{}).get('package_error_handler')
+            if handler and metadata.get('source_ref_id') in handler['source_ids']:
+                cells.append(self._markdown_cell('Executed only by the package OnError handler above; this is not a normal pipeline step.'))
+                continue
+            on_error=(step_name,metadata.get('source_description','')) if handler else None
 
             # --- AI-assisted step handling ---
 
@@ -266,7 +281,7 @@ class NotebookAssembler:
             if is_ai_generated:
                 # Use the LLM-generated code directly.
                 cells.append(self._code_cell(
-                    self._wrap_step_code(step_id, artifact.code)
+                    self._wrap_step_code(step_id, artifact.code,on_error=on_error)
                 ))
 
             else:
@@ -295,6 +310,7 @@ class NotebookAssembler:
                         self._wrap_step_code(
                             step_id,
                             "\n\n".join(code_blocks),
+                            on_error=on_error,
                         )
                     ))
                     cells[-1]['metadata']['ssis_migration'] = {
@@ -586,7 +602,7 @@ def update_etl_cutoff(table_name: str, cutoff_time) -> None:
         ] + [lines[-1]]
 
     @staticmethod
-    def _wrap_step_code(step_id: str, code: str) -> str:
+    def _wrap_step_code(step_id: str, code: str, *, on_error=None) -> str:
         """
         Wrap step code with a conditional guard so the
         notebook can run a single step when invoked by a
@@ -596,6 +612,14 @@ def update_etl_cutoff(table_name: str, cutoff_time) -> None:
         ``spark.sql()`` calls so they can be nested
         inside the Python ``if`` block.
         """
+        if on_error is not None:
+            if not ast.parse(code).body:code += "\nraise RuntimeError('No executable implementation is available for this step.')"
+            wrapped=['try:']+['    '+line if line.strip() else '' for line in code.splitlines()]
+            wrapped += ['except Exception as _ssis_original:', '    try:',
+                f'        _ssis_run_package_error({on_error[0]!r}, {on_error[1]!r}, _ssis_original)',
+                '    except Exception as _ssis_dispatch_error:',
+                "        _ssis_event_errors.append({'source':'package_on_error','error':str(_ssis_dispatch_error)})",'    raise']
+            code='\n'.join(wrapped)
         guard = f'if _step_id in ("all", {step_id!r}):'
 
         if code.startswith("%sql\n"):

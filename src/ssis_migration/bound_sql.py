@@ -21,14 +21,18 @@ class BindingContext:
         self.package = package
         self.inputs = {}
         self.defaults = {}
+        self.derived = {}
+        self.deriving = set()
 
     def fork(self):
         other = BindingContext(self.package)
         other.inputs, other.defaults = {k:dict(v) for k,v in self.inputs.items()}, dict(self.defaults)
+        other.derived,other.deriving=dict(self.derived),set(self.deriving)
         return other
 
     def adopt(self, other):
         self.inputs, self.defaults = other.inputs, other.defaults
+        self.derived,self.deriving=other.derived,other.deriving
 
     def variable(self, reference, owner, *, write=False):
         if not isinstance(reference, str) or not reference.strip():
@@ -47,16 +51,24 @@ class BindingContext:
                 key = context['scope_ref_id'] + '|' + reference
             kind = {'2':'int16','3':'int32','20':'int64','8':'string','7':'datetime','11':'bool',
                 '4':'float','5':'float','6':'decimal','14':'decimal'}.get(str(context.get('data_type')), 'scalar')
-            if not context.get('expression') and context.get('value') is not None and context['status'] != 'SENSITIVE_REDACTED':
+            if (not context.get('expression') or context.get('evaluate_as_expression') is False) and context.get('value') is not None and context['status'] != 'SENSITIVE_REDACTED':
                 self.defaults[key] = context['value']
         elif reference.startswith('System::'):
             attrs = self.package.metadata.get('package_attributes', {})
             captured = {'System::PackageName':self.package.package_name,
                 'System::PackageID':attrs.get('DTSID'), 'System::VersionGUID':attrs.get('VersionGUID'),
                 'System::VersionMajor':attrs.get('VersionMajor'), 'System::VersionMinor':attrs.get('VersionMinor')}
-            kind = 'datetime' if reference == 'System::StartTime' else 'int32' if reference in {'System::VersionMajor','System::VersionMinor'} else 'string'
+            kind = 'datetime' if reference == 'System::StartTime' else 'int32' if reference in {'System::VersionMajor','System::VersionMinor','System::ErrorCode'} else 'string'
             if captured.get(reference) is not None: self.defaults[key] = captured[reference]
-        elif not reference.startswith(('$Package::','$Project::')):
+        elif reference.startswith('$Package::'):
+            parameters=[p for p in self.package.metadata.get('package_parameters',[]) if p.get('name')==reference.split('::',1)[1]]
+            if len(parameters)>1:raise ConversionGap('VARIABLE_BINDING_UNRESOLVED','Duplicate package parameter declaration.')
+            if parameters:
+                parameter=parameters[0]
+                kind={'2':'int16','3':'int32','20':'int64','8':'string','7':'datetime','11':'bool','4':'float','5':'float','6':'decimal','14':'decimal'}.get(str(parameter.get('data_type')),'scalar')
+                if not parameter.get('required') and not parameter.get('sensitive') and parameter.get('default_value') is not None:
+                    self.defaults[key]=parameter['default_value']
+        elif not reference.startswith('$Project::'):
             raise ConversionGap('VARIABLE_BINDING_UNRESOLVED', f'Unsupported variable namespace: {reference}')
         record = {'key':key,'reference':reference,'kind':kind,'scope_ref_id':context.get('scope_ref_id'),
             'read':not write, 'write':write}
@@ -67,12 +79,31 @@ class BindingContext:
             record.update(read=previous.get('read',False) or not write, write=previous.get('write',False) or write,
                 numeric_fragment=previous.get('numeric_fragment',False))
         self.inputs[key] = record
+        if reference.startswith('User::') and context['status']!='SENSITIVE_REDACTED' and context.get('expression') and context.get('evaluate_as_expression') is not False:
+            if context.get('evaluate_as_expression') is not True:
+                raise ConversionGap('VARIABLE_EXPRESSION_REVIEW_REQUIRED','Expression evaluation flag is unavailable; do not substitute a runtime override for computed source logic.')
+            if write:raise ConversionGap('VARIABLE_EXPRESSION_REVIEW_REQUIRED','Result binding into an expression variable requires explicit source review.')
+            if key in self.deriving or len(self.deriving)>16:raise ConversionGap('VARIABLE_EXPRESSION_REVIEW_REQUIRED','Cyclic or excessive variable-expression dependencies.')
+            if key not in self.derived:
+                from ssis_migration.scalar_expressions import compile_scalar
+                self.deriving.add(key)
+                try:
+                    scope=context.get('scope_ref_id') or owner
+                    def resolve(ref):
+                        expression=self.read(ref,scope)
+                        dependency_key,_=self.variable(ref,scope)
+                        return expression,self.inputs[dependency_key]['kind']
+                    expression,_=compile_scalar(context['expression'],resolve)
+                    self.derived[key]=expression
+                finally:self.deriving.discard(key)
+            self.inputs[key]['derived']=True
         return key, kind
 
     def read(self, reference, owner, *, numeric=False):
         key, kind = self.variable(reference, owner)
         if numeric: self.inputs[key]['numeric_fragment'] = True
         value = f'_ssis_value({key!r}, {kind!r})'
+        if key in self.derived:value=f'_ssis_coerce({self.derived[key]}, {kind!r})'
         return f'_ssis_numeric({value})' if numeric else value
 
 
@@ -286,4 +317,18 @@ def _ssis_numeric(value):
     if isinstance(value,bool) or not re.fullmatch(r'[+-]?\\d+(?:\\.\\d+)?',str(value)):
         raise RuntimeError('A bare numeric SQL expression reference requires a numeric value.')
     return int(str(value)) if '.' not in str(value) else Decimal(str(value))
+
+def _ssis_substring(value, start, length):
+    if start < 1 or length < 0:
+        raise RuntimeError('Invalid SSIS substring bounds.')
+    return value.encode('utf-16-le', 'surrogatepass')[(start-1)*2:(start-1+length)*2].decode('utf-16-le', 'surrogatepass')
+
+def _ssis_left(value, length):
+    return _ssis_substring(value, 1, length)
+
+def _ssis_right(value, length):
+    if length < 0: raise RuntimeError('Invalid SSIS right-string length.')
+    if length == 0: return ''
+    size = len(value.encode('utf-16-le', 'surrogatepass')) // 2
+    return _ssis_substring(value, max(1, size-length+1), length)
 '''

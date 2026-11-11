@@ -57,7 +57,8 @@ def dependency_findings(context):
     disabled_refs=set()
     for exe in package.executables:
         attrs=exe.properties.get('_attributes',{})
-        if str(attrs.get('Disabled','')).casefold() in {'true','1','-1'}: disabled_refs.add(exe.ref_id)
+        event_attrs=exe.properties.get('_event_handler_attributes',{})
+        if str(attrs.get('Disabled','')).casefold() in {'true','1','-1'} or str(event_attrs.get('Disabled','')).casefold() in {'true','1','-1'}: disabled_refs.add(exe.ref_id)
     parents = {e.ref_id: e.properties.get('_parent_ref_id') for e in package.executables}
     def disabled(ref):
         seen = set()
