@@ -55,6 +55,10 @@ No broad workload-accuracy, memory, performance, or production-readiness claim i
 
 Supported named inputs, ordinal single-row results, bounded relational batches, and literal/reference SQL templates generate executable native bodies. Runtime requirements remain separate from generation status. Missing procedures and unsupported handlers retain named pending sections. Identity allocation, statement atomicity, and source/target conversions retain explicit review findings. See [source-graph.md](source-graph.md) for the supported forms and shared-notebook restriction.
 
+Initial-value requirements use emitted variable reads/writes and transitive task dependencies. A prior source producer can satisfy a later read; a producer in the same task or after the read does not remove the initial-value requirement. Missing implementations retain their pending producer evidence and global blockers. Initial values, captured defaults actually needed initially, numeric SQL fragments, and source-derived expressions depending only on initial values receive a preflight check before audit/business writes. This does not predict data-dependent failures, roll back mutations, or freeze derived values: expressions still evaluate at their source read points.
+
+Notebook review text displays blocking findings separately from warnings and lists required typed initial values without inventing business defaults. Shared graph notebooks summarize structural markers and audit replacements in tables instead of emitting repeated marker cells. Per-step/nonshared notebooks retain their executable control cells. Source inventories, coverage denominators, graph edges, and pending implementations are retained independently of notebook presentation.
+
 ## Source-preserving development update
 
 The graph planner now generates guarded inserts into existing mapped tables for captured OLE DB table/FastLoad destinations, matches bounded procedure arguments to formals, and evaluates supported scalar variable expressions from current runtime state. The generated scalar helpers are ordinary Python functions. Spark/Pandas UDFs remain prohibited.

@@ -407,9 +407,8 @@ def build_graph_plan(context, config):
         for key in ('System::SourceName','System::SourceDescription','System::ErrorDescription','System::ErrorCode'):
             if key in runtime.inputs:
                 runtime.inputs[key]['origin']='error_code_mapping' if key=='System::ErrorCode' else 'failure_context'
-    for key,record in runtime.inputs.items():
-        record['required_external_input']=bool(record.get('read') and not record.get('derived') and key not in runtime.defaults
-            and record.get('origin') not in {'source_result','failure_context','error_code_mapping','target_audit_notebook_key'})
+    from ssis_migration.runtime_contract import annotate_initial_values
+    annotate_initial_values(plan,runtime)
     plan.metadata['runtime_variables'] = list(runtime.inputs.values())
     plan.metadata['runtime_defaults'] = runtime.defaults
     plan.metadata['runtime_derived_expressions'] = runtime.derived

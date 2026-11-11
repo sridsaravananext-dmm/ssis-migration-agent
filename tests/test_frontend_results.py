@@ -74,8 +74,9 @@ def test_native_binding_requirements_render_on_the_results_card(tmp_path):
       xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" DTS:refId="Package" DTS:ObjectName="Native">
       <DTS:Variables><DTS:Variable DTS:ObjectName="Result" DTS:Namespace="User"><DTS:VariableValue DTS:DataType="8"/></DTS:Variable></DTS:Variables>
       <DTS:Executables><DTS:Executable DTS:refId="Package\\T" DTS:ExecutableType="Microsoft.ExecuteSQLTask"><DTS:ObjectData>
-        <SQLTask:SqlTaskData SQLTask:SqlStatementSource="SELECT @name AS name" SQLTask:ResultType="ResultSetType_SingleRow">
+        <SQLTask:SqlTaskData SQLTask:SqlStatementSource="SELECT @name AS name, @key AS input_key" SQLTask:ResultType="ResultSetType_SingleRow">
           <SQLTask:ParameterBinding SQLTask:ParameterName="@name" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input"/>
+          <SQLTask:ParameterBinding SQLTask:ParameterName="@key" SQLTask:DtsVariableName="$Package::Key" SQLTask:ParameterDirection="Input"/>
           <SQLTask:ResultBinding SQLTask:ResultName="0" SQLTask:DtsVariableName="User::Result"/>
         </SQLTask:SqlTaskData></DTS:ObjectData></DTS:Executable></DTS:Executables></DTS:Executable>''')
     report=run_migration(str(source),str(tmp_path/'out'))
@@ -87,6 +88,7 @@ def test_native_binding_requirements_render_on_the_results_card(tmp_path):
     app.run()
     assert not app.exception
     assert any(e.label=='Native runtime bindings' for e in app.expander)
+    assert any('"$Package::Key": null' in code.value for code in app.code)
 
 
 def test_reference_review_is_downloadable_without_running_reference_code(tmp_path):

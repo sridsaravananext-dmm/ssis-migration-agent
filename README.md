@@ -97,6 +97,10 @@ Expression Tasks capture their source Expression and support one assignment to a
 
 Runtime binding records distinguish external inputs, captured defaults, derived expressions, source result producers, failure context, and audit value bridges. `required_external_input` identifies missing external values. Source mode retains source auditing; target mode records its replacement separately. Captured zero audit-count defaults are never presented as measured counts.
 
+Generated graph notebooks show execution readiness, blocking codes, and a typed input template at the top. Nulls in that template must be replaced; they are not runnable defaults. Initial values and eligible source-derived conversions are checked before audit setup or business mutations, including a source TRUNCATE. Source assignment/result values produced along prior task dependencies are distinguished from initial inputs; read-before-assignment and read/write variables still require an initial value. Later data-derived values retain checks at their source read points.
+
+Shared-state notebooks group replaced audit tasks and structural/disabled sections into review tables, keeping executable cells focused on business work. The complete source dispositions and dependencies remain in the diagnostic task graph; grouping does not alter business ordering or the runtime review gate. Missing procedure bodies remain named pending sections rather than commented-out success paths.
+
 ## Existing framework references
 
 Use the frontend reference role or `--reference path/to/framework.zip` for target configuration, database-definition, and library notebooks. This role stays separate from SQL Server procedure/DDL inputs. Two similarly named cfg archives are classified per member by their contents. A database-definition notebook can contain DDL; it is still target reference evidence, not a source schema override.
