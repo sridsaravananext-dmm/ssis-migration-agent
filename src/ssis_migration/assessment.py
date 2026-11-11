@@ -120,7 +120,7 @@ def assess_operations(operations_by_step, artifacts):
 
 
 def assessment_summary(inventory, validations, findings, *, dry_run=False):
-    business = [v for v in validations if v.get('operation_type') != 'STRUCTURAL']
+    business = [v for v in validations if v.get('operation_type') not in {'STRUCTURAL','AUDIT_REPLACED'}]
     valid = sum(v['status'] == 'PASS' for v in business)
     return {'source_accounting': {'total_items': len(inventory),
                 'planned_candidates': sum(i['disposition'] == 'PLANNED_CANDIDATE' for i in inventory),
@@ -128,10 +128,11 @@ def assessment_summary(inventory, validations, findings, *, dry_run=False):
                 'disabled_items': sum(i['disposition'] == 'DISABLED' for i in inventory)},
             'generation': {'status':'NOT_RUN' if dry_run else 'ASSESSED',
                 'operation_count': len(business), 'statically_valid_operations': valid,
-                'structural_operation_count': len(validations) - len(business),
+                'structural_operation_count': sum(v.get('operation_type')=='STRUCTURAL' for v in validations),
+                'audit_replaced_operation_count': sum(v.get('operation_type')=='AUDIT_REPLACED' for v in validations),
                 'pending_operations': sum(v['status'] == 'PENDING' for v in business),
                 'operation_coverage_percent': round(100 * valid / len(business), 1) if business else None,
-                'basis': 'Operations passing native-code checks; not task coverage or behavioral accuracy. Container bookkeeping is excluded.'},
+                'basis': 'Operations passing native-code checks; not task coverage or behavioral accuracy. Container bookkeeping and replaced audit operations are excluded.'},
             'verification': {'status': 'NOT_MEASURED', 'legacy_match_percent': None},
             'human_review_item_count': len(findings),
             'status': 'REVIEW_REQUIRED' if findings else ('ANALYZED' if dry_run else 'ARTIFACTS_GENERATED')}

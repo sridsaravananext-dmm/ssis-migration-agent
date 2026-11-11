@@ -87,3 +87,19 @@ def test_native_binding_requirements_render_on_the_results_card(tmp_path):
     app.run()
     assert not app.exception
     assert any(e.label=='Native runtime bindings' for e in app.expander)
+
+
+def test_reference_review_is_downloadable_without_running_reference_code(tmp_path):
+    import tempfile
+    from ssis_migration.migrate import run_migration
+    source=tmp_path/'sample.dtsx'
+    source.write_text('''<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:S="sql" DTS:refId="Package" DTS:ObjectName="ReferenceExample">
+      <DTS:Executables><DTS:Executable DTS:refId="Package\\T" DTS:ExecutableType="Microsoft.ExecuteSQLTask"><DTS:ObjectData>
+      <S:SqlTaskData S:SqlStatementSource="SELECT 1"/></DTS:ObjectData></DTS:Executable></DTS:Executables></DTS:Executable>''')
+    reference=tmp_path/'library.py';reference.write_text('# Databricks notebook source\nraise RuntimeError("never execute")')
+    report=run_migration(source,tmp_path/'out',references_paths=[reference])
+    app=AppTest.from_file(str(ROOT/'frontend/app.py'),default_timeout=30).run()
+    (Path(tempfile.gettempdir())/'ssis_conversion_app'/app.session_state['session_id']).mkdir(parents=True,exist_ok=True)
+    app.session_state['result']=report;app.session_state['output']=str(tmp_path/'out');app.run()
+    assert not app.exception
+    assert 'Download supporting-file review' in [b.proto.label for b in app.get('download_button')]

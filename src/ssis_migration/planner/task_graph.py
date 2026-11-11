@@ -33,6 +33,8 @@ def build_graph_plan(context, config):
     from ssis_migration.assessment import finding, dependency_findings
     from ssis_migration.generator.graph_native import dataflow_operations, truth
     package = context.package_ir
+    root_ref=package.metadata.get('package_root_ref','Package')
+    root_error_scope=root_ref+'.EventHandlers[OnError]'
     runtime = BindingContext(package)
     plan = MigrationPlan(package_name=package.package_name, metadata={
         'planner':'source_graph', 'model_version':'2.1', 'uses_legacy_controls':False,
@@ -40,6 +42,8 @@ def build_graph_plan(context, config):
     by_ref, parent, children = {}, {}, defaultdict(list)
     for index, exe in enumerate(package.executables):
         ref = exe.ref_id or f'missing:{index}'
+        if ref==root_ref:
+            plan.unresolved.append(finding('SOURCE_ID_INVALID', ref, 'Child executable reuses the package root refId.'))
         if not exe.ref_id or ref in by_ref:
             plan.unresolved.append(finding('SOURCE_ID_INVALID', ref, 'Executable requires a unique source refId.'))
             ref += f':duplicate:{index}'
@@ -48,7 +52,7 @@ def build_graph_plan(context, config):
         explicit = exe.properties.get('_parent_ref_id')
         inferred = ref.rsplit('\\',1)[0] if '\\' in ref else None
         p = explicit if explicit in by_ref else inferred if inferred in by_ref else None
-        if explicit not in (None,'Package') and explicit not in by_ref:
+        if explicit not in (None,root_ref) and explicit not in by_ref:
             plan.unresolved.append(finding('PARENT_SCOPE_UNRESOLVED', ref, 'Parent executable is absent from the source graph.', evidence=explicit))
         parent[ref] = p
         children[p].append(ref)
@@ -59,12 +63,13 @@ def build_graph_plan(context, config):
         while ref in by_ref and ref not in seen:
             seen.add(ref)
             if by_ref[ref].properties.get('_event_handler') or '.EventHandlers[' in ref:
+                if by_ref[ref].properties.get('_event_handler_scope'):return by_ref[ref].properties['_event_handler_scope']
                 scope=by_ref[ref].properties.get('_event_handler_attributes',{}).get('refId') or ref
                 return scope.split(']')[0] + ']' if '.EventHandlers[' in scope else 'event:' + ref
             ref = parent.get(ref)
         return None
     def finish(ref): return ref + '::complete' if sequence(by_ref[ref]) else ref
-    root_event_refs={ref for ref in by_ref if event_scope(ref)=='Package.EventHandlers[OnError]'}
+    root_event_refs={ref for ref in by_ref if event_scope(ref)==root_error_scope}
     flat_handler=bool(root_event_refs) and all(parent[r] is None and not children[r] and not sequence(by_ref[r])
         and 'loop' not in (by_ref[r].executable_type or by_ref[r].creation_name or '').casefold() for r in root_event_refs)
     deps = {ref:set() for ref in by_ref}
@@ -118,10 +123,25 @@ def build_graph_plan(context, config):
             ref = parent.get(ref)
         return False
     handler=None
+    audit_plan=None;replaced_audits=set()
+    if config.audit_mode=='target':
+        from ssis_migration.audit_replacement import select_replacements
+        audit_plan=select_replacements(package,config,disabled)
+        for code,ref,message in audit_plan['rule_findings']:plan.unresolved.append(finding(code,ref,message))
+        replaced_audits=set(audit_plan['replaced_sources'])
+        context.metadata['excluded_dependency_sources']=replaced_audits
+        if not config.audit_schema:
+            plan.unresolved.append(finding('TARGET_AUDIT_LOCATION_REQUIRED','target_audit',
+                'Set the existing target audit schema; no audit table or schema is created automatically.'))
+        plan.unresolved.append(finding('TARGET_AUDIT_REPLACEMENT_REVIEW','target_audit',
+            'Target auditing is enabled. Only recognized or explicitly configured source audit operations are replaced; review source dispositions and business key bridges.',severity='WARNING'))
+        if root_event_refs & replaced_audits and root_event_refs-replaced_audits:
+            plan.unresolved.append(finding('TARGET_AUDIT_RECOVERY_CONTROL_REVIEW','target_audit',
+                'The source handler mixes replaced auditing with recovery work. Preserve/review its control semantics before execution.'))
     if flat_handler and not (root_event_refs & set(cycles)):
-        active=[r for r in order if r in root_event_refs and not disabled(r)]
-        if active and len(active)!=len(root_event_refs):
-            plan.unresolved.append(finding('EVENT_DISABLED_TASK_REVIEW_REQUIRED','Package.EventHandlers[OnError]',
+        active=[r for r in order if r in root_event_refs and r not in replaced_audits and not disabled(r)]
+        if active and len(active)!=len(root_event_refs-replaced_audits):
+            plan.unresolved.append(finding('EVENT_DISABLED_TASK_REVIEW_REQUIRED',root_error_scope,
                 'Mixed enabled/disabled event tasks need explicit constraint-outcome review.'))
             active=[]
         if active:
@@ -147,10 +167,10 @@ def build_graph_plan(context, config):
                     for ref in ready:event_deps.pop(ref)
                     for parents in event_deps.values():parents.difference_update(ready)
                 runtime.adopt(candidate)
-                handler={'scope':'Package.EventHandlers[OnError]','source_ids':active,'edges':edges}
+                handler={'scope':root_error_scope,'source_ids':active,'edges':edges}
                 plan.unresolved.append(finding('EVENT_PROPAGATION_REVIEW_REQUIRED',package.package_name or 'package',
                     'Package OnError runs once per failed notebook step. Review SSIS propagation and supply target error-class mappings.',severity='WARNING'))
-            except ConversionGap as exc:plan.unresolved.append(finding(exc.code,'Package.EventHandlers[OnError]',str(exc)))
+            except ConversionGap as exc:plan.unresolved.append(finding(exc.code,root_error_scope,str(exc)))
     waves = {key:set(values) for key,values in deps.items()}
     while waves:
         ready = {key for key,values in waves.items() if not values}
@@ -182,14 +202,18 @@ def build_graph_plan(context, config):
         connection = props.get('connection_manager_ref_id') or props.get('Connection')
         connection = context.metadata.get('connection_aliases', {}).get(connection, connection)
         sql_source = props.get('SqlStatementSource')
-        procedures, bodies = procedure_references(sql_source, connection, context) if sql_source and not is_disabled else ([], {})
+        is_replaced=origin in replaced_audits
+        procedures, bodies = procedure_references(sql_source, connection, context) if sql_source and not is_disabled and not is_replaced else ([], {})
         handler_step=handler is not None and origin in handler['source_ids']
         is_mail='sendmailtask' in kind
-        if not is_disabled and exe.properties.get('_property_expressions') and not is_mail:
+        if not is_disabled and not is_replaced and exe.properties.get('_property_expressions') and not is_mail:
             findings.append(finding('DYNAMIC_EXECUTABLE_PROPERTY',origin,'Executable property expressions require typed evaluation.'))
-        if not is_disabled and event_scope(origin) and not handler_step:
+        if not is_disabled and not is_replaced and event_scope(origin) and not handler_step:
             findings.append(finding('EVENT_HANDLER_UNSUPPORTED',origin,'Event handler execution semantics require review.'))
-        if is_disabled or barrier or sequence(exe):
+        if is_replaced:
+            task_type='TARGET_AUDIT_REPLACED'
+            ops=[{'operation_id':origin,'operation_type':'AUDIT_REPLACED','order':0,'code':f'_completed_{sid} = True'}]
+        elif is_disabled or barrier or sequence(exe):
             task_type = 'DISABLED' if is_disabled else 'SEQUENCE_COMPLETE' if barrier else 'SEQUENCE_START'
             ops = [{'operation_id':ref,'operation_type':'STRUCTURAL','order':0,'code':f'_completed_{sid} = True'}]
         elif event_scope(origin) and not handler_step:
@@ -280,6 +304,15 @@ def build_graph_plan(context, config):
                 findings.append(finding('EXECUTION_OVERRIDE_UNSUPPORTED',origin,'Forced execution outcomes/values require explicit translation.',evidence=key))
         if not is_disabled and str(attrs.get('TransactionOption','')) in {'2','Required'}:
             findings.append(finding('TRANSACTION_SEMANTICS_UNSUPPORTED',origin,'Required transaction semantics are not implemented.'))
+        if audit_plan is not None and not is_replaced:
+            aliases=package.metadata.get('connection_aliases',{})
+            def audit_connection(ref):return aliases.get(ref,aliases.get(str(ref).strip('{}').casefold(),ref))
+            audit_objects={(t['connection'],t['source_object']) for t in audit_plan['audit_table_contracts']}
+            if any(u.get('role') in {'target','destination'} and
+                   (audit_connection(u.get('connection_reference')),normalize_name(u['source'],config.default_schema)) in audit_objects for u in mapping_uses):
+                findings.append(finding('SOURCE_AUDIT_IN_BUSINESS_TASK',origin,
+                    'Business work contains a source-audit write. Separate or adapt that embedded audit logic; the whole business task is retained as pending.'))
+                ops=[]
         if findings or not ops:
             if not ops: task_type = 'REVIEW_ONLY'
             if not ops:
@@ -292,12 +325,14 @@ def build_graph_plan(context, config):
         metadata = {'source_ref_id':origin,'source_scope':parent[origin], 'mapping_uses':mapping_uses,
                     'migration_strategy':{'strategy':'DETERMINISTIC' if not findings else 'REVIEW_REQUIRED'},
                     'graph_node_id':ref, 'event_handler_scope':event_scope(origin), 'source_description':exe.description or ''}
+        if is_replaced:metadata['audit_replacement']=next(r for r in audit_plan['replacements'] if r['source_id']==origin)
         plan.steps.append(MigrationStep(step_id=sid,name=exe.name or origin,step_type=task_type,
             dependencies=[step_id(d) for d in sorted(deps[ref])],metadata=metadata))
         plan.metadata['operations_by_step'][sid] = ops
         if not barrier:
             plan.metadata['source_inventory'].append({'source_id':origin,'name':exe.name,'kind':'CONTAINER' if sequence(exe) or children[origin] else 'TASK',
-                'step_id':sid,'disposition':'DISABLED' if is_disabled else 'REVIEW_ONLY' if findings else 'PLANNED_CANDIDATE'})
+                'step_id':sid,'disposition':'DISABLED' if is_disabled else 'REVIEW_ONLY' if findings else 'PLANNED_CANDIDATE',
+                'audit_disposition':'REPLACED_BY_TARGET_FRAMEWORK' if is_replaced else None})
         if origin in flows and not barrier:
             flow=flows[origin]
             for component in flow.components:
@@ -340,8 +375,26 @@ def build_graph_plan(context, config):
         if use.get('layer') and config.layer.casefold() not in {'unspecified','multi-layer','multilayer',use['layer'].casefold()}:
             plan.unresolved.append(finding('LAYER_CONTEXT_CONFLICT',use['mapping_key'],'Mapped output layer conflicts with package layer context.'))
     plan.metadata['execution_model'] = 'serialized_topological'
+    if audit_plan is not None:
+        from ssis_migration.audit_replacement import bridge_values
+        bridges,issues=bridge_values(package,audit_plan,config,runtime,disabled)
+        audit_plan['value_bindings']=bridges
+        audit_plan['catalog']=config.audit_catalog or config.catalog
+        audit_plan['schema']=config.audit_schema or '__pending_audit_schema__'
+        audit_plan['storage_contract']=config.audit_contract
+        audit_plan['capture_table_stats']=config.audit_capture_table_stats
+        audit_plan['adapter']={'implementation':'native_storage_contract','shared_library_imported':False,
+            'root_key_allocation':'positive UUID-derived Int64','attached_execution':'one existing Running record',
+            'success_exit_protocol':'[$OK][$STR]'}
+        write_refs={o['operation_id'] for group in plan.metadata['operations_by_step'].values() for o in group
+            if o.get('operation_type') in {'NATIVE_SQL','NATIVE_BOUND_SQL','NATIVE_PROCEDURE_BODY','NATIVE_DESTINATION_WRITE'}}
+        audit_plan['stats_targets']=sorted({u['target'] for u in targets if u['resolution']!='PLACEHOLDER' and u['source_id'] in write_refs})
+        for code,ref,message in issues:plan.unresolved.append(finding(code,ref,message))
+        for key in set(config.audit_value_bindings)-{b['key'] for b in bridges}:
+            plan.unresolved.append(finding('AUDIT_VALUE_BINDING_UNUSED',key,'Audit value binding does not match a replaced source value consumed by business SQL.'))
+        plan.metadata['target_audit']=audit_plan
     for exe in package.executables:
-        if disabled(exe.ref_id):continue
+        if disabled(exe.ref_id) or exe.ref_id in replaced_audits:continue
         for binding in exe.properties.get('result_bindings',[]):
             try:
                 key,_=runtime.fork().variable(binding.get('DtsVariableName'),exe.ref_id,write=True)
@@ -356,11 +409,11 @@ def build_graph_plan(context, config):
                 runtime.inputs[key]['origin']='error_code_mapping' if key=='System::ErrorCode' else 'failure_context'
     for key,record in runtime.inputs.items():
         record['required_external_input']=bool(record.get('read') and not record.get('derived') and key not in runtime.defaults
-            and record.get('origin') not in {'source_result','failure_context','error_code_mapping'})
+            and record.get('origin') not in {'source_result','failure_context','error_code_mapping','target_audit_notebook_key'})
     plan.metadata['runtime_variables'] = list(runtime.inputs.values())
     plan.metadata['runtime_defaults'] = runtime.defaults
     plan.metadata['runtime_derived_expressions'] = runtime.derived
-    plan.metadata['requires_shared_runtime_state'] = bool(runtime.inputs) or handler is not None
+    plan.metadata['requires_shared_runtime_state'] = bool(runtime.inputs) or handler is not None or audit_plan is not None
     if handler:plan.metadata['package_error_handler']=handler
     if plan.metadata['requires_shared_runtime_state']: plan.metadata['minimum_binding_runtime'] = 'Spark 3.4+ / Databricks native named SQL arguments'
     plan.metadata['mapping_uses'] = uses

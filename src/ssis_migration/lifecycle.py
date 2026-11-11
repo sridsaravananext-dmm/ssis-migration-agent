@@ -11,10 +11,11 @@ def file_record(path):
     return {'name': path.name, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def input_manifest(package, procedures, ddls, mapping, base, config, *, ai, ai_provider):
+def input_manifest(package, procedures, ddls, mapping, base, config, *, ai, ai_provider, references=()):
     records = {'package': file_record(package),
                'procedures': sorted([file_record(p) for p in procedures], key=lambda x: (x['name'], x['sha256'])),
                'ddl': sorted([file_record(p) for p in ddls], key=lambda x: (x['name'], x['sha256'])),
+               'references': sorted([file_record(p) for p in references], key=lambda x: (x['name'],x['sha256'])),
                'connection_mapping': file_record(mapping) if mapping else None,
                'database_metadata': [], 'configuration': config.to_dict(),
                'ai': {'enabled': ai, 'provider': ai_provider}, 'engine_sha256': engine_hash()}

@@ -146,6 +146,7 @@ class SSISPackageParser:
             parent_ref = None
             event_scope = False
             event_attributes = {}
+            event_scope_ref=None
             lexical_scopes=[attrs.get('refId')] if attrs.get('refId') else []
             while ancestor is not None:
                 if local_name(ancestor.tag).lower() in {'executable','eventhandler'}:
@@ -153,14 +154,23 @@ class SSISPackageParser:
                     if scope_ref:lexical_scopes.append(scope_ref)
                 if local_name(ancestor.tag).lower() == "eventhandler":
                     event_scope = True
-                    if not event_attributes:event_attributes=self._attributes(ancestor)
+                    if not event_attributes:
+                        event_attributes=self._attributes(ancestor)
+                        event_scope_ref=event_attributes.get('refId')
+                        owner=parents.get(ancestor)
+                        while owner is not None and local_name(owner.tag).lower()!='executable':owner=parents.get(owner)
+                        owner_ref=self._get_attribute(owner,'refId') if owner is not None else None
+                        event_name=event_attributes.get('EventName')
+                        if owner_ref and event_name:event_scope_ref=owner_ref+'.EventHandlers['+event_name+']'
                 if parent_ref is None and local_name(ancestor.tag).lower() == "executable":
                     parent_ref = self._get_attribute(ancestor, "refId")
                 ancestor = parents.get(ancestor)
             parsed["properties"]["_parent_ref_id"] = parent_ref
             parsed["properties"]["_event_handler"] = event_scope
             parsed["properties"]["_event_handler_attributes"] = event_attributes
+            parsed['properties']['_event_handler_scope']=event_scope_ref
             parsed['properties']['_lexical_scopes']=lexical_scopes
+            parsed['_is_package_root']=element is self.root
             expressions = []
             for child in element:
                 if local_name(child.tag).lower() == "propertyexpression":
