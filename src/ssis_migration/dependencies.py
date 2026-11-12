@@ -73,7 +73,9 @@ def dependency_findings(context):
         if disabled(exe.ref_id) or exe.ref_id in context.metadata.get('excluded_dependency_sources',set()): continue
         if 'executesqltask' in (exe.executable_type or exe.creation_name or '').casefold():
             props=exe.properties;sql=props.get('SqlStatementSource')
-            if str(props.get('SqlStatementSourceType','DirectInput')) not in {'0','DirectInput'}:sql=None
+            if str(props.get('SqlStatementSourceType','DirectInput')) not in {'0','DirectInput'}:
+                if exe.ref_id in context.metadata.get('compiled_variable_tasks',{}):continue
+                sql=None
             inspect(exe.ref_id or f'executable:{index}',sql,props.get('connection_manager_ref_id') or props.get('Connection'),True)
     for flow in package.data_flows:
         if disabled(flow.ref_id): continue

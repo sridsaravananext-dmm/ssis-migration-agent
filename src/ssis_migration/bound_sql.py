@@ -78,6 +78,7 @@ class BindingContext:
         if previous:
             record.update(read=previous.get('read',False) or not write, write=previous.get('write',False) or write,
                 numeric_fragment=previous.get('numeric_fragment',False))
+            if 'fixed_sql_text' in previous:record['fixed_sql_text']=previous['fixed_sql_text']
         self.inputs[key] = record
         if reference.startswith('User::') and context['status']!='SENSITIVE_REDACTED' and context.get('expression') and context.get('evaluate_as_expression') is not False:
             if context.get('evaluate_as_expression') is not True:
@@ -178,15 +179,20 @@ def relational_batch(sql):
         raise ConversionGap('SQL_PARSE_FAILED', str(original)) from original
 
 
-def bound_task(properties, owner, connection, config, runtime):
-    parent_runtime, runtime = runtime, runtime.fork()
-    sql = properties.get('SqlStatementSource') or ''
+def result_bindings(properties):
     results = properties.get('result_bindings', [])
     result_type = str(properties.get('ResultType','ResultSetType_None'))
     if result_type not in {'','0','None','ResultSetType_None','1','ResultSetType_SingleRow'}:
         raise ConversionGap('SQL_BINDINGS_UNSUPPORTED', 'Full result sets and XML bindings require separate translation.')
     if bool(results) != (result_type in {'1','ResultSetType_SingleRow'}):
         raise ConversionGap('SQL_BINDINGS_UNSUPPORTED', 'Single-row result mode must have explicit ordinal bindings.')
+    return results
+
+
+def bound_task(properties, owner, connection, config, runtime):
+    parent_runtime, runtime = runtime, runtime.fork()
+    sql = properties.get('SqlStatementSource') or ''
+    results = result_bindings(properties)
     dynamic = re.fullmatch(r"\s*exec(?:ute)?\s*\(\s*'SELECT\s+Count\(\*\)\s+FROM\s+'\s*\+\s*@([A-Za-z_]\w*)\s*\)\s*;?\s*", sql, re.I)
     guards = []
     if dynamic:
@@ -250,7 +256,7 @@ def variable_query(context, owner, connection, config, runtime):
             except ValueError as exc: raise ConversionGap('VARIABLE_SQL_REVIEW_REQUIRED', 'Unsupported SSIS string escape.') from exc
         else:
             marker = 'ssis_p' + str(len(arguments))
-            arguments[marker] = runtime.read(match[2], owner, numeric=True)
+            arguments[marker] = runtime.read(match[2], context.get('scope_ref_id') or owner, numeric=True)
             parts.append(':' + marker)
         pos=match.end(); expect_value=False
     if expect_value or not parts:

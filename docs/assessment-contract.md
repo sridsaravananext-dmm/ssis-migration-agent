@@ -59,6 +59,8 @@ Initial-value requirements use emitted variable reads/writes and transitive task
 
 Notebook review text displays blocking findings separately from warnings and lists required typed initial values without inventing business defaults. Shared graph notebooks summarize structural markers and audit replacements in tables instead of emitting repeated marker cells. Per-step/nonshared notebooks retain their executable control cells. Source inventories, coverage denominators, graph edges, and pending implementations are retained independently of notebook presentation.
 
+Variable Execute SQL Tasks can compile one supported query with explicit ordinal single-row results from an active string expression template or captured non-expression String declaration. Expression templates bind numeric values in declaration scope; captured queries support named task input bindings and reject changed text before writes. Known writes to captured SQL variables remain blockers. Compilation evidence clears only that task's generic missing-static-SQL finding. Dynamic procedures, changing SQL structures, write batches, unsupported result modes, and unresolved declarations stay pending. See [source-graph.md](source-graph.md#variable-execute-sql-tasks) for the exact boundary.
+
 ## Source-preserving development update
 
 The graph planner now generates guarded inserts into existing mapped tables for captured OLE DB table/FastLoad destinations, matches bounded procedure arguments to formals, and evaluates supported scalar variable expressions from current runtime state. The generated scalar helpers are ordinary Python functions. Spark/Pandas UDFs remain prohibited.

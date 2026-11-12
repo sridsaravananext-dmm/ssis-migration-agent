@@ -50,6 +50,9 @@ def annotate_initial_values(plan, runtime):
 def preflight_code(variables,derived=None):
     required=[{'key':r['key'],'kind':r['kind'],'numeric':bool(r.get('numeric_fragment'))}
         for r in variables if r.get('initial_value_required',r.get('required_external_input'))]
+    fixed={r['key']:r['fixed_sql_text'] for r in variables if 'fixed_sql_text' in r}
+    for r in required:
+        if r['key'] in fixed:r['fixed_sql_text']=fixed[r['key']]
     initial={r['key'] for r in required};checks=[]
     for record in variables:
         expression=(derived or {}).get(record['key'])
@@ -70,6 +73,9 @@ for _ssis_input in '''+repr(required)+''':
         _ssis_checked_input = _ssis_value(_ssis_key, _ssis_input['kind'])
         if _ssis_input['numeric']:
             _ssis_numeric(_ssis_checked_input)
+        if 'fixed_sql_text' in _ssis_input and _ssis_checked_input != _ssis_input['fixed_sql_text']:
+            _ssis_input_errors.append(_ssis_key + ': captured SQL changed; regenerate before execution')
+            continue
     except Exception:
         _ssis_input_errors.append(_ssis_key + ': invalid ' + _ssis_input['kind'] + (' / numeric SQL value' if _ssis_input['numeric'] else ' value'))
 '''

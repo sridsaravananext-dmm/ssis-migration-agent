@@ -7,6 +7,7 @@ from ssis_migration.bound_sql import BindingContext,relational_batch
 from ssis_migration.mapping import ConversionGap
 from ssis_migration.sql_text import normalize_name,mask_sql,CALL
 from ssis_migration.audit_contract import source_rules
+from ssis_migration.source_context import output_references
 
 
 SIGNATURES={
@@ -55,17 +56,6 @@ def notification_call(sql):
     if not match:return False
     tail=clean[match.end():].strip().removesuffix(';')
     return not re.search(r';|\b(?:SELECT|INSERT|UPDATE|DELETE|MERGE|EXEC|DROP|ALTER|CREATE)\b',tail,re.I)
-
-
-def output_references(exe,extra=()):
-    props=exe.properties
-    refs={b.get('DtsVariableName') for b in props.get('result_bindings',[])}
-    refs.update(b.get('DtsVariableName') for b in props.get('parameter_bindings',[]) if str(b.get('ParameterDirection','Input')) in {'Output','InputOutput','ReturnValue','2','3','4'})
-    refs.update(v.strip() for v in props.get('ReadWriteVariables','').split(',') if v.strip())
-    match=re.match(r'\s*@\[([^\]]+)\]\s*=(?!=)',props.get('Expression') or '')
-    if match:refs.add(match[1])
-    refs.update(extra)
-    return {r for r in refs if isinstance(r,str) and r}
 
 
 def select_replacements(package,config,disabled):
