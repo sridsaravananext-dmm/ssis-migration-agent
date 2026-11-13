@@ -112,6 +112,9 @@ def translate_procedure(call,definition,properties,owner,connection,config,runti
         if match[1].casefold() in replacements:edits.append((match.start(),match.end(),replacements[match[1].casefold()]))
     for a,b,value in reversed(edits):body=body[:a]+value+body[b:]
     rewritten={**properties,'SqlStatementSource':body,'parameter_bindings':bindings}
-    code,uses,evidence=bound_task(rewritten,owner,connection,config,runtime)
+    if re.search(r'\b(?:DECLARE|SET|IF)\b',bindable_sql(body),re.I):
+        from ssis_migration.procedure_program import compile_program
+        code,uses,evidence=compile_program(body,rewritten,owner,connection,config,runtime)
+    else:code,uses,evidence=bound_task(rewritten,owner,connection,config,runtime)
     evidence['procedure_parameters']=formals
     return code,uses,evidence

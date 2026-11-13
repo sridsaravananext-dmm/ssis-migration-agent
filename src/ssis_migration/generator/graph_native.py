@@ -165,7 +165,7 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None, 
 
             linked = [state[inbound[p['ref_id']]] for p in comp.inputs if p.get('ref_id') in inbound and inbound[p['ref_id']] in state]
             actual_inputs = [p for p in comp.inputs if p.get('ref_id') in inbound]
-            if comp.detected_type != 'OLE_DB_SOURCE' and (len(actual_inputs) != 1 or len(linked) != 1 or len(comp.inputs) != 1):
+            if comp.detected_type not in {'OLE_DB_SOURCE','UNION_ALL','MERGE_JOIN'} and (len(actual_inputs) != 1 or len(linked) != 1 or len(comp.inputs) != 1):
                 raise ConversionGap('DATAFLOW_INPUT_UNSUPPORTED', 'This component requires a single resolved input; multi-input semantics are not inferred.')
             if comp.detected_type == 'OLE_DB_SOURCE':
                 if comp.inputs or len(ports) != 1: raise ConversionGap('DATAFLOW_SOURCE_UNSUPPORTED', 'Source must have one normal output and no inputs.')
@@ -197,6 +197,38 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None, 
                 code.append(f'{name} = {call}')
                 code.append(f'{name} = {name}.select(*[F.col("`" + c.replace("`", "``") + "`") for c in {cols!r}])')
                 state[port['ref_id']] = (name, cols, lineage)
+            elif comp.detected_type in {'UNION_ALL','AGGREGATE','MERGE_JOIN'}:
+                from ssis_migration.generator.graph_transforms import union_all,aggregate,merge_join
+                if len(ports)!=1:raise ConversionGap('DATAFLOW_COMPONENT_UNSUPPORTED','Transform requires one explicit output.')
+                name=variable(ports[0]['ref_id'])
+                if comp.detected_type=='UNION_ALL':emitted,result=union_all(comp,linked,ports[0],name)
+                elif comp.detected_type=='MERGE_JOIN':emitted,result=merge_join(comp,linked,ports[0],name)
+                else:emitted,result=aggregate(comp,linked[0],ports[0],name)
+                code.extend(emitted);state[ports[0]['ref_id']]=result
+                findings.append(finding('TRANSFORM_RUNTIME_REVIEW',ref,'Verify captured aggregation/union types, source NULLs, and target overflow behavior.',severity='WARNING'))
+            elif comp.detected_type=='LOOKUP':
+                from ssis_migration.generator.graph_transforms import lookup
+                emitted,result,match_port,uses=lookup(comp,linked[0],ports,variable(ref),canonical(comp),config)
+                if any(p['ref_id'] in outbound and p is not match_port for p in ports):
+                    raise ConversionGap('LOOKUP_ROUTING_UNSUPPORTED','Connected non-match lookup outputs require explicit routing.')
+                code.extend(emitted);state[match_port['ref_id']]=result
+                mapping_uses.extend({**u,'source_id':ref} for u in uses)
+                findings.append(finding('LOOKUP_RUNTIME_REVIEW',ref,'Native lookup requires unique reference keys and compatible captured types; duplicate/non-match behavior is checked at runtime.',severity='WARNING'))
+            elif comp.detected_type in {'SORT','DATA_CONVERSION','ROW_COUNT'}:
+                if len(ports)!=1:raise ConversionGap('DATAFLOW_COMPONENT_UNSUPPORTED','Transform requires one normal output.')
+                name=variable(ports[0]['ref_id'])
+                if comp.detected_type=='ROW_COUNT':
+                    if runtime is None:raise ConversionGap('VARIABLE_BINDING_UNRESOLVED','Row Count requires package variable context.')
+                    candidate=runtime.fork();key,kind=candidate.variable(comp.properties.get('VariableName'),flow.ref_id,write=True)
+                    if kind not in {'int32','int64'}:raise ConversionGap('VARIABLE_BINDING_UNRESOLVED','Row Count needs a captured Int32/Int64 variable.')
+                    source,cols,lineage=linked[0]
+                    code += [f'_ssis_values[{key!r}] = _ssis_coerce({source}.count(), {kind!r})',name+' = '+source]
+                    runtime.adopt(candidate);state[ports[0]['ref_id']]=(name,list(cols),dict(lineage))
+                    findings.append(finding('ROW_COUNT_ACTION_REVIEW',ref,'Distributed count adds a source action; validate source determinism/snapshot behavior.',severity='WARNING'))
+                else:
+                    from ssis_migration.generator.graph_transforms import sort,conversion
+                    emitted,result=(sort if comp.detected_type=='SORT' else conversion)(comp,linked[0],ports[0],name)
+                    code.extend(emitted);state[ports[0]['ref_id']]=result
             elif comp.detected_type == 'MULTICAST':
                 source, cols, lineage = linked[0]
                 if any(c.get('name') not in cols for p in ports for c in p.get('columns',[])):
@@ -279,7 +311,12 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None, 
             for port in comp.outputs:
                 if truth(port.get('attributes', {}).get('isErrorOut', False)) and port.get('ref_id') in outbound:
                     raise ConversionGap('ERROR_ROUTING_UNSUPPORTED', 'Connected error output needs explicit implementation.')
+            for port in comp.outputs:
+                if port.get('ref_id') in state:
+                    lineage=state[port['ref_id']][2]
+                    lineage.update({'#'+str(k):v for k,v in list(lineage.items()) if str(k).isdigit()})
             operations.append({'operation_id': ref, 'operation_type':'NATIVE_DESTINATION_WRITE' if comp.detected_type == 'OLE_DB_DESTINATION' and write_enabled else 'NATIVE_DATAFRAME', 'order':len(operations),
+                               'persists_frame':comp.detected_type=='LOOKUP',
                                'code':'from pyspark.sql import functions as F\n' + '\n'.join(code)})
         except (ConversionGap, KeyError, ValueError) as exc:
             if ref in compiled_sources: compiled_sources.remove(ref)
@@ -293,7 +330,13 @@ def dataflow_operations(flow, config, connection_aliases=None, *, package=None, 
                     '_target_proposals':[use for use in mapping_uses if use.get('source_id') == ref]})
             pending['order'] = len(operations)
             operations.append(pending)
+    cleanup=any(o.get('persists_frame') for o in operations)
+    if cleanup and operations:operations[0]['code']='_ssis_cached_frames = []\n'+operations[0]['code']
     graph = {'components':[{'source_id':ref,'type':components[ref].detected_type} for ref in components],
+             'requires_cache_cleanup':cleanup,
              'edges':edges,'order':ordered,'cycles':cycles,'mapping_uses':mapping_uses,
              'compiled_variable_sources':compiled_sources, 'variable_contexts':variable_contexts}
+    graph['spark_settings']={'spark.sql.ansi.enabled':'true'} if any(
+        c.detected_type=='AGGREGATE' and any(str(v.get('properties',{}).get('AggregationType'))=='4' for p in c.outputs for v in p.get('columns',[]))
+        for c in components.values()) else {}
     return operations, findings, graph

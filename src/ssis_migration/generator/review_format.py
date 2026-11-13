@@ -20,7 +20,8 @@ def overview(plan):
         result+='\n### Required runtime inputs\n\nSet `ssis_runtime_values` with values of the declared types. Bare numeric SQL references need numeric text/numbers as declared; date/timezone and business-key meaning still require review.\n\n'
         result+='| Key | Type | Additional constraint |\n| --- | --- | --- |\n'
         for row in required:
-            result+=f"| {text(row['key'])} | {text(row['kind'])} | {'numeric SQL value' if row.get('numeric_fragment') else 'source semantics'} |\n"
+            constraint='IANA source timezone' if row.get('timezone') else 'numeric SQL value' if row.get('numeric_fragment') else 'source semantics'
+            result+=f"| {text(row['key'])} | {text(row['kind'])} | {constraint} |\n"
         result+='\nInput template — replace every null with a reviewed typed value; this template is not runnable:\n\n```json\n'+json.dumps({r['key']:None for r in required},indent=2,ensure_ascii=False)+'\n```\n'
     return result
 

@@ -191,7 +191,7 @@ def test_split_without_rule_order_is_not_guessed():
 def test_unsupported_transform_does_not_feed_downstream_first_source():
     flow=routing_flow();next(c for c in flow.components if c.ref_id=='X').detected_type='LOOKUP'
     ops,findings,_=dataflow_operations(flow,routing_config())
-    assert any(f['code']=='TRANSFORMATION_UNSUPPORTED' for f in findings)
+    assert any(f['code']=='LOOKUP_OUTPUT_UNRESOLVED' for f in findings)
     assert not any(o['operation_id']=='A' and o['operation_type']=='NATIVE_DATAFRAME' for o in ops)
 
 
@@ -340,7 +340,7 @@ def test_multiple_sources_are_kept_separate_when_join_is_unsupported():
     flow=DataFlowIR(ref_id='DF',components=[join,b,a],paths=[{'start_id':'A:o','end_id':'J:left'},{'start_id':'B:o','end_id':'J:right'}])
     ops,findings,graph=dataflow_operations(flow,AssessmentConfig(object_mappings={'dbo.A':'c.s.A','dbo.B':'c.s.B'}))
     assert sum(o['operation_type']=='NATIVE_DATAFRAME' for o in ops)==2
-    assert any(f['code']=='DATAFLOW_INPUT_UNSUPPORTED' for f in findings)
+    assert any(f['code']=='JOIN_MAPPING_REQUIRED' for f in findings)
     assert len(graph['edges'])==2
 
 

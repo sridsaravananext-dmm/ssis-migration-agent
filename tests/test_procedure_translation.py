@@ -45,7 +45,7 @@ def test_named_arguments_defaults_and_literal_commas_are_parsed_without_runtime_
     ('EXEC dbo.P 1','CREATE PROC dbo.P @x int OUTPUT AS SELECT @x'),
     ('EXEC dbo.P 1','CREATE PROC dbo.P @x dbo.CustomType AS SELECT @x'),
     ('EXEC dbo.P GETDATE()','CREATE PROC dbo.P @x datetime AS SELECT @x'),
-    ('EXEC dbo.P 1','CREATE PROC dbo.P @x int AS DECLARE @local int; SELECT @x'),
+    ('EXEC dbo.P 1','CREATE PROC dbo.P @x int AS WHILE @x > 0 SET @x=@x-1; SELECT @x'),
 ])
 def test_unsupported_procedure_semantics_remain_explicit_gaps(call,definition):
     state=runtime()

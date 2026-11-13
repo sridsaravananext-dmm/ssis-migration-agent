@@ -86,5 +86,5 @@ def test_expression_tasks_assign_shared_state_without_row_udfs(tmp_path):
 def test_unsupported_expression_assignment_preserves_no_partial_runtime_state():
     from ssis_migration.scalar_expressions import assignment_code
     runtime=BindingContext(PackageIR(variables=[VariableIR(name='Date',namespace='User',scope_ref_id='Package',data_type='7')]))
-    with pytest.raises(ConversionGap):assignment_code('@[User::Date] = GETDATE()','Package',runtime)
+    with pytest.raises(ConversionGap):assignment_code('@[User::Date] = UNKNOWNDATE()','Package',runtime)
     assert not runtime.inputs

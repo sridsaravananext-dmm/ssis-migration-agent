@@ -159,7 +159,11 @@ class SSISPipelineParser:
         ).lower()
 
         combined = class_id + " " + description
-        component['properties']['_type_evidence'] = 'class_id' if class_id.startswith('microsoft.') else 'description'
+        from ssis_migration.parser.component_ids import CLASS_IDS
+        if class_id in CLASS_IDS:
+            component['properties']['_type_evidence']='class_id'
+            return CLASS_IDS[class_id]
+        component['properties']['_type_evidence']='description'
 
 
         if "oledbdestination" in combined:
@@ -186,6 +190,12 @@ class SSISPipelineParser:
             return "MERGE_JOIN"
         if "unionall" in class_id:
             return "UNION_ALL"
+        if class_id == 'microsoft.sort':
+            return 'SORT'
+        if class_id == 'microsoft.rowcount':
+            return 'ROW_COUNT'
+        if class_id in {'microsoft.dataconvert','microsoft.dataconversion'}:
+            return 'DATA_CONVERSION'
         if "aggregate" in combined:
             return "AGGREGATE"
 

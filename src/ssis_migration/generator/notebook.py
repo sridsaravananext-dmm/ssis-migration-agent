@@ -138,6 +138,8 @@ class NotebookAssembler:
             rows = []
             for item in plan_dict['metadata'].get('runtime_variables', []):
                 origin = {'failure_context':'supplied by package OnError handler',
+                    'optional_source_clock':'optional replay clock (ISO timestamp with UTC offset)',
+                    'source_clock':'explicit IANA source timezone for local clock expressions',
                     'error_code_mapping':'mapped from target error class through ssis_error_codes',
                     'target_audit_bridge':'explicit business value bridge from replaced source auditing',
                     'target_audit_notebook_key':'assigned from target Int64 notebook execution key',
@@ -148,6 +150,11 @@ class NotebookAssembler:
             cells.append(self._markdown_cell('## Native runtime bindings\n\n'
                 'Use the `ssis_runtime_values` JSON widget for external inputs. Bound variables share one notebook run '
                 '(`step_id=all`). Source NULL, timezone, and provider conversions still require review.\n\n' + '\n'.join(rows)))
+        for requirement in plan_dict.get('metadata',{}).get('spark_requirements',[]):
+            cells.append(self._code_cell(
+                f"if _step_id in ('all', {requirement['step_id']!r}) and spark.conf.get({requirement['setting']!r}).lower() != {requirement['value']!r}:\n"
+                f"    raise RuntimeError({('Required Spark setting before writes: '+requirement['setting']+'='+requirement['value'])!r})"))
+            cells[-1]['metadata']['ssis_migration']={'role':'spark_preflight'}
         if plan_dict.get('metadata',{}).get('package_error_handler'):
             from ssis_migration.event_handlers import handler_setup
             cells.append(self._markdown_cell('## Package OnError handler\n\n'
@@ -338,10 +345,17 @@ class NotebookAssembler:
                             f"{op_code}\n"
                         )
 
+                    body="\n\n".join(code_blocks)
+                    if metadata.get('requires_cache_cleanup'):
+                        body='\n'.join(['_ssis_cached_frames = []','_ssis_cache_cleanup_errors = []','try:']+['    '+s if s.strip() else '' for s in body.splitlines()]+[
+                            'finally:', '    for _ssis_cached in _ssis_cached_frames:',
+                            '        try:', '            _ssis_cached.unpersist(blocking=True)',
+                            '        except Exception as _ssis_cleanup_error:',
+                            '            _ssis_cache_cleanup_errors.append(type(_ssis_cleanup_error).__name__)'])
                     cells.append(self._code_cell(
                         self._wrap_step_code(
                             step_id,
-                            "\n\n".join(code_blocks),
+                            body,
                             on_error=on_error,
                             target_audit=bool(plan_dict.get('metadata',{}).get('target_audit')),
                         )
