@@ -95,7 +95,7 @@ Variable-backed Execute SQL Tasks now support a bounded query-only path with exp
 
 Supported computed variables are evaluated from their source expressions at each read, using ordinary Python helpers. They do not become extra manual inputs or Spark/Pandas UDFs. The bounded subset includes typed additions, selected scalar casts, and UTF-16 SUBSTRING/LEFT/RIGHT. Captured non-sensitive, non-required package-parameter defaults are retained; required or sensitive values must be supplied externally. Unknown expressions remain pending.
 
-Expression Tasks capture their source Expression and support one assignment to a declared User variable using the same scalar subset. Unsupported functions, including GETDATE/DATEADD/DATEPART, retain the original expression in a named pending section. No cutoff clock or timezone policy is guessed.
+Expression Tasks capture their source Expression and support one assignment to a declared User variable using the same scalar subset. Bounded date functions now use an explicit source-clock contract; unsupported functions retain their source expressions in pending sections. No cutoff timezone policy is guessed. See [backend development](docs/backend-development.md#scalar-dates-and-clocks).
 
 Runtime binding records distinguish external inputs, captured defaults, derived expressions, source result producers, failure context, and audit value bridges. `required_external_input` identifies missing external values. Source mode retains source auditing; target mode records its replacement separately. Captured zero audit-count defaults are never presented as measured counts.
 
@@ -104,6 +104,8 @@ Generated graph notebooks show execution readiness, blocking codes, and a typed 
 Shared-state notebooks group replaced audit tasks and structural/disabled sections into review tables, keeping executable cells focused on business work. The complete source dispositions and dependencies remain in the diagnostic task graph; grouping does not alter business ordering or the runtime review gate. Missing procedure bodies remain named pending sections rather than commented-out success paths.
 
 ## Existing framework references
+
+The newer backend release adds bounded procedure local variables/IF blocks, explicit source clocks and date arithmetic, additional native graph transforms, dataset comparison, target inspection, persistent review history, and edited-notebook checks. See [backend capabilities and remaining work](docs/backend-development.md) for exact support boundaries, CLI examples, and the prioritized backlog. These additions do not establish universal SSIS or target-runtime equivalence.
 
 Use the frontend reference role or `--reference path/to/framework.zip` for target configuration, database-definition, and library notebooks. This role stays separate from SQL Server procedure/DDL inputs. Two similarly named cfg archives are classified per member by their contents. A database-definition notebook can contain DDL; it is still target reference evidence, not a source schema override.
 

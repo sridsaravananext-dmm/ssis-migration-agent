@@ -233,6 +233,7 @@ def build_graph_plan(context, config):
             ops, findings, graph = dataflow_operations(flows[origin],config,context.metadata.get("connection_aliases",{}), package=package, runtime=runtime)
             graph['task_id'] = sid
             plan.metadata['dataflow_graphs'].append(graph)
+            plan.metadata.setdefault('spark_requirements',[]).extend({'setting':k,'value':v,'step_id':sid,'source_id':origin} for k,v in graph.get('spark_settings',{}).items())
             mapping_uses = graph.get('mapping_uses',[])
             context.metadata.setdefault('compiled_variable_sources', set()).update(graph.get('compiled_variable_sources', []))
             task_type = 'NATIVE_DATA_FLOW'
@@ -334,6 +335,7 @@ def build_graph_plan(context, config):
         metadata = {'source_ref_id':origin,'source_scope':parent[origin], 'mapping_uses':mapping_uses,
                     'migration_strategy':{'strategy':'DETERMINISTIC' if not findings else 'REVIEW_REQUIRED'},
                     'graph_node_id':ref, 'event_handler_scope':event_scope(origin), 'source_description':exe.description or ''}
+        if origin in flows and any(op.get('persists_frame') for op in ops):metadata['requires_cache_cleanup']=True
         if is_replaced:metadata['audit_replacement']=next(r for r in audit_plan['replacements'] if r['source_id']==origin)
         plan.steps.append(MigrationStep(step_id=sid,name=exe.name or origin,step_type=task_type,
             dependencies=[step_id(d) for d in sorted(deps[ref])],metadata=metadata))

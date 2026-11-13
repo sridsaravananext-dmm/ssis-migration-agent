@@ -94,7 +94,7 @@ class BindingContext:
                         expression=self.read(ref,scope)
                         dependency_key,_=self.variable(ref,scope)
                         return expression,self.inputs[dependency_key]['kind']
-                    expression,_=compile_scalar(context['expression'],resolve)
+                    expression,_=compile_scalar(context['expression'],resolve,clock=self.source_clock)
                     self.derived[key]=expression
                 finally:self.deriving.discard(key)
             self.inputs[key]['derived']=True
@@ -106,6 +106,14 @@ class BindingContext:
         value = f'_ssis_value({key!r}, {kind!r})'
         if key in self.derived:value=f'_ssis_coerce({self.derived[key]}, {kind!r})'
         return f'_ssis_numeric({value})' if numeric else value
+
+    def source_clock(self,utc=False):
+        self.inputs['$Runtime::SourceClock']={'key':'$Runtime::SourceClock','reference':'$Runtime::SourceClock',
+            'kind':'string','read':False,'write':False,'clock_override':True,'origin':'optional_source_clock'}
+        if not utc:
+            self.inputs['$Runtime::SourceTimeZone']={'key':'$Runtime::SourceTimeZone','reference':'$Runtime::SourceTimeZone',
+                'kind':'string','read':True,'write':False,'timezone':True,'origin':'source_clock'}
+        return "_ssis_source_now('UTC')" if utc else '_ssis_source_now()'
 
 
 def require_targets(uses):
@@ -279,7 +287,9 @@ def runtime_setup(defaults):
 import re
 import math
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+import calendar
 _ssis_values = ''' + repr(defaults) + '''
 _ssis_supplied = json.loads(dbutils.widgets.get('ssis_runtime_values'))
 if not isinstance(_ssis_supplied, dict):
@@ -337,4 +347,37 @@ def _ssis_right(value, length):
     if length == 0: return ''
     size = len(value.encode('utf-16-le', 'surrogatepass')) // 2
     return _ssis_substring(value, max(1, size-length+1), length)
+
+def _ssis_source_now(zone=None):
+    zone = zone or _ssis_value('$Runtime::SourceTimeZone', 'string')
+    if '$Runtime::SourceClock' in _ssis_values:
+        return _ssis_source_clock_override().astimezone(ZoneInfo(zone)).replace(tzinfo=None)
+    return datetime.now(ZoneInfo(zone)).replace(tzinfo=None)
+
+def _ssis_source_clock_override():
+    value = _ssis_values['$Runtime::SourceClock']
+    if not isinstance(value,str): raise RuntimeError('Source clock must be an ISO timestamp with offset.')
+    value = datetime.fromisoformat(value)
+    if value.tzinfo is None: raise RuntimeError('Replay clock requires an explicit UTC offset.')
+    return value
+
+def _ssis_datepart(part, value):
+    value = _ssis_coerce(value, 'datetime')
+    parts = {'year':value.year, 'quarter':(value.month-1)//3+1, 'month':value.month,
+        'dayofyear':value.timetuple().tm_yday, 'day':value.day, 'hour':value.hour,
+        'minute':value.minute, 'second':value.second, 'millisecond':value.microsecond//1000}
+    if part not in parts: raise RuntimeError('Unsupported date part.')
+    return parts[part]
+
+def _ssis_dateadd(part, number, value):
+    value = _ssis_coerce(value, 'datetime')
+    number = _ssis_coerce(number, 'int32')
+    if part in ('year','quarter','month'):
+        months = number * {'year':12,'quarter':3,'month':1}[part]
+        year, month = divmod(value.year*12+value.month-1+months, 12)
+        if not 1 <= year <= 9999: raise RuntimeError('Date arithmetic overflow.')
+        return value.replace(year=year, month=month+1, day=min(value.day,calendar.monthrange(year,month+1)[1]))
+    units = {'day':'days','dayofyear':'days','hour':'hours','minute':'minutes','second':'seconds','millisecond':'milliseconds'}
+    if part not in units: raise RuntimeError('Unsupported date part.')
+    return value + timedelta(**{units[part]:number})
 '''

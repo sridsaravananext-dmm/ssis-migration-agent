@@ -181,3 +181,43 @@ def test_nonshared_per_step_notebooks_keep_control_cells():
         'name':'Container','metadata':{'source_ref_id':'S'}}]}
     n=NotebookAssembler().assemble(p,[],{'S':[{'operation_id':'S','operation_type':'STRUCTURAL','code':'_completed_S = True'}]})
     assert any('_completed_S' in ''.join(c['source']) for c in n['cells'] if c['cell_type']=='code')
+
+
+def test_lookup_resource_cleanup_does_not_mask_business_failure():
+    from ssis_migration.generator.notebook import NotebookAssembler
+    p={'package_name':'P','metadata':{'planner':'source_graph'},'steps':[{'step_id':'S','step_type':'NATIVE_DATA_FLOW','name':'Flow',
+        'metadata':{'source_ref_id':'S','requires_cache_cleanup':True}}]}
+    n=NotebookAssembler().assemble(p,[],{'S':[{'operation_id':'Lookup','operation_type':'NATIVE_DATAFRAME',
+        'code':"_ssis_cached_frames.append(_fake_cached)\nraise ValueError('original business failure')"}]})
+    cell=next(c for c in n['cells'] if c.get('metadata',{}).get('ssis_migration',{}).get('source_ref_id')=='S')
+    class Cached:
+        def unpersist(self,blocking):raise RuntimeError('cleanup failure')
+    data={'_step_id':'all','_fake_cached':Cached()}
+    with pytest.raises(ValueError,match='original business'):exec(''.join(cell['source']),data)
+    assert data['_ssis_cache_cleanup_errors']==['RuntimeError']
+
+
+@pytest.mark.parametrize('values',[{}, {'$Runtime::SourceTimeZone':'Invalid/Zone'},
+    {'$Runtime::SourceTimeZone':'UTC','$Runtime::SourceClock':'2026-11-13T12:00:00'}])
+def test_source_clock_policy_is_validated_before_truncate(tmp_path,values):
+    truncate=task('truncate','TRUNCATE TABLE dbo.Business')
+    clock=ExecutableIR(ref_id='clock',executable_type='Microsoft.ExpressionTask',properties={'Expression':'@[User::Date] = GETDATE()'})
+    ir=PackageIR(package_name='Synthetic',variables=[VariableIR(name='Date',namespace='User',scope_ref_id='Package',data_type='7')],
+        executables=[truncate,clock],precedence_constraints=chain(truncate,clock))
+    _,n=generate(ir,tmp_path)
+    spark=Spark()
+    with pytest.raises(RuntimeError,match='preflight failed'):execute(n,spark,runtime_values=values)
+    assert spark.calls==[]
+
+
+def test_sum_overflow_setting_is_checked_before_earlier_truncate(tmp_path):
+    from types import SimpleNamespace
+    from tests.test_backend_transforms import aggregate_flow
+    flow=aggregate_flow();truncate=task('truncate','TRUNCATE TABLE dbo.Business')
+    owner=ExecutableIR(ref_id=flow.ref_id,executable_type='Microsoft.Pipeline')
+    ir=PackageIR(package_name='Synthetic',executables=[truncate,owner],data_flows=[flow],precedence_constraints=chain(truncate,owner))
+    config=cfg(audit_capture_table_stats=False,object_mappings={'dbo.Business':'c.data.business','dbo.A':'c.data.a'})
+    _,n=generate(ir,tmp_path,config)
+    spark=Spark();spark.conf=SimpleNamespace(get=lambda key:'false')
+    with pytest.raises(RuntimeError,match='Required Spark setting before writes'):execute(n,spark)
+    assert spark.calls==[]

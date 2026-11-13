@@ -53,6 +53,7 @@ def preflight_code(variables,derived=None):
     fixed={r['key']:r['fixed_sql_text'] for r in variables if 'fixed_sql_text' in r}
     for r in required:
         if r['key'] in fixed:r['fixed_sql_text']=fixed[r['key']]
+        if any(v['key']==r['key'] and v.get('timezone') for v in variables):r['timezone']=True
     initial={r['key'] for r in required};checks=[]
     for record in variables:
         expression=(derived or {}).get(record['key'])
@@ -61,7 +62,7 @@ def preflight_code(variables,derived=None):
         refs={n.args[0].value for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='_ssis_value'
             and n.args and isinstance(n.args[0],ast.Constant)}
         if refs.issubset(initial):checks.append((record,expression))
-    if not required and not checks:return ''
+    if not required and not checks and not any(v.get('clock_override') for v in variables):return ''
     code='''# Validate initial SSIS values before audit setup or business mutations.
 _ssis_input_errors = []
 for _ssis_input in '''+repr(required)+''':
@@ -73,6 +74,8 @@ for _ssis_input in '''+repr(required)+''':
         _ssis_checked_input = _ssis_value(_ssis_key, _ssis_input['kind'])
         if _ssis_input['numeric']:
             _ssis_numeric(_ssis_checked_input)
+        if _ssis_input.get('timezone'):
+            ZoneInfo(_ssis_checked_input)
         if 'fixed_sql_text' in _ssis_input and _ssis_checked_input != _ssis_input['fixed_sql_text']:
             _ssis_input_errors.append(_ssis_key + ': captured SQL changed; regenerate before execution')
             continue
@@ -85,6 +88,11 @@ for _ssis_input in '''+repr(required)+''':
         code+='if not _ssis_input_errors:\n    try:\n        _ssis_checked_derived = '+value+'\n    except Exception:\n'
         code+='        _ssis_input_errors.append('+repr(record['key']+': invalid initial derived '+record['kind']+' value')+')\n'
     return code+'''
+if '$Runtime::SourceClock' in _ssis_values:
+    try:
+        _ssis_source_clock_override()
+    except Exception:
+        _ssis_input_errors.append('$Runtime::SourceClock: invalid timestamp or missing UTC offset')
 if _ssis_input_errors:
     raise RuntimeError('SSIS input preflight failed; set ssis_runtime_values and rerun before any writes: ' + '; '.join(_ssis_input_errors))
 '''
