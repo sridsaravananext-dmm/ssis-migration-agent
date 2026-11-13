@@ -81,6 +81,8 @@ Variable-backed table sources and unsupported SQL expressions remain pending. A 
 
 Same-named variables in unrelated containers are not visible. XML ancestry retains event-local scope even when executable IDs are opaque. References inside quoted expression literals are not treated as variable bindings. Variable-based Execute SQL Tasks also retain declaration context. Arbitrary expressions, provider-specific conversions, full result sets, procedure output parameters, and state transfer across separate Job tasks remain future work.
 
+Query-template references resolve from the SQL variable's declaration scope. A package-level expression does not pick up a task-local shadow merely because that task reads the expression. This rule is shared by data-flow variable queries and variable Execute SQL Tasks.
+
 Computed scalar variables have a separate bounded compiler: literals, explicit references, typed string/numeric addition, parentheses, numeric negation, DT_I2/I4/I8/R4/R8/BOOL/DATE/DBTIMESTAMP casts, and SUBSTRING/LEFT/RIGHT. String slicing counts UTF-16 units. Expressions run as ordinary Python scalar helpers at each read, so later result assignments are visible. There is no eval, cached designer substitution, Spark UDF, or manual override of computed logic. Cycles, unknown functions/types, ambiguous additions, and result assignments into computed variables remain gaps. Source type/NULL/date conversion semantics still require review.
 
 Expression Tasks use this compiler for one assignment to a declared User variable. Captured source assignments update shared state before later tasks read it. Writes into computed variables, unknown destinations, multiple assignments, and unsupported functions remain blocked. Pending items retain `source_expression`, including cutoff expressions using GETDATE/DATEADD/DATEPART. No source clock/timezone policy is inferred.
@@ -100,6 +102,35 @@ Use the notebook `ssis_runtime_values` JSON widget. Keys and types are listed in
 All bound operations share one notebook process (`step_id=all`). Separate per-step Job generation is rejected because Python variable state does not transfer between notebook runs. This does not choose a deployment or orchestration strategy.
 
 For the recognized row-count dynamic SQL shape, a captured table declaration is parsed and mapped at generation time, and its runtime value must remain unchanged. Other dynamic SQL remains pending. An INSERT/SELECT batch emits separate SQL calls with an atomicity warning. INSERT followed by MAX receives RESULT_KEY_GENERATION_REVIEW_REQUIRED because target-generated keys and concurrent writers must be designed explicitly. No identity or key-allocation implementation is invented.
+
+## Variable Execute SQL Tasks
+
+`SqlStatementSourceType=Variable` (or `2`) now has a bounded native implementation. The property must resolve to one scoped, non-sensitive String variable, and the task must declare explicit ordinal single-row result bindings. This path supports one relational query, not write SQL or general procedural execution.
+
+Two declaration forms are supported:
+
+- **EvaluateAsExpression=true:** literal strings concatenated with numeric scalar references, for example `"SELECT COUNT(*) FROM dbo.Orders WHERE batch_key=" + @[$Package::BatchKey]`. The template is parsed/mapped once and value references become named Spark SQL arguments at each read. Extra Execute SQL task parameter bindings are rejected in this form. Captured designer snapshots are ignored.
+- **EvaluateAsExpression=false:** a captured query such as `SELECT COUNT(*) FROM dbo.Orders WHERE batch_key=@key`. Supported named task input bindings provide values. The generator translates the captured text; it never passes the runtime string to `spark.sql`. Initial preflight and a task-level guard reject changed query-text overrides. Known source tasks writing that captured SQL variable produce `VARIABLE_SQL_MUTATION_UNSUPPORTED` instead of silently freezing changing source behavior.
+
+Example task properties for a captured query:
+
+```json
+{
+  "SqlStatementSourceType": "Variable",
+  "SqlStatementSource": "User::CountQuery",
+  "ResultType": "ResultSetType_SingleRow",
+  "parameter_bindings": [
+    {"ParameterName": "key", "DtsVariableName": "$Package::BatchKey", "ParameterDirection": "Input"}
+  ],
+  "result_bindings": [
+    {"ResultName": "0", "DtsVariableName": "User::RowCount"}
+  ]
+}
+```
+
+The package must also declare the SQL and result variables. Conversion requires available scoped declarations, supported query syntax, and resolved physical locations. Output metadata records the active variable reference/scope, source hash, query kind, two-row limit, and result bindings as `VARIABLE_TASK_BINDING_REVIEW` evidence. Successful translation removes the generic missing-static-SQL dependency finding for that task alone. Rejected forms keep their variable context in pending evidence; missing procedure bodies are not implemented by this feature.
+
+Results use the same bounded cardinality, ordinal, and source-type checks as direct Execute SQL Tasks. They can feed later ordered SQL tasks within one notebook. Additional result modes, runtime query overrides, task/file-based SQL expressions, SQL-structure concatenation, positional/provider-specific bindings, procedures, and write/batch SQL remain review work. No source SQL, variable expression, or reference notebook is evaluated as Python, and no Spark/Pandas UDF is introduced.
 
 ## Native data-flow subset
 

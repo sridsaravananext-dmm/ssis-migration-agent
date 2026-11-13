@@ -239,9 +239,18 @@ def build_graph_plan(context, config):
         elif 'executesqltask' in kind:
             task_type = 'NATIVE_SQL_TASK'
             try:
-                if str(props.get('SqlStatementSourceType','DirectInput')) not in {'0','DirectInput'} or not props.get('SqlStatementSource'):
+                source_mode=str(props.get('SqlStatementSourceType','DirectInput'))
+                if source_mode in {'2','Variable'}:
+                    from ssis_migration.variable_tasks import variable_sql_task
+                    code,mapping_uses,evidence=variable_sql_task(props,origin,connection,config,runtime,disabled)
+                    ops=[{'operation_id':origin,'operation_type':'NATIVE_BOUND_SQL','order':0,'code':code}]
+                    context.metadata.setdefault('compiled_variable_tasks',{})[origin]=evidence
+                    task_type='NATIVE_VARIABLE_SQL_TASK'
+                    findings.append(finding('VARIABLE_TASK_BINDING_REVIEW',origin,
+                        'Variable query is compiled to static native SQL with bounded results. Review source provider types and conversions.',severity='WARNING',evidence=evidence))
+                elif source_mode not in {'0','DirectInput'} or not props.get('SqlStatementSource'):
                     raise ConversionGap('SQL_EXTRACTION_INCOMPLETE','Static direct SQL is required.')
-                if procedures:
+                elif procedures:
                     if len(procedures) != 1 or procedures[0]['name'] not in bodies:
                         raise ConversionGap('PROCEDURE_IMPLEMENTATION_PENDING', 'Retain this procedure call until its definition and call semantics are available.')
                     try:
@@ -407,9 +416,8 @@ def build_graph_plan(context, config):
         for key in ('System::SourceName','System::SourceDescription','System::ErrorDescription','System::ErrorCode'):
             if key in runtime.inputs:
                 runtime.inputs[key]['origin']='error_code_mapping' if key=='System::ErrorCode' else 'failure_context'
-    for key,record in runtime.inputs.items():
-        record['required_external_input']=bool(record.get('read') and not record.get('derived') and key not in runtime.defaults
-            and record.get('origin') not in {'source_result','failure_context','error_code_mapping','target_audit_notebook_key'})
+    from ssis_migration.runtime_contract import annotate_initial_values
+    annotate_initial_values(plan,runtime)
     plan.metadata['runtime_variables'] = list(runtime.inputs.values())
     plan.metadata['runtime_defaults'] = runtime.defaults
     plan.metadata['runtime_derived_expressions'] = runtime.derived

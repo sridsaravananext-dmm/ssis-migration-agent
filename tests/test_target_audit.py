@@ -185,10 +185,10 @@ def notebook(tmp_path,write=False):
     return json.loads(Path(result['notebook_file']).read_text())
 
 
-def execute(n,spark,job=None,execution_key='',context=None,env_out=None):
+def execute(n,spark,job=None,execution_key='',context=None,env_out=None,runtime_values=None):
     exits=[]
     env={'spark':spark,'dbutils':SimpleNamespace(widgets=SimpleNamespace(text=lambda *a:None,
-        get=lambda name:{'catalog':'c','schema':'data','step_id':'all','ssis_runtime_values':'{}',
+        get=lambda name:{'catalog':'c','schema':'data','step_id':'all','ssis_runtime_values':json.dumps(runtime_values or {}),
             'target_audit_job':json.dumps(job or {}),'execution_key':execution_key}[name]),
         notebook=SimpleNamespace(exit=exits.append))}
     if context is not None:

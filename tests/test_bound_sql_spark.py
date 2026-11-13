@@ -131,6 +131,58 @@ def test_mapped_target_audit_insert_uses_real_spark_identifiers_and_bound_status
     assert row['run notebook_key']==52 and row['run status']=="DONE 'OK'" and row['run message']=="quoted 'message'"
 
 
+def test_generated_preflight_prevents_truncate_until_numeric_inputs_are_valid(spark,tmp_path):
+    from pathlib import Path
+    from ssis_migration.migrate import generate_migration_artifacts
+    from ssis_migration.generator.graph_native import variable
+    from tests.test_notebook_readiness import numeric_query_package
+    spark.createDataFrame([(1,)],'id int').write.saveAsTable('preflight_business')
+    config=AssessmentConfig(catalog='spark_catalog',target_schema='default',
+        object_mappings={'dbo.Business':'spark_catalog.default.preflight_business'})
+    result=generate_migration_artifacts(numeric_query_package(),{},None,'.',tmp_path,config=config)
+    assert not [f for f in result['findings'] if f['severity']=='ERROR']
+    notebook=json.loads(Path(result['notebook_file']).read_text())
+    def run(values):
+        widgets={'catalog':'spark_catalog','schema':'default','step_id':'all','ssis_runtime_values':json.dumps(values)}
+        data={'spark':spark,'dbutils':SimpleNamespace(widgets=SimpleNamespace(text=lambda *a:None,get=widgets.__getitem__))}
+        for cell in notebook['cells']:
+            if cell['cell_type']=='code':exec(''.join(cell['source']),data)
+        return data
+    with pytest.raises(RuntimeError,match='preflight failed'):run({})
+    with pytest.raises(RuntimeError,match='preflight failed'):run({'$Package::Date':'invalid'})
+    assert spark.table('preflight_business').count()==1
+    data=run({'$Package::Date':'20261111'})
+    assert spark.table('preflight_business').count()==0
+    assert data[variable('out')].limit(1).collect()[0]['main']==20261111
+
+
+@pytest.mark.parametrize('expression',[False,True])
+def test_real_variable_execute_sql_result_drives_later_bound_insert(spark,tmp_path,expression):
+    from pathlib import Path
+    from ssis_migration.migrate import generate_migration_artifacts
+    from ssis_migration.ir.models import ExecutableIR,PrecedenceConstraintIR
+    from tests.test_variable_tasks import fixture
+    ir,query=fixture(expression);ir.variables[1].value='2'
+    table='variable_results_'+('expression' if expression else 'captured')
+    spark.createDataFrame([],'value int').write.saveAsTable(table)
+    writer=ExecutableIR(ref_id='InsertResult',executable_type='Microsoft.ExecuteSQLTask',properties={
+        'SqlStatementSource':'INSERT INTO dbo.Results (value) VALUES (@value)',
+        'parameter_bindings':[{'ParameterName':'value','DtsVariableName':'User::Result'}]})
+    ir.executables.append(writer)
+    ir.precedence_constraints=[PrecedenceConstraintIR(from_executable=query.ref_id,to_executable=writer.ref_id,value='Success')]
+    config=AssessmentConfig(catalog='spark_catalog',target_schema='default',object_mappings={
+        'dbo.Orders':'spark_catalog.default.bound_orders','dbo.Results':'spark_catalog.default.'+table})
+    result=generate_migration_artifacts(ir,{},None,'.',tmp_path,config=config)
+    assert not [f for f in result['findings'] if f['severity']=='ERROR']
+    n=json.loads(Path(result['notebook_file']).read_text())
+    widgets={'catalog':'spark_catalog','schema':'default','step_id':'all','ssis_runtime_values':'{}'}
+    data={'spark':spark,'dbutils':SimpleNamespace(widgets=SimpleNamespace(text=lambda *a:None,get=widgets.__getitem__))}
+    for cell in n['cells']:
+        if cell['cell_type']=='code':exec(''.join(cell['source']),data)
+    assert data['_ssis_values']['User::Result']==1
+    assert spark.table(table).limit(1).collect()[0]['value']==1
+
+
 def test_real_spark_insert_then_select_batch_preserves_order_and_state(spark):
     runtime=BindingContext(PackageIR(variables=[VariableIR(name='Result',namespace='User',scope_ref_id='Package',data_type='3')]))
     props={'SqlStatementSource':'INSERT INTO dbo.Orders (id,batch_key) VALUES (@id,30)\nSELECT MAX(id) FROM dbo.Orders',

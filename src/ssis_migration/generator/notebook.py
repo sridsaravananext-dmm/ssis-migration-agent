@@ -66,6 +66,7 @@ class NotebookAssembler:
 
         step_count = len(plan_dict["steps"])
         unresolved_count = len(plan_dict.get("unresolved", []))
+        from ssis_migration.generator.review_format import overview,findings_table,compact_steps
 
         cells.append(self._markdown_cell(
             f"# {plan_dict['package_name']} \u2014 Databricks Conversion Review\n"
@@ -77,6 +78,7 @@ class NotebookAssembler:
             f"| Steps | {step_count} |\n"
             f"| Unresolved | {unresolved_count} |\n"
             f"| Planner | {plan_dict.get('metadata', {}).get('planner', 'N/A')} |\n"
+            + overview(plan_dict)
         ))
 
         # -------------------------------------------------
@@ -127,6 +129,11 @@ class NotebookAssembler:
         if plan_dict.get('metadata', {}).get('requires_shared_runtime_state'):
             from ssis_migration.bound_sql import runtime_setup
             cells.append(self._code_cell(runtime_setup(plan_dict['metadata'].get('runtime_defaults', {}))))
+            from ssis_migration.runtime_contract import preflight_code
+            preflight=preflight_code(plan_dict['metadata'].get('runtime_variables',[]),plan_dict['metadata'].get('runtime_derived_expressions',{}))
+            if preflight:
+                cells.append(self._code_cell(preflight))
+                cells[-1]['metadata']['ssis_migration']={'role':'input_preflight'}
             defaults = plan_dict['metadata'].get('runtime_defaults', {})
             rows = []
             for item in plan_dict['metadata'].get('runtime_variables', []):
@@ -134,7 +141,8 @@ class NotebookAssembler:
                     'error_code_mapping':'mapped from target error class through ssis_error_codes',
                     'target_audit_bridge':'explicit business value bridge from replaced source auditing',
                     'target_audit_notebook_key':'assigned from target Int64 notebook execution key',
-                    'source_result':'assigned by source task result binding (producer may still be pending)'}.get(item.get('origin'))
+                    'source_result':'assigned by source task output/assignment (producer may still be pending)'}.get(item.get('origin'))
+                if item.get('required_external_input'):origin='required initial runtime input; '+(origin or 'no captured default')
                 origin = origin or ('derived source expression' if item.get('derived') else 'captured default' if item['key'] in defaults else 'result/runtime state' if item.get('write') else 'required runtime input')
                 rows.append(f"- `{item['key']}` — {item['kind']}; {origin}")
             cells.append(self._markdown_cell('## Native runtime bindings\n\n'
@@ -173,15 +181,7 @@ class NotebookAssembler:
 
         unresolved = plan_dict.get("unresolved", [])
         if unresolved:
-            items = "\n".join(
-                f"- {item}" for item in unresolved
-            )
-            cells.append(self._markdown_cell(
-                f"## \u26a0 Unresolved Items\n\n"
-                f"The following items could not be automatically\n"
-                f"resolved and require manual review:\n\n"
-                f"{items}\n"
-            ))
+            cells.append(self._markdown_cell(findings_table(unresolved)))
 
         pending = plan_dict.get('metadata', {}).get('pending_items', [])
         if pending:
@@ -195,8 +195,11 @@ class NotebookAssembler:
         # One section per step
         # -------------------------------------------------
 
+        compact_ids,compact_review=compact_steps(plan_dict,operations_by_step)
+        if compact_review:cells.append(self._markdown_cell(compact_review))
         for step in ordered_steps:
             step_id = step["step_id"]
+            if step_id in compact_ids:continue
             step_name = step["name"]
             step_type = step["step_type"]
             dependencies = step.get("dependencies", [])

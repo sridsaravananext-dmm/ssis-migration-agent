@@ -91,11 +91,17 @@ See [the assessment contract](docs/assessment-contract.md) for details and follo
 
 Named input parameters, ordinal single-row results, and bounded relational batches can generate native Spark SQL code. The notebook `ssis_runtime_values` JSON widget supplies external values, using the keys listed in the generated Native runtime bindings section. Captured literal variable defaults are retained; supported result bindings update shared notebook state. Missing inputs, unsupported NULL conversions, integer overflow, and incompatible scalar types fail explicitly.
 
+Variable-backed Execute SQL Tasks now support a bounded query-only path with explicit single-row result bindings. An active string expression can provide a literal/numeric-reference query template. An explicitly non-expression String variable can provide captured query text with supported named input bindings. Both compile to fixed SQL before execution; captured-query overrides that differ fail input preflight before writes. Known source writes to captured SQL variables remain blockers. Dynamic procedures, changing SQL structure, positional bindings, full/XML results, and write/batch SQL in this path remain pending. Query-expression references resolve in the declaration's lexical scope, including when a task-local variable has the same name. See [source-graph.md](docs/source-graph.md#variable-execute-sql-tasks).
+
 Supported computed variables are evaluated from their source expressions at each read, using ordinary Python helpers. They do not become extra manual inputs or Spark/Pandas UDFs. The bounded subset includes typed additions, selected scalar casts, and UTF-16 SUBSTRING/LEFT/RIGHT. Captured non-sensitive, non-required package-parameter defaults are retained; required or sensitive values must be supplied externally. Unknown expressions remain pending.
 
 Expression Tasks capture their source Expression and support one assignment to a declared User variable using the same scalar subset. Unsupported functions, including GETDATE/DATEADD/DATEPART, retain the original expression in a named pending section. No cutoff clock or timezone policy is guessed.
 
 Runtime binding records distinguish external inputs, captured defaults, derived expressions, source result producers, failure context, and audit value bridges. `required_external_input` identifies missing external values. Source mode retains source auditing; target mode records its replacement separately. Captured zero audit-count defaults are never presented as measured counts.
+
+Generated graph notebooks show execution readiness, blocking codes, and a typed input template at the top. Nulls in that template must be replaced; they are not runnable defaults. Initial values and eligible source-derived conversions are checked before audit setup or business mutations, including a source TRUNCATE. Source assignment/result values produced along prior task dependencies are distinguished from initial inputs; read-before-assignment and read/write variables still require an initial value. Later data-derived values retain checks at their source read points.
+
+Shared-state notebooks group replaced audit tasks and structural/disabled sections into review tables, keeping executable cells focused on business work. The complete source dispositions and dependencies remain in the diagnostic task graph; grouping does not alter business ordering or the runtime review gate. Missing procedure bodies remain named pending sections rather than commented-out success paths.
 
 ## Existing framework references
 

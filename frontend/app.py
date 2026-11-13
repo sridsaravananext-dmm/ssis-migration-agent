@@ -185,6 +185,12 @@ with results_tab:
                     if assessment.get('runtime_bindings'):
                         with st.expander('Native runtime bindings'):
                             st.caption('External values use the notebook ssis_runtime_values JSON widget. Bound variables require step_id=all.')
+                            required=[r for r in assessment['runtime_bindings']['variables'] if r.get('required_external_input')]
+                            if required:
+                                st.write('Required initial values')
+                                st.table([{'Key':r['key'],'Type':r['kind'],'Constraint':'numeric SQL value' if r.get('numeric_fragment') else 'source semantics'} for r in required])
+                                st.caption('Replace each null with a reviewed typed value. This is an input template, not runnable defaults.')
+                                st.code(json.dumps({r['key']:None for r in required},indent=2,ensure_ascii=False),language='json')
                             st.json(assessment['runtime_bindings'])
                     if assessment.get('target_audit'):
                         with st.expander('Target audit replacement'):
